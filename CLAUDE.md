@@ -42,4 +42,6 @@ MCP-verktøybeskrivelser er på engelsk.
 - HTML-dra-og-slipp i scenelista krever `"dragDropEnabled": false` i `tauri.conf.json` (ellers tar WebView2 dra-hendelsene).
 - Kun ett app-vindu kan være koblet til MCP-broen; flere avvises med lukkekode 4001 (`BRIDGE_BUSY_CODE`).
 - Hot reload bytter ikke ut handlerne i en åpen WebSocket – last vinduet helt på nytt etter endringer i `src/bridge/`.
+- Etter hot reload av `Viewport.tsx` kan gamle lys/skygger henge igjen i scenen (rare mørke felt på flater som
+  ikke finnes etter full omlasting). Last vinduet helt på nytt før du feilsøker belysning.
 - drei 10 `Outlines`: `screenspace`-grenene i shaderen er byttet om – uten `screenspace` er `thickness` i piksler.

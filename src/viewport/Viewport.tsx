@@ -18,6 +18,21 @@ const DEG = Math.PI / 180;
 let lastGizmoInteraction = 0;
 const gizmoRecentlyUsed = () => performance.now() - lastGizmoInteraction < 250;
 
+/**
+ * Skyggefangeren på bakken viser bare skygger fra sola. En vanlig ShadowMaterial tar med
+ * alle lys, og da ble alt et punktlys ikke nådde (f.eks. utenfor veggene til en hytte med
+ * lampe inne) mørklagt helt ut i horisonten. Punkt- og spotlys kaster fortsatt skygger på
+ * de faktiske objektene.
+ */
+const groundShadowMaterial = new THREE.ShadowMaterial({ opacity: 0.28 });
+groundShadowMaterial.onBeforeCompile = (shader) => {
+  const sunOnly = THREE.ShaderChunk.shadowmask_pars_fragment
+    .replace(/#if NUM_SPOT_LIGHT_SHADOWS > 0[^\n]*/, "#if 0")
+    .replace(/#if NUM_POINT_LIGHT_SHADOWS > 0[^\n]*/, "#if 0");
+  shader.fragmentShader = shader.fragmentShader.replace("#include <shadowmask_pars_fragment>", sunOnly);
+};
+groundShadowMaterial.customProgramCacheKey = () => "luna-sun-shadows-only";
+
 /** Synlige objekter, med skjulte mapper tatt hensyn til. */
 export function useVisibleObjects() {
   const objects = useEditor((s) => s.objects);
@@ -279,7 +294,7 @@ export function Viewport() {
       {/* Usynlig bakke som bare fanger skygger */}
       <mesh rotation-x={-Math.PI / 2} position-y={-0.002} receiveShadow raycast={() => null}>
         <planeGeometry args={[200, 200]} />
-        <shadowMaterial opacity={0.28} />
+        <primitive object={groundShadowMaterial} attach="material" />
       </mesh>
       <Grid
         position={[0, -0.001, 0]}
