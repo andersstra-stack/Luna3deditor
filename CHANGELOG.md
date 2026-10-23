@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-10-23
+
 ### Added
 - **Kommentar-pinner**: sett en nummerert pinne med kommentar på et objekt eller bakken (pinneknappen eller N),
   f.eks. «her må noe gjøres». Pinner følger objektet de sitter på, har svartråd, kan markeres som løst, og listes
