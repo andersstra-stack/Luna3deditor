@@ -35,6 +35,8 @@ interface ImportedNode {
 
 interface Part {
   name: string;
+  /** Materialnavnet i fila (f.eks. «nova_glass») – blir med i eksporten. */
+  materialName?: string;
   geometry: THREE.BufferGeometry;
   color: string;
   opacity: number;
@@ -276,6 +278,7 @@ function extractParts(root: THREE.Object3D, fallbackName: string): Part[] {
 
     const material = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial | undefined;
     const look = {
+      materialName: material?.name || undefined,
       opacity: material?.transparent ? (material.opacity ?? 1) : 1,
       metalness: material?.metalness ?? 0,
       roughness: material?.roughness ?? 0.6,
@@ -456,6 +459,7 @@ export async function importModelData(
       opacity: p.opacity,
       metalness: p.metalness,
       roughness: p.roughness,
+      ...(p.materialName ? { material: p.materialName } : {}),
       folderId,
     };
   });

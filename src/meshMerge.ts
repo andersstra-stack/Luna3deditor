@@ -87,6 +87,8 @@ export function mergeObjects(ids: string[]): MergeResult {
         metalness: primary.metalness,
         roughness: primary.roughness,
         opacity: primary.opacity,
+        ...(primary.emissive ? { emissive: primary.emissive } : {}),
+        ...(primary.material ? { material: primary.material } : {}),
         visible: true,
         folderId: primary.folderId,
       },

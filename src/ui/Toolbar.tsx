@@ -36,7 +36,10 @@ function reportExport(r: GlbExport | null) {
   const file = (path: string) => path.split(/[\\/]/).pop();
   useEditor
     .getState()
-    .setActivity(r.nodes ? `Eksporterte ${file(r.path)} med ${r.nodes} noder` : `Eksporterte ${file(r.path)}`);
+    .setActivity(
+      `Eksporterte ${file(r.path)}: ${r.colors} farger i ${file(r.palette)}${r.emission ? ` + ${file(r.emission)}` : ""}` +
+        (r.nodes ? `, ${r.nodes} noder` : ""),
+    );
 }
 
 export function Toolbar() {

@@ -10,6 +10,15 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Palett-tekstur i GLB-eksporten**, som i Nova-biblioteket: hver farge blir én piksel i `<navn>_palette.png`
+  (8×8, større ved behov), delene får UV-er som peker på sin piksel og deler felles materialer – ett per utseende
+  (metall/ruhet/gjennomsiktighet). Bildet ligger inne i GLB-en og skrives også ved siden av.
+- **Glød** per objekt (egenskapspanelet, MCP/Python `emissive` 0–1): delen lyser i sin egen farge, og gløden eksporteres
+  som `<navn>_emission.png`.
+- **Materialnavn** per objekt (f.eks. `nova_glass`, så Unity bytter inn sitt glass). Importerte modeller beholder
+  materialnavnene fra fila.
+
 ## [0.10.0] — 2026-10-23
 
 ### Added

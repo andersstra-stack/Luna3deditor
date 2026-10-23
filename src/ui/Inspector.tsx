@@ -109,7 +109,7 @@ function Vec3Row({ title, obj, field, step }: { title: string; obj: SceneObject;
   );
 }
 
-type SliderField = "metalness" | "roughness" | "opacity" | "intensity";
+type SliderField = "metalness" | "roughness" | "opacity" | "intensity" | "emissive";
 
 /** Glidebryter som gjelder alle valgte objekter (verdien vises fra hovedvalget). */
 function Slider({
@@ -224,6 +224,42 @@ function ScriptSource({ objs }: { objs: SceneObject[] }) {
       >
         Løsne
       </button>
+    </div>
+  );
+}
+
+/** Forslag i materialnavn-feltet (navn Unity-siden kjenner igjen). */
+const MATERIAL_SUGGESTIONS = ["nova_glass"];
+
+/** Materialnavn i eksporten: tomt = felles palett-materiale, ellers f.eks. «nova_glass». */
+function MaterialRow({ objs }: { objs: SceneObject[] }) {
+  const solids = objs.filter((o) => !isHelper(o.type));
+  if (!solids.length) return null;
+  const value = solids[solids.length - 1].material ?? "";
+  const same = solids.every((o) => (o.material ?? "") === value);
+  return (
+    <div className="row">
+      <div className="row-title">
+        Materialnavn <span className="value">tomt = felles palett</span>
+      </div>
+      <input
+        key={solids.map((o) => o.id + (o.material ?? "")).join()}
+        className="text"
+        list="luna-materials"
+        defaultValue={same ? value : ""}
+        placeholder={same ? "palett (standard)" : "(flere ulike)"}
+        onBlur={(e) => {
+          const name = e.target.value.trim();
+          if (same && name === value) return;
+          useEditor.getState().updateObjects(solids.map((o) => ({ id: o.id, material: name || undefined })));
+        }}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+      />
+      <datalist id="luna-materials">
+        {MATERIAL_SUGGESTIONS.map((m) => (
+          <option key={m} value={m} />
+        ))}
+      </datalist>
     </div>
   );
 }
@@ -549,6 +585,8 @@ export function Inspector() {
         <FolderSelect objs={objs} />
         <ScriptSource objs={objs} />
         <ColorRow objs={objs} />
+        {objs.some((o) => !isHelper(o.type)) && <Slider title="Glød" objs={objs.filter((o) => !isHelper(o.type))} field="emissive" />}
+        <MaterialRow objs={objs} />
         <HoleToggle objs={objs} />
         <Placement objs={objs} />
         <ModelTools objs={objs} />
@@ -598,6 +636,8 @@ export function Inspector() {
           <Slider title="Metallisk" objs={objs} field="metalness" />
           <Slider title="Ruhet" objs={objs} field="roughness" />
           <Slider title="Synlighet" objs={objs} field="opacity" />
+          <Slider title="Glød" objs={objs} field="emissive" />
+          <MaterialRow objs={objs} />
         </>
       )}
 

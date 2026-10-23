@@ -111,6 +111,13 @@ export interface SceneObject {
   hole?: boolean;
   /** Kun lys: lysstyrke (candela). */
   intensity?: number;
+  /** Glød 0–1 i objektets egen farge (vinduer, lamper, skjermer). Eksporteres som palettens `_emission`-bilde. */
+  emissive?: number;
+  /**
+   * Materialnavn i GLB-eksporten, f.eks. "nova_glass" (Unity bytter det til sitt glass). Tomt = det felles
+   * palett-materialet. Importerte modeller beholder navnet fra fila.
+   */
+  material?: string;
   /**
    * Kun noder: egendefinerte egenskaper, f.eks. { type: "pirate_grunt" } eller { yaw_min: -150 }.
    * Nodens lokale +Z er «forover» og +Y «opp» (samme som i Unity etter import). `scale` er bare markørstørrelsen.

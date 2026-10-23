@@ -147,6 +147,16 @@ const objectProps = {
     .optional()
     .describe("true = this object is a HOLE: it is shown as a ghost and cut away (CSG) from the other objects in the SAME folder."),
   intensity: z.number().min(0).optional().describe("Lights only: brightness in candela (pointLight ~20, spotLight ~60)."),
+  emissive: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Glow 0–1 in the object's own color (windows, lamps, screens, engine nozzles). Exported as the palette's _emission map."),
+  material: z
+    .string()
+    .optional()
+    .describe("Material name in the exported GLB, e.g. 'nova_glass' (Unity swaps it for its glass). Omit / empty for the shared palette material."),
   props: z
     .record(z.string(), z.union([z.string(), z.number()]))
     .optional()
@@ -181,6 +191,11 @@ To rest an object on the ground, set position.y = scale.y / 2 (planes: y = 0) �
 get_scene returns each object's exact world-space bounding box ('bounds' min/max), which makes it easy to place
 things flush against each other (e.g. new.position.x = other.bounds.max.x + new.scale.x / 2).
 
+Export & materials (like the Nova library): export_glb writes ONE shared palette material per look – every color is a
+pixel in <name>_palette.png (also embedded in the GLB) and each part's UVs point at its pixel. 'emissive' (0–1) makes a
+part glow and goes into <name>_emission.png. Set material: 'nova_glass' on glass so Unity swaps in its glass shader;
+imported models keep their material names from the file.
+
 Holes (CSG): set hole: true on an object to cut it out of every other (non-hole) object in the SAME folder it overlaps —
 e.g. windows and doors in a wall: put the wall and box-shaped holes in one folder. Holes are live and stay editable.
 
@@ -206,7 +221,7 @@ module – best for anything repetitive or mathematical (fences, stairs, grids, 
 where one loop replaces hundreds of add_objects entries. The whole run is ONE undo step. API (import luna3d as luna):
 - luna.box/sphere/cylinder/cone/torus/plane/capsule/wedge/prism/pyramid/stairs/hemisphere/tube/rounded_box/
   point_light/spot_light/node(name=, position=(x,y,z), rotation=(deg,deg,deg), scale=(x,y,z), color="#rrggbb",
-  metalness=, roughness=, opacity=, hole=, intensity=, props={...}, folder=) -> key; or luna.add("box", ...)
+  metalness=, roughness=, opacity=, hole=, intensity=, emissive=, material=, props={...}, folder=) -> key; or luna.add("box", ...)
 - luna.folder(name, parent=None) -> key (use as folder=/parent=)
 - luna.update(id_or_key, **props), luna.delete(*ids)
 - luna.scene / luna.objects(name=, type=, folder=) / luna.folders(name=) / luna.get(id): the scene at start,
@@ -640,7 +655,7 @@ server.registerTool(
   {
     title: "Export GLB",
     description:
-      "Export visible objects as a binary glTF (.glb) file that Blender, Roblox Studio, Unity, Godot etc. can import. Folders become named groups; marker nodes become empty nodes with their props as extras.",
+      "Export visible objects as a binary glTF (.glb) file that Blender, Roblox Studio, Unity, Godot etc. can import. Folders become named groups; parts share palette materials (colors as pixels in <name>_palette.png, glow in <name>_emission.png, both also written next to the .glb); objects with a material name get their own material; marker nodes become empty nodes with their props as extras.",
     inputSchema: { path: z.string().describe("Absolute file path ending in .glb") },
   },
   ({ path }) => run("export_glb", { path }),

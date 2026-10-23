@@ -42,7 +42,7 @@ SHAPES = {
 }
 PROPS = {
     "name", "position", "rotation", "scale", "color", "metalness", "roughness",
-    "opacity", "visible", "hole", "intensity", "props", "folder",
+    "opacity", "visible", "hole", "intensity", "emissive", "material", "props", "folder",
 }
 MARKER = "@@LUNA3D_OPS@@"
 MAX_OPS = 20000

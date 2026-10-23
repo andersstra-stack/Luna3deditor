@@ -48,6 +48,9 @@ MCP-verktøybeskrivelser er på engelsk.
   appen kjører, `useMcpBridge.ts` er WebSocket-klienten med auto-reconnect.
 - `mcp-server/index.ts` – kjøres direkte av Node 24 (type stripping, ingen build): kun slettbar
   TS-syntaks, `.ts`-endelser i relative imports, logging kun til stderr.
+- Eksport: `src/io.ts` `buildGlb` (i minnet, testbar) + `exportGlb` (skriver filer). `src/palette.ts` lager palett- og
+  glød-bildet (én piksel per farge+glød, `flipY = false`, UV med v = 0 øverst). Materialer deles per
+  materialnavn + metall/ruhet/gjennomsiktighet; `emissive` (0–1) og `material` ligger på `SceneObject`.
 - `src-tauri/src/lib.rs` – filkommandoer (`write_text_file`, `read_text_file`, `write_binary_file`) + dialog-plugin.
 
 ## Versjon og endringslogg

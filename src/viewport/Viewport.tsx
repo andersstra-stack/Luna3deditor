@@ -203,6 +203,8 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
         color={obj.color}
         metalness={obj.metalness}
         roughness={obj.roughness}
+        emissive={obj.color}
+        emissiveIntensity={obj.hole ? 0 : (obj.emissive ?? 0)}
         transparent={transparent}
         opacity={obj.hole ? 0.28 : obj.opacity}
         depthWrite={!transparent}
