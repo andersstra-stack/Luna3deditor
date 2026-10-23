@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "luna3d": {
+      "command": "node",
+      "args": ["mcp-server/index.ts"]
+    }
+  }
+}
