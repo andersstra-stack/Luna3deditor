@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10-23
+
 ### Added
 - **Markør-noder** (Flere → Node): usynlige, navngitte punkter med retning som spillmotoren leser fra modellen –
   dokkepunkter, hardpoints, motorer, spawn-punkter o.l. (navnene fra Unity-sidens oppskrifter, f.eks. `hp_turret_S_01`,
