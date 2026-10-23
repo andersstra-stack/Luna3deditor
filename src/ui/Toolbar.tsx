@@ -72,11 +72,6 @@ export function Toolbar() {
 
   return (
     <header className="toolbar">
-      <div className="brand">
-        <span className="brand-moon" />
-        Luna 3D
-      </div>
-
       <div className="tool-group">
         <button className="icon-btn" title="Ny scene" onClick={newScene}>
           <Icon name="file" />

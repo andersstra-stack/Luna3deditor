@@ -11,6 +11,7 @@ import { copySelection, pasteText } from "./clipboard";
 import { IMPORT_EXTENSIONS, importDroppedFiles, importModelFile } from "./importer";
 import { SelectionInfo } from "./ui/SelectionInfo";
 import { Toolbar } from "./ui/Toolbar";
+import { TitleBar } from "./ui/TitleBar";
 import { Outliner } from "./ui/Outliner";
 import { Inspector } from "./ui/Inspector";
 import { StatusBar, reportError } from "./ui/StatusBar";
@@ -121,6 +122,7 @@ export default function App() {
     <div className="app">
       <div className="app-orb app-orb-1" />
       <div className="app-orb app-orb-2" />
+      <TitleBar />
       <Toolbar />
       <main className="workspace">
         <Outliner />
