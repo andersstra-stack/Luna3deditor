@@ -6,7 +6,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEditor } from "./store";
 import { objectBox, round } from "./bounds";
-import type { ScriptOp, ScriptResult } from "./types";
+import { isNode, type ScriptOp, type ScriptResult } from "./types";
+import { nodeAxes } from "./nodes";
 
 export const SCRIPT_MARKER = "@@LUNA3D_OPS@@";
 
@@ -15,7 +16,9 @@ export function sceneForScripts() {
   const { objects, folders, selectedIds, filePath } = useEditor.getState();
   const withBounds = objects.map((o) => {
     const b = objectBox(o);
-    return { ...o, bounds: { min: b.min.toArray().map((v) => round(v)), max: b.max.toArray().map((v) => round(v)) } };
+    const bounds = { min: b.min.toArray().map((v) => round(v)), max: b.max.toArray().map((v) => round(v)) };
+    // Noder: retningene i verdensrommet (lokal +Z forover, +Y opp), så Claude slipper å regne på Euler-vinkler.
+    return isNode(o.type) ? { ...o, bounds, ...nodeAxes(o) } : { ...o, bounds };
   });
   return { folders, objects: withBounds, selectedIds, filePath };
 }

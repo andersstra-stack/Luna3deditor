@@ -6,6 +6,8 @@ import {
   DEFAULT_SCALE,
   SHAPE_LABELS,
   isLight,
+  isNode,
+  startHeight,
   type Folder,
   type Note,
   type NoteReply,
@@ -17,6 +19,7 @@ import {
   type Vec3,
 } from "./types";
 import { folderChain, isInside } from "./folders";
+import { uniqueNodeName } from "./nodes";
 
 const HISTORY_LIMIT = 100;
 
@@ -125,15 +128,14 @@ function uniqueName(base: string, taken: { name: string }[]): string {
 function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<SceneObject> = {}): SceneObject {
   const { id: _ignored, type: _type, name: _name, ...rest } = props;
   const scale = DEFAULT_SCALE[type] ?? [1, 1, 1];
-  // Lys henger i lufta, plan ligger på bakken, alt annet står oppå den.
-  const y = isLight(type) ? 2.5 : type === "plane" ? 0 : scale[1] / 2;
+  const y = startHeight(type, scale);
   return {
     id: newId(),
-    name: uniqueName(props.name ?? SHAPE_LABELS[type], existing),
+    name: isNode(type) ? uniqueNodeName(props.name ?? "node", existing) : uniqueName(props.name ?? SHAPE_LABELS[type], existing),
     position: [0, y, 0],
     rotation: [0, 0, 0],
     scale: [...scale],
-    color: isLight(type) ? "#fff2d6" : DEFAULT_COLORS[existing.length % DEFAULT_COLORS.length],
+    color: isLight(type) ? "#fff2d6" : isNode(type) ? "#ff9e64" : DEFAULT_COLORS[existing.length % DEFAULT_COLORS.length],
     metalness: 0,
     roughness: 0.5,
     opacity: 1,
@@ -247,7 +249,8 @@ export const useEditor = create<EditorState>((set, get) => {
         if (!src) continue;
         const copy = makeObject(src.type, all, {
           ...src,
-          name: src.name.replace(/ \d+$/, ""),
+          // Noder får neste nummer (hp_01 → hp_02), se uniqueNodeName.
+          name: isNode(src.type) ? src.name : src.name.replace(/ \d+$/, ""),
           script: undefined,
           position: src.position.map((v, i) => v + offset[i]) as Vec3,
         });

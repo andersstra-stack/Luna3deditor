@@ -18,6 +18,11 @@ hele kjøringen er ett angre-steg. `print()` vises som skriptets utdata.
 
 Former: box, sphere, cylinder, cone, torus, plane, capsule, wedge, prism, pyramid,
 stairs, hemisphere, tube, rounded_box, point_light, spot_light (eller add(type, ...)).
+
+Markør-noder (node) er usynlige punkter med navn og retning som spillmotoren leser: lokal +Z er
+forover og +Y opp. Egendefinerte egenskaper legges i props={...} (eksporteres som glTF extras):
+
+    luna.node(name="hp_turret_S_01", position=(0, 2.1, 4), props={"yaw_min": -150, "yaw_max": 150})
 """
 
 import json
@@ -28,16 +33,16 @@ import sys
 __all__ = [
     "scene", "objects", "get", "folders", "folder", "add", "update", "delete",
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
-    "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "point_light", "spot_light",
+    "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "point_light", "spot_light", "node",
 ]
 
 SHAPES = {
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
-    "pyramid", "stairs", "hemisphere", "tube", "roundedBox", "pointLight", "spotLight",
+    "pyramid", "stairs", "hemisphere", "tube", "roundedBox", "pointLight", "spotLight", "node",
 }
 PROPS = {
     "name", "position", "rotation", "scale", "color", "metalness", "roughness",
-    "opacity", "visible", "hole", "intensity", "folder",
+    "opacity", "visible", "hole", "intensity", "props", "folder",
 }
 MARKER = "@@LUNA3D_OPS@@"
 MAX_OPS = 20000
@@ -91,6 +96,14 @@ def _clean(props):
             continue
         if k in ("position", "rotation", "scale"):
             v = _vec3(k, v)
+        elif k == "props":
+            if not isinstance(v, dict):
+                raise ValueError(f"props må være en dict, f.eks. {{'type': 'pirate_grunt'}} – fikk {v!r}")
+            for pk, pv in v.items():
+                # Unity leser bare tall og tekst – bruk 1/0 i stedet for True/False.
+                if not isinstance(pk, str) or isinstance(pv, bool) or not isinstance(pv, (str, int, float)):
+                    raise ValueError(f"props må ha tekstnøkler og tall eller tekst som verdier (1/0 for ja/nei) – fikk {pk!r}: {pv!r}")
+            v = dict(v)
         elif k == "color":
             if not (isinstance(v, str) and len(v) == 7 and v.startswith("#")):
                 raise ValueError(f"color må være en hex-farge som '#ff8800' – fikk {v!r}")
@@ -183,6 +196,7 @@ tube = _shape("tube")
 rounded_box = _shape("roundedBox")
 point_light = _shape("pointLight")
 spot_light = _shape("spotLight")
+node = _shape("node")
 
 
 def _emit():

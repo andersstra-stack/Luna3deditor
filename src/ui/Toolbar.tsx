@@ -5,12 +5,13 @@ import {
   DEFAULT_SCALE,
   EXTRA_SHAPES,
   LIGHTS,
+  MARKERS,
   SHAPE_LABELS,
-  isLight,
+  startHeight,
   type ShapeType,
   type TransformMode,
 } from "../types";
-import { exportGlb, openScene, saveScene } from "../io";
+import { exportGlb, openScene, saveScene, type GlbExport } from "../io";
 import { importModelFile } from "../importer";
 import { runPythonScriptFile } from "../scripting";
 import { useUi } from "./uiStore";
@@ -29,6 +30,14 @@ const BRIDGE_TEXT: Record<BridgeStatus, { label: string; title: string }> = {
   disconnected: { label: "Claude ikke tilkoblet", title: "Venter på Claude Code (MCP-serveren startes av Claude Code)" },
   busy: { label: "Claude i annet vindu", title: "Et annet Luna 3D-vindu er allerede koblet til Claude" },
 };
+
+function reportExport(r: GlbExport | null) {
+  if (!r) return;
+  const file = (path: string) => path.split(/[\\/]/).pop();
+  useEditor
+    .getState()
+    .setActivity(r.nodes ? `Eksporterte ${file(r.path)} med ${r.nodes} noder` : `Eksporterte ${file(r.path)}`);
+}
 
 export function Toolbar() {
   const transformMode = useEditor((s) => s.transformMode);
@@ -54,7 +63,7 @@ export function Toolbar() {
 
   const add = (type: ShapeType) => {
     const [x, z] = viewTargetOnGround();
-    const y = isLight(type) ? 2.5 : type === "plane" ? 0 : (DEFAULT_SCALE[type]?.[1] ?? 1) / 2;
+    const y = startHeight(type, DEFAULT_SCALE[type] ?? [1, 1, 1]);
     addObject(type, { position: [x, y, z], folderId: useEditor.getState().activeFolderId });
     setMoreOpen(false);
   };
@@ -98,7 +107,7 @@ export function Toolbar() {
         >
           <Icon name="code" />
         </button>
-        <button className="icon-btn" title="Eksporter GLB (til Blender, Roblox, Unity…)" onClick={() => exportGlb().catch(reportError)}>
+        <button className="icon-btn" title="Eksporter GLB (til Blender, Roblox, Unity…)" onClick={() => exportGlb().then(reportExport).catch(reportError)}>
           <Icon name="export" />
         </button>
       </div>
@@ -106,7 +115,7 @@ export function Toolbar() {
       <div className="tool-group shapes">
         {BASIC_SHAPES.map(shapeButton)}
         <div className="more" ref={moreRef}>
-          <button className={`shape-btn ${moreOpen ? "active" : ""}`} title="Flere former og lys" onClick={() => setMoreOpen(!moreOpen)}>
+          <button className={`shape-btn ${moreOpen ? "active" : ""}`} title="Flere former, lys og noder" onClick={() => setMoreOpen(!moreOpen)}>
             <Icon name="shapes" size={18} />
             <span>Flere</span>
           </button>
@@ -116,6 +125,8 @@ export function Toolbar() {
               <div className="more-grid">{EXTRA_SHAPES.map(shapeButton)}</div>
               <div className="more-title">Lys</div>
               <div className="more-grid">{LIGHTS.map(shapeButton)}</div>
+              <div className="more-title">Markører</div>
+              <div className="more-grid">{MARKERS.map(shapeButton)}</div>
             </div>
           )}
         </div>

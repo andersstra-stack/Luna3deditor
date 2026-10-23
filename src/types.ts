@@ -5,13 +5,31 @@ export type Vec3 = [number, number, number];
 export const BASIC_SHAPES = ["box", "sphere", "cylinder", "cone", "torus", "plane", "capsule"] as const;
 export const EXTRA_SHAPES = ["wedge", "prism", "pyramid", "stairs", "hemisphere", "tube", "roundedBox"] as const;
 export const LIGHTS = ["pointLight", "spotLight"] as const;
-/** Former og lys som kan legges til direkte (verktøylinja, MCP add_objects). */
-export const ADDABLE_SHAPES = [...BASIC_SHAPES, ...EXTRA_SHAPES, ...LIGHTS] as const;
+/** Markør-noder: usynlige, navngitte punkter med retning (dokking, hardpoints, spawn …) for spillmotoren. */
+export const MARKERS = ["node"] as const;
+/** Former, lys og noder som kan legges til direkte (verktøylinja, MCP add_objects). */
+export const ADDABLE_SHAPES = [...BASIC_SHAPES, ...EXTRA_SHAPES, ...LIGHTS, ...MARKERS] as const;
 /** Alle objekttyper. "mesh" er en importert modell (FBX/GLB/OBJ/STL) med geometri i et modellregister. */
 export const SHAPES = [...ADDABLE_SHAPES, "mesh"] as const;
 export type ShapeType = (typeof SHAPES)[number];
 
 export const isLight = (t: ShapeType) => t === "pointLight" || t === "spotLight";
+export const isNode = (t: ShapeType) => t === "node";
+/** Lys og noder er hjelpere i editoren: ingen hull, ikke noe å lande på eller snappe mot. */
+export const isHelper = (t: ShapeType) => isLight(t) || isNode(t);
+
+/** Høyden en ny form settes i: lys henger i lufta, plan og noder ligger på bakken, alt annet står oppå den. */
+export function startHeight(type: ShapeType, scale: Vec3): number {
+  if (isLight(type)) return 2.5;
+  if (type === "plane" || isNode(type)) return 0;
+  return scale[1] / 2;
+}
+
+/**
+ * Egendefinerte egenskaper på en node (som Custom Properties i Blender). Eksporteres som glTF `extras`.
+ * Flate par med tall eller tekst – det er det Unity-siden leser (SVAR_GLB_NODER_v1.md).
+ */
+export type NodeProps = Record<string, string | number>;
 
 export const SHAPE_LABELS: Record<ShapeType, string> = {
   box: "Kube",
@@ -30,6 +48,7 @@ export const SHAPE_LABELS: Record<ShapeType, string> = {
   roundedBox: "Avrundet kube",
   pointLight: "Punktlys",
   spotLight: "Spotlys",
+  node: "Node",
   mesh: "Modell",
 };
 
@@ -38,6 +57,7 @@ export const DEFAULT_SCALE: Partial<Record<ShapeType, Vec3>> = {
   hemisphere: [1, 0.5, 1],
   pointLight: [0.25, 0.25, 0.25],
   spotLight: [0.3, 0.3, 0.3],
+  node: [0.6, 0.6, 0.6],
 };
 
 export const DEFAULT_INTENSITY: Partial<Record<ShapeType, number>> = { pointLight: 20, spotLight: 60 };
@@ -63,6 +83,8 @@ export const SYMMETRIC_AXES: Record<ShapeType, string> = {
   roundedBox: "xyz",
   pointLight: "xyz",
   spotLight: "xz",
+  // Pila peker langs +Z og har «opp» langs +Y; speiles om lokal X (se placement.ts).
+  node: "x",
   mesh: "",
 };
 
@@ -89,6 +111,11 @@ export interface SceneObject {
   hole?: boolean;
   /** Kun lys: lysstyrke (candela). */
   intensity?: number;
+  /**
+   * Kun noder: egendefinerte egenskaper, f.eks. { type: "pirate_grunt" } eller { yaw_min: -150 }.
+   * Nodens lokale +Z er «forover» og +Y «opp» (samme som i Unity etter import). `scale` er bare markørstørrelsen.
+   */
+  props?: NodeProps;
   /** Kun importerte modeller: id i modellregisteret (se meshes.ts). */
   meshId?: string;
   /** Skriptet (normalisert sti) som laget objektet – erstattes når skriptet kjøres igjen. */

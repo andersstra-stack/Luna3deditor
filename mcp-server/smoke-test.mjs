@@ -107,6 +107,23 @@ s = await scene();
 check("to valgt", s.selectedIds.length === 2);
 await call("select_objects", { ids: [] });
 
+// --- Markør-noder ---
+await call("add_objects", {
+  objects: [
+    { type: "node", name: "hp_turret_S_01", position: [0, 3, 0], rotation: [0, 90, 0], props: { yaw_min: -150, yaw_max: 150 }, folderId: tak },
+    { type: "node", name: "dock_entry", position: [0, 1, 8], rotation: [0, 180, 0] },
+  ],
+});
+s = await scene();
+const hp = byName(s, "hp_turret_S_01");
+check("node har egenskaper", hp?.props?.yaw_min === -150);
+check("node peker forover langs +X etter 90° om Y", near(hp.forward[0], 1) && near(hp.up[1], 1), `forward ${hp.forward}`);
+const [hpCopy] = (await call("duplicate_objects", { ids: [hp.id], offset: [1, 0, 0] })).data;
+check("kopi av node får neste nummer", hpCopy.name === "hp_turret_S_02", hpCopy.name);
+await call("mirror_objects", { ids: [byName(s, "dock_entry").id], axis: "x" });
+s = await scene();
+check("speilet node peker fortsatt mot -Z", near(byName(s, "dock_entry").forward[2], -1), `forward ${byName(s, "dock_entry").forward}`);
+
 // --- Bilde og eksport ---
 const shot = await call("screenshot", { view: "iso" });
 const img = shot.r.content.find((c) => c.type === "image");
@@ -125,6 +142,9 @@ check("hull og lys er ikke med i GLB", !lines.some((l) => /Vindu|Dør|Lampe/.tes
 const veggMesh = gltf.meshes[gltf.nodes.find((n) => n.name === "Vegg").mesh];
 const veggVerts = gltf.accessors[veggMesh.primitives[0].attributes.POSITION].count;
 check("veggen har hull skåret ut (mer enn 24 hjørner)", veggVerts > 24, `${veggVerts} hjørner`);
+const hpNode = gltf.nodes.find((n) => n.name === "hp_turret_S_01");
+check("node er tom node i GLB med extras", hpNode && hpNode.mesh === undefined && hpNode.extras?.yaw_max === 150, JSON.stringify(hpNode));
+check("node ligger under mappa Tak", lines.some((l, i) => /^\s+hp_turret_S_01$/.test(l) && lines.slice(0, i).some((p) => p.trim() === "Tak")));
 
 await call("save_scene", { path: `${outDir}/hus.luna.json` });
 await call("undo");

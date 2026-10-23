@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { primaryId, useEditor } from "../store";
 import { folderPath } from "../folders";
-import { SHAPE_LABELS, isLight, type SceneObject, type Vec3 } from "../types";
+import { SHAPE_LABELS, isHelper, isLight, isNode, type NodeProps, type SceneObject, type Vec3 } from "../types";
 import { AXES, type Axis } from "../bounds";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
+import { nodeAxes, nodeNameProblem } from "../nodes";
 import { reportError } from "./StatusBar";
 import { Icon } from "./icons";
 
@@ -226,7 +227,7 @@ function ScriptSource({ objs }: { objs: SceneObject[] }) {
 }
 
 function HoleToggle({ objs }: { objs: SceneObject[] }) {
-  const solids = objs.filter((o) => !isLight(o.type));
+  const solids = objs.filter((o) => !isHelper(o.type));
   if (!solids.length) return null;
   const on = solids.every((o) => o.hole);
   return (
@@ -242,6 +243,90 @@ function HoleToggle({ objs }: { objs: SceneObject[] }) {
         <small>Skjærer bort fra andre objekter i samme mappe</small>
       </span>
     </label>
+  );
+}
+
+/** Tekst fra et felt → verdi: tall blir tall, resten tekst (Unity leser bare tall og tekst). */
+function parsePropValue(text: string): string | number {
+  const t = text.trim().replace(",", ".");
+  return t !== "" && Number.isFinite(Number(t)) ? Number(t) : text;
+}
+
+const PROP_KIND = { string: "tekst", number: "tall" } as const;
+
+/** Egendefinerte egenskaper på en node (Custom Properties i Blender, `extras` i GLB). */
+function NodePropsEditor({ obj }: { obj: SceneObject }) {
+  const props = obj.props ?? {};
+  const entries = Object.entries(props);
+  const save = (next: NodeProps) => useEditor.getState().updateObject(obj.id, { props: next });
+
+  const rename = (from: string, to: string) => {
+    const key = to.trim();
+    if (key === from) return;
+    // Tomt navn fjerner egenskapen; et navn som finnes fra før lar vi være.
+    if (key && key in props) return reportError(new Error(`Egenskapen «${key}» finnes allerede`));
+    save(Object.fromEntries(entries.flatMap(([k, v]) => (k === from ? (key ? [[key, v]] : []) : [[k, v]]))));
+  };
+  const add = () => {
+    let key = "egenskap";
+    for (let i = 2; key in props; i++) key = `egenskap_${i}`;
+    save({ ...props, [key]: "" });
+  };
+
+  return (
+    <div className="row">
+      <div className="row-title">
+        Egenskaper <span className="value">eksporteres som extras</span>
+      </div>
+      {entries.map(([key, value]) => (
+        <div className="node-prop" key={obj.id + key}>
+          <input
+            className="text"
+            defaultValue={key}
+            placeholder="navn"
+            onBlur={(e) => rename(key, e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+          />
+          <input
+            key={String(value)}
+            className="text"
+            defaultValue={String(value)}
+            placeholder="verdi"
+            onBlur={(e) => {
+              const v = parsePropValue(e.target.value);
+              if (v !== value) save({ ...props, [key]: v });
+            }}
+            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+          />
+          <span className="kind">{PROP_KIND[typeof value as keyof typeof PROP_KIND]}</span>
+          <button className="icon-btn" title="Fjern egenskapen" onClick={() => rename(key, "")}>
+            <Icon name="close" size={12} />
+          </button>
+        </div>
+      ))}
+      <div className="btn-row">
+        <button className="small-btn" title="Tall eller tekst, f.eks. type = pirate_grunt, yaw_min = -150, loop = 1" onClick={add}>
+          + Legg til egenskap
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NodeInfo({ obj }: { obj: SceneObject }) {
+  const objects = useEditor((s) => s.objects);
+  const problem = nodeNameProblem(obj, objects);
+  const { forward, up } = nodeAxes(obj);
+  const fmt = (v: Vec3) => v.map((c) => Number(c.toFixed(2))).join(", ");
+  return (
+    <>
+      {problem && <p className="node-warning">{problem}</p>}
+      <p className="node-axes">
+        Forover (lokal +Z): <b>{fmt(forward)}</b>
+        <br />
+        Opp (lokal +Y): <b>{fmt(up)}</b>
+      </p>
+    </>
   );
 }
 
@@ -436,6 +521,7 @@ export function Inspector() {
   }
 
   const light = isLight(obj.type);
+  const node = isNode(obj.type);
   return (
     <aside className="panel inspector">
       <h2>Egenskaper</h2>
@@ -454,17 +540,20 @@ export function Inspector() {
           onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
         />
       </div>
+      {node && <NodeInfo obj={obj} />}
 
       <FolderSelect objs={objs} />
       <ScriptSource objs={objs} />
 
       <Vec3Row title="Posisjon (m)" obj={obj} field="position" step={0.01} />
       <Vec3Row title="Rotasjon (°)" obj={obj} field="rotation" step={0.5} />
-      {!light && <Vec3Row title="Størrelse (m)" obj={obj} field="scale" step={0.01} />}
+      {!light && !node && <Vec3Row title="Størrelse (m)" obj={obj} field="scale" step={0.01} />}
 
       <ColorRow objs={objs} />
 
-      {light ? (
+      {node ? (
+        <NodePropsEditor obj={obj} />
+      ) : light ? (
         <Slider title="Lysstyrke" objs={objs} field="intensity" max={200} percent={false} />
       ) : (
         <>

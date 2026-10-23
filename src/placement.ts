@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { useEditor, type ObjectUpdate } from "./store";
 import { hiddenFolderIds } from "./folders";
 import { AXES, axisIndex, boxOf, objectBox, objectQuaternion, round, type Axis } from "./bounds";
-import { SYMMETRIC_AXES, isLight, type SceneObject, type Vec3 } from "./types";
+import { SYMMETRIC_AXES, isHelper, isNode, type SceneObject, type Vec3 } from "./types";
 
 const DEG = Math.PI / 180;
 
@@ -20,7 +20,7 @@ function surfaces(exclude: Set<string>): SceneObject[] {
   const { objects, folders } = useEditor.getState();
   const hidden = hiddenFolderIds(folders);
   return objects.filter(
-    (o) => !exclude.has(o.id) && o.visible && !o.hole && !isLight(o.type) && !(o.folderId && hidden.has(o.folderId)),
+    (o) => !exclude.has(o.id) && o.visible && !o.hole && !isHelper(o.type) && !(o.folderId && hidden.has(o.folderId)),
   );
 }
 
@@ -84,6 +84,9 @@ function mirrored(o: SceneObject, axis: Axis, plane: number): Pick<SceneObject, 
   if (o.type === "mesh") {
     // Importerte modeller kan ha hvilken som helst form: speil selve geometrien med negativ størrelse.
     scale[i] = -scale[i];
+  } else if (isNode(o.type)) {
+    // M·R·Lx: forover (+Z) og opp (+Y) speiles som punktene rundt, uten negativ skala i eksporten.
+    result.copy(m.clone().multiply(r).multiply(new THREE.Matrix4().makeScale(-1, 1, 1)));
   } else if (!SYMMETRIC_AXES[o.type].includes(axis)) {
     result.multiply(axis === "x" ? new THREE.Matrix4().makeRotationY(Math.PI) : new THREE.Matrix4().makeRotationX(Math.PI));
   }

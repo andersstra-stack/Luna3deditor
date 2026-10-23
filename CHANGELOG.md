@@ -10,6 +10,16 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Markør-noder** (Flere → Node): usynlige, navngitte punkter med retning som spillmotoren leser fra modellen –
+  dokkepunkter, hardpoints, motorer, spawn-punkter o.l. (navnene fra Unity-sidens oppskrifter, f.eks. `hp_turret_S_01`,
+  `dock_entry`). Lokal +Z er forover og +Y opp, som i Unity etter import. Egne egenskaper (tall eller tekst) redigeres
+  i egenskapspanelet, som Custom Properties i Blender. Kopier får neste nummer, speiling snur retningen riktig, og panelet
+  varsler om like navn, mellomrom og `.001`. Markøren holder en minste størrelse på skjermen.
+- **GLB-eksporten** tar med nodene som tomme noder med egenskapene som `extras`. Unity-siden leser dem med glTFast.
+- Claude og Python-skript kan lage noder (`add_objects` med `type: "node"` og `props`, `luna.node(..., props={...})`);
+  `get_scene` viser nodenes retning (`forward`/`up`) i verdensrommet.
+
 ### Fixed
 - MCP-broen kommer seg av seg selv når porten er opptatt (f.eks. av en gammel Claude-økt): serveren prøver å lytte
   på nytt hvert 3. sekund i stedet for å gi opp til Claude Code kobler den til på nytt.

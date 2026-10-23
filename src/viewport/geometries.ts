@@ -82,6 +82,14 @@ function build(type: ShapeType): THREE.BufferGeometry {
     case "spotLight":
       // Kjegle som peker nedover (-Y), samme vei som lyset.
       return new THREE.ConeGeometry(0.5, 1, 24).rotateX(Math.PI);
+    case "node": {
+      // Markøren i editoren: kule i punktet, pil langs +Z (forover) og en kort pinne langs +Y (opp).
+      const ball = new THREE.SphereGeometry(0.12, 16, 8);
+      const shaft = new THREE.CylinderGeometry(0.035, 0.035, 0.32, 8).rotateX(Math.PI / 2).translate(0, 0, 0.16);
+      const tip = new THREE.ConeGeometry(0.09, 0.18, 12).rotateX(Math.PI / 2).translate(0, 0, 0.41);
+      const up = new THREE.CylinderGeometry(0.022, 0.022, 0.3, 6).translate(0, 0.15, 0);
+      return mergeGeometries([ball, shaft, tip, up])!;
+    }
     case "mesh":
       // Importerte modeller har egen geometri – se geometryOf().
       return new THREE.BoxGeometry(1, 1, 1);

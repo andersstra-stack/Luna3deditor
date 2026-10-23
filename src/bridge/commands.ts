@@ -237,8 +237,8 @@ export const handlers: Record<BridgeMethod, Handler> = {
   },
 
   export_glb: async (p) => {
-    const path = await exportGlb(requireString(p, "path"));
-    say(`eksporterte ${path}`);
-    return { path };
+    const result = await exportGlb(requireString(p, "path"));
+    say(`eksporterte ${result?.path}`);
+    return result;
   },
 };

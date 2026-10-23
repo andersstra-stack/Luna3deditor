@@ -26,6 +26,7 @@ Tema velges under **Innstillinger** (tannhjulet øverst til høyre): de samme 10
 | Plassering | Egenskapspanelet: **Legg ned på underlaget** (**End**), innrett flere objekter (min/midt/maks), speil og speilkopi. Mål på utvalget vises nede til venstre |
 | Hull | Huk av **Hull** på et objekt, så skjæres det bort fra de andre objektene i samme mappe (vinduer, dører, hakk) – live og redigerbart |
 | Lys | Punktlys og spotlys under **Flere**; farge og lysstyrke i egenskapspanelet. Roter spotlyset for å sikte |
+| Markør-noder | **Flere → Node**: usynlige, navngitte punkter med retning for spillmotoren (dokkepunkter, hardpoints, motorer, spawn …). Pila er «forover» (lokal +Z), pinnen «opp» (+Y). Egne egenskaper (tall eller tekst) i egenskapspanelet. Kopier får neste nummer (`hp_01` → `hp_02`), og panelet varsler om like navn og mellomrom |
 | Nøyaktige verdier | Høyre panel – skriv inn tall eller dra i X/Y/Z-bokstaven (Shift = fint) |
 | Mapper | Mappe-knappen i scenelista lager en mappe (inni den aktive). Dra objekter og mapper inn/ut, eller velg mappe i egenskapspanelet. Klikk en mappe for å velge alt i den (gizmoen flytter da hele mappa) – nye former havner også i den. Øyet skjuler hele mappa |
 | Kopier / lim inn | **Ctrl+C** / **Ctrl+X** / **Ctrl+V** – via utklippstavla, så det virker også mellom to vinduer. Limes inn i den aktive mappa |
@@ -35,7 +36,7 @@ Tema velges under **Innstillinger** (tannhjulet øverst til høyre): de samme 10
 | Importer | **Ctrl+I**, importknappen eller dra filer inn i vinduet: **FBX, GLB/glTF, OBJ, STL**. Flere deler havner i en egen mappe, cm/mm skaleres til meter. Farger hentes fra materialer, hjørnefarger og teksturer/fargepaletter (bildet leses fra samme mappe – ved dra-og-slipp: dra modell og bilde inn sammen), og modellen deles opp i én del per farge. Modellen kan flyttes, skaleres, fargelegges, speiles og få hull, men ikke formredigeres. `.gltf` med eksterne filer støttes ikke – bruk `.glb` |
 | Python-skript | `</>`-knappen kjører en `.py`-fil som bygger/endrer scenen med `import luna3d as luna` (se `scripting/luna3d.py` og `scripting/eksempler/`). Ett angre-steg per kjøring. Kjøres samme fil igjen, erstattes forrige resultat («Løsne» i egenskapene beholder et objekt). Krever Python 3 |
 | Kommentar-pinner | Pinneknappen eller **N**, klikk på et objekt/bakken og skriv hva som må gjøres. Fanen «Kommentarer» i venstre panel lister dem. Claude kan lese, svare og markere dem som løst – og sette egne (lilla) |
-| Eksporter | Eksport-knappen → `.glb` (Blender, Roblox Studio, Unity, Godot …). Mappene blir navngitte grupper |
+| Eksporter | Eksport-knappen → `.glb` (Blender, Roblox Studio, Unity, Godot …). Mappene blir navngitte grupper. Noder blir tomme noder med egenskapene som glTF `extras` |
 
 ## Versjoner
 

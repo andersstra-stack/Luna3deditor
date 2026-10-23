@@ -4,7 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useEditor, type Snapshot } from "./store";
 import { hiddenFolderIds } from "./folders";
-import { SHAPES, isLight, type Folder, type SceneFile } from "./types";
+import { SHAPES, isLight, isNode, type Folder, type SceneFile } from "./types";
+import { objectQuaternion } from "./bounds";
 import { sceneMeshes } from "./viewport/three-handle";
 import { deserializeMesh, hasMesh, registerMesh, serializeUsedMeshes } from "./meshes";
 
@@ -61,8 +62,17 @@ export async function openScene(path?: string): Promise<string | null> {
   return target;
 }
 
-/** Eksporterer synlige objekter som GLB (kan åpnes i Blender, Roblox Studio, Unity, osv). */
-export async function exportGlb(path?: string): Promise<string | null> {
+export interface GlbExport {
+  path: string;
+  /** Antall markør-noder i fila. */
+  nodes: number;
+}
+
+/**
+ * Eksporterer synlige objekter som GLB (kan åpnes i Blender, Roblox Studio, Unity, osv).
+ * Markør-noder blir tomme noder med egenskapene som `extras` – eneste kilde; Unity-siden leser dem selv fra GLB-fila.
+ */
+export async function exportGlb(path?: string): Promise<GlbExport | null> {
   let target = path ?? null;
   if (!target) target = await save({ filters: [{ name: "glTF binær", extensions: ["glb"] }], defaultPath: "scene.glb" });
   if (!target) return null;
@@ -90,7 +100,23 @@ export async function exportGlb(path?: string): Promise<string | null> {
   };
 
   let count = 0;
+  let nodes = 0;
   for (const obj of objects) {
+    if (isNode(obj.type)) {
+      if (!obj.visible || (obj.folderId && hidden.has(obj.folderId))) continue;
+      // Tom node uten skala: markørstørrelsen er bare for editoren. GLTFExporter skriver userData som extras.
+      const n = new THREE.Object3D();
+      n.name = obj.name;
+      n.position.set(...obj.position);
+      n.quaternion.copy(objectQuaternion(obj));
+      n.userData = { ...obj.props };
+      const parent = groupFor(obj.folderId);
+      if (parent) parent.add(n);
+      else roots.push(n);
+      nodes++;
+      count++;
+      continue;
+    }
     const mesh = meshById.get(obj.id);
     // Hull og lys er editor-hjelpere; hullene er allerede skåret ut av geometrien (CSG).
     if (!mesh || !obj.visible || obj.hole || isLight(obj.type) || (obj.folderId && hidden.has(obj.folderId))) continue;
@@ -109,5 +135,5 @@ export async function exportGlb(path?: string): Promise<string | null> {
   const result = await new GLTFExporter().parseAsync(roots, { binary: true });
   const bytes = new Uint8Array(result as ArrayBuffer);
   await invoke("write_binary_file", { path: target, contents: Array.from(bytes) });
-  return target;
+  return { path: target, nodes };
 }

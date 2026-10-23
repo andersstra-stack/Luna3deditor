@@ -147,6 +147,12 @@ const objectProps = {
     .optional()
     .describe("true = this object is a HOLE: it is shown as a ghost and cut away (CSG) from the other objects in the SAME folder."),
   intensity: z.number().min(0).optional().describe("Lights only: brightness in candela (pointLight ~20, spotLight ~60)."),
+  props: z
+    .record(z.string(), z.union([z.string(), z.number()]))
+    .optional()
+    .describe(
+      "Nodes only: custom properties, exported as glTF extras (like Blender Custom Properties). Flat key/value pairs, numbers or text only (use 1/0 for flags), e.g. { type: 'pirate_grunt' } or { yaw_min: -150, yaw_max: 150 }. Replaces the whole set.",
+    ),
   folderId: z
     .string()
     .nullable()
@@ -169,6 +175,7 @@ All shapes are unit-sized and centered on their origin, so 'scale' equals the ob
 - plane: flat 1×1 square in the XZ plane (zero thickness)
 - capsule: 0.5 wide, 1 tall (along Y)
 - pointLight / spotLight: light sources (spotLight shines along its local -Y; rotate it to aim). Use 'intensity' and 'color'.
+- node: an invisible marker point for game engines (see "Marker nodes" below). 'scale' is only its size in the editor.
 To rest an object on the ground, set position.y = scale.y / 2 (planes: y = 0) — or call drop_to_ground.
 
 get_scene returns each object's exact world-space bounding box ('bounds' min/max), which makes it easy to place
@@ -182,12 +189,22 @@ type "mesh" (several parts are put in their own folder). Like every other shape 
 is their size in meters; centimeter/millimeter files are scaled to meters automatically. Meshes can be moved, scaled, recolored,
 mirrored, duplicated and cut with holes, but their geometry can't be edited.
 
+Marker nodes: type "node" is a named, invisible point with a direction – dock points, weapon hardpoints, engines,
+spawn points, doors, loot spots – that the game (SpaceRUS, Unity) finds by NAME. Local +Z is "forward" and local +Y is
+"up" (the same axes in Unity after import); get_scene gives each node its world 'forward' and 'up'. Put custom
+properties in 'props'. Names must be exact and unique, no spaces or .001 – follow the game's conventions, e.g.
+hp_turret_S_01 (up = out of the hull, forward = rest direction; props yaw_min/yaw_max/pitch_min/pitch_max),
+engine_01 (forward points backwards out of the nozzle), nav_light_L/R, dock_clamp, land_point, cockpit,
+boarding_door, dock_entry/dock_inside/undock (forward = nose direction), spawn_<room>_<nr> with props.type.
+Props are flat numbers or text (no booleans – use 1/0). Duplicating a node numbers the copy (hp_01 → hp_02).
+export_glb writes nodes as empty glTF nodes with props as extras; Unity (glTFast) reads them from there.
+
 Python scripts: run_python runs Python code (or a .py file) that builds or edits the scene through the luna3d
 module – best for anything repetitive or mathematical (fences, stairs, grids, rings, terrain, arrays of parts),
 where one loop replaces hundreds of add_objects entries. The whole run is ONE undo step. API (import luna3d as luna):
 - luna.box/sphere/cylinder/cone/torus/plane/capsule/wedge/prism/pyramid/stairs/hemisphere/tube/rounded_box/
-  point_light/spot_light(name=, position=(x,y,z), rotation=(deg,deg,deg), scale=(x,y,z), color="#rrggbb",
-  metalness=, roughness=, opacity=, hole=, intensity=, folder=) -> key; or luna.add("box", ...)
+  point_light/spot_light/node(name=, position=(x,y,z), rotation=(deg,deg,deg), scale=(x,y,z), color="#rrggbb",
+  metalness=, roughness=, opacity=, hole=, intensity=, props={...}, folder=) -> key; or luna.add("box", ...)
 - luna.folder(name, parent=None) -> key (use as folder=/parent=)
 - luna.update(id_or_key, **props), luna.delete(*ids)
 - luna.scene / luna.objects(name=, type=, folder=) / luna.folders(name=) / luna.get(id): the scene at start,
@@ -242,7 +259,7 @@ server.registerTool(
   "add_objects",
   {
     title: "Add objects",
-    description: "Add one or more shapes or lights to the scene. Returns their new ids. Prefer adding all parts of a model in one call.",
+    description: "Add one or more shapes, lights or marker nodes to the scene. Returns their new ids. Prefer adding all parts of a model in one call.",
     inputSchema: {
       objects: z.array(z.object({ type: z.enum(ADDABLE_SHAPES), ...objectProps })).min(1),
     },
@@ -586,7 +603,8 @@ server.registerTool(
   "export_glb",
   {
     title: "Export GLB",
-    description: "Export visible objects as a binary glTF (.glb) file that Blender, Roblox Studio, Unity, Godot etc. can import.",
+    description:
+      "Export visible objects as a binary glTF (.glb) file that Blender, Roblox Studio, Unity, Godot etc. can import. Folders become named groups; marker nodes become empty nodes with their props as extras.",
     inputSchema: { path: z.string().describe("Absolute file path ending in .glb") },
   },
   ({ path }) => run("export_glb", { path }),

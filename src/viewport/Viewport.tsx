@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
-import { GizmoHelper, GizmoViewport, Grid, OrbitControls, Outlines, TransformControls } from "@react-three/drei";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+import { GizmoHelper, GizmoViewport, Grid, Html, OrbitControls, Outlines, TransformControls } from "@react-three/drei";
 import type { TransformControls as TransformControlsImpl } from "three-stdlib";
 import { useEditor } from "../store";
 import { hiddenFolderIds } from "../folders";
 import { boxOf, objectBox, objectMatrix, round } from "../bounds";
-import { isLight, type SceneObject, type Vec3 } from "../types";
+import { isHelper, isLight, isNode, type SceneObject, type Vec3 } from "../types";
 import { geometryOf, getGeometry } from "./geometries";
 import { cutGeometry, overlappingHoles } from "./csg";
 import { snapOffset, type SnapContext } from "./snapping";
@@ -120,7 +120,7 @@ function SelectionGizmo({ visible }: { visible: SceneObject[] }) {
             items: selected.map((o) => ({ id: o.id, matrix: objectMatrix(o) })),
             snap: {
               startBox: boxOf(selected),
-              others: visible.filter((o) => !ids.has(o.id) && !isLight(o.type)).map(objectBox),
+              others: visible.filter((o) => !ids.has(o.id) && !isHelper(o.type)).map(objectBox),
             },
           };
         }}
@@ -246,6 +246,34 @@ function LightObject({ obj, selected, accent }: { obj: SceneObject; selected: bo
   );
 }
 
+/** Minste størrelse på en node-markør, i forhold til kameraavstanden (så den synes også på store stasjoner). */
+const NODE_MIN_SCREEN = 0.08;
+
+/** Markør-node: pil langs +Z (forover). Navnet vises når den er valgt – spillet finner noden på navnet. */
+function NodeMarker({ obj, selected, accent }: { obj: SceneObject; selected: boolean; accent: string }) {
+  const onClick = useSelectHandler(obj.id);
+  const mesh = useRef<THREE.Mesh>(null);
+  useFrame(({ camera }) => {
+    const m = mesh.current;
+    if (!m) return;
+    const k = Math.max(1, (camera.position.distanceTo(m.getWorldPosition(new THREE.Vector3())) * NODE_MIN_SCREEN) / obj.scale[1]);
+    m.scale.set(obj.scale[0] * k, obj.scale[1] * k, obj.scale[2] * k);
+  });
+  return (
+    <group position={obj.position} rotation={obj.rotation.map((d) => d * DEG) as Vec3}>
+      <mesh ref={mesh} name={obj.name} userData={{ lunaId: obj.id }} geometry={getGeometry(obj.type)} onClick={onClick}>
+        <meshBasicMaterial color={obj.color} toneMapped={false} />
+        {selected && <Outlines thickness={3} color={accent} />}
+      </mesh>
+      {selected && (
+        <Html center className="node-label" pointerEvents="none">
+          {obj.name}
+        </Html>
+      )}
+    </group>
+  );
+}
+
 function ThreeBridge() {
   const get = useThree((s) => s.get);
   useEffect(() => setThreeGetter(get), [get]);
@@ -260,14 +288,16 @@ function Scene({ accent }: { accent: string }) {
   // Hull per mappe; et hull skjærer i de andre objektene i samme mappe.
   const holesByFolder = useMemo(() => {
     const map = new Map<string | null, SceneObject[]>();
-    for (const o of visible) if (o.hole && !isLight(o.type)) map.set(o.folderId, [...(map.get(o.folderId) ?? []), o]);
+    for (const o of visible) if (o.hole && !isHelper(o.type)) map.set(o.folderId, [...(map.get(o.folderId) ?? []), o]);
     return map;
   }, [visible]);
 
   return (
     <>
       {visible.map((o) =>
-        isLight(o.type) ? (
+        isNode(o.type) ? (
+          <NodeMarker key={o.id} obj={o} selected={selected.has(o.id)} accent={accent} />
+        ) : isLight(o.type) ? (
           <LightObject key={o.id} obj={o} selected={selected.has(o.id)} accent={accent} />
         ) : (
           <SolidMesh
