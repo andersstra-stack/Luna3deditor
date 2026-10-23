@@ -11,6 +11,9 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 ## [Unreleased]
 
 ### Added
+- **Slå sammen** (egenskapspanelet ved flervalg og MCP `merge_objects`), som Ctrl+J i Blender: valgte former og modeller
+  blir én modell på samme sted, med navn, mappe og utseende fra hovedvalget. Bitene fra «Del opp i løse deler» får
+  tilbake navnet sitt. Lys, noder og hull blir ikke med.
 - **Del opp i løse deler** for importerte modeller (egenskapspanelet og MCP `split_loose_parts`), som «Separate by
   Loose Parts» i Blender: bitene som ikke henger sammen blir egne objekter (`navn.1`, `navn.2` …, største først) på samme
   sted og med samme utseende. Heiskabinen i hangaren blir f.eks. fire stolper, to rekkverk, tak, gulv og lampe.

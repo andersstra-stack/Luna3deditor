@@ -8,6 +8,7 @@ import { anchorNote, noteWorldPosition, topOf } from "../notes";
 import { applyScriptOps, sceneForScripts } from "../scripting";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { splitLooseParts } from "../meshSplit";
+import { mergeObjects } from "../meshMerge";
 import { captureViewport, frameScene, VIEWS, type ViewName } from "../viewport/three-handle";
 import type { BridgeMethod } from "./protocol";
 
@@ -191,6 +192,14 @@ export const handlers: Record<BridgeMethod, Handler> = {
     if (!Array.isArray(ids) || !ids.length) throw new Error("ids må være en ikke-tom liste");
     const result = splitLooseParts(ids);
     say(result.split.length ? `delte ${result.split.map((s) => s.name).join(", ")} i løse deler` : "fant ingenting å dele");
+    return result;
+  },
+
+  merge_objects: (p) => {
+    const ids = p.ids as string[];
+    if (!Array.isArray(ids) || ids.length < 2) throw new Error("ids må ha minst to objekter");
+    const result = mergeObjects(ids);
+    say(`slo sammen ${result.merged} deler til ${result.name}`);
     return result;
   },
 

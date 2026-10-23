@@ -228,7 +228,8 @@ Create folders first with create_folders, then pass folderId in add_objects. Hid
 
 Helpers: duplicate_objects (repeat parts with an offset), mirror_objects (symmetric models: build one side, mirror-copy
 across x = 0), align_objects, drop_to_ground. split_loose_parts splits imported meshes into their unconnected pieces
-(like Blender's "Separate by Loose Parts") so single pieces can be moved, recolored or deleted.
+(like Blender's "Separate by Loose Parts") so single pieces can be moved, recolored or deleted; merge_objects joins
+several shapes/meshes into one mesh (like Ctrl+J; it gets the primary's color, so merge parts of one color).
 
 Workflow tips: call get_scene first to see existing objects and their ids. Build composite things from several shapes
 with one add_objects call. Use screenshot to check your work visually — try different views. Every change is undoable by the user.`;
@@ -621,6 +622,17 @@ server.registerTool(
     inputSchema: { ids: z.array(z.string()).min(1).describe("Ids of the mesh objects to split") },
   },
   ({ ids }) => run("split_loose_parts", { ids }),
+);
+
+server.registerTool(
+  "merge_objects",
+  {
+    title: "Merge objects",
+    description:
+      "Join several shapes or imported models into ONE mesh object, like Blender's Ctrl+J. It stays where the parts were, takes the name, folder, color and material of the last id (the primary), and is axis-aligned (rotation 0). A mesh has one color, so merge parts that share a color. Lights, nodes and holes are skipped (holes in the folder still cut the result). One undo step; split_loose_parts can split it again.",
+    inputSchema: { ids: z.array(z.string()).min(2).describe("Ids of the objects to merge; the last one is the primary") },
+  },
+  ({ ids }) => run("merge_objects", { ids }),
 );
 
 server.registerTool(

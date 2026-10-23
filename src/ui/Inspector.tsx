@@ -6,6 +6,7 @@ import { AXES, type Axis } from "../bounds";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { nodeAxes, nodeNameProblem } from "../nodes";
 import { splitLooseParts } from "../meshSplit";
+import { mergeObjects } from "../meshMerge";
 import { reportError } from "./StatusBar";
 import { Icon } from "./icons";
 
@@ -406,19 +407,34 @@ function Placement({ objs }: { objs: SceneObject[] }) {
   );
 }
 
-/** Importerte modeller: del i bitene som ikke henger sammen (som «By Loose Parts» i Blender). */
+/**
+ * Modeller: del i bitene som ikke henger sammen (som «By Loose Parts» i Blender),
+ * eller slå flere valgte deler sammen til én modell (som Ctrl+J).
+ */
 function ModelTools({ objs }: { objs: SceneObject[] }) {
   const meshes = objs.filter((o) => o.type === "mesh");
-  if (!meshes.length) return null;
+  const mergeable = objs.filter((o) => !isHelper(o.type) && !o.hole);
+  if (!meshes.length && mergeable.length < 2) return null;
   return (
     <div className="btn-row">
-      <button
-        className="small-btn"
-        title="Del modellen i bitene som ikke henger sammen – hver bit blir et eget objekt"
-        onClick={run(() => splitLooseParts(meshes.map((o) => o.id)))}
-      >
-        <Icon name="shapes" size={14} /> Del opp i løse deler
-      </button>
+      {meshes.length > 0 && (
+        <button
+          className="small-btn"
+          title="Del modellen i bitene som ikke henger sammen – hver bit blir et eget objekt"
+          onClick={run(() => splitLooseParts(meshes.map((o) => o.id)))}
+        >
+          <Icon name="shapes" size={14} /> Del opp i løse deler
+        </button>
+      )}
+      {mergeable.length > 1 && (
+        <button
+          className="small-btn"
+          title="Gjør de valgte delene til én modell. Den får fargen til hovedvalget (sist valgte)."
+          onClick={run(() => mergeObjects(mergeable.map((o) => o.id)))}
+        >
+          <Icon name="copy" size={14} /> Slå sammen
+        </button>
+      )}
     </div>
   );
 }
