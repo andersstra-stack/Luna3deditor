@@ -153,6 +153,10 @@ input {
   color: var(--text);
 }
 
+.claude-pill.busy .dot {
+  background: var(--accent);
+}
+
 .claude-pill.connected .dot {
   background: var(--green);
   box-shadow: 0 0 8px var(--green);
@@ -208,10 +212,123 @@ input {
 }
 
 /* Scene-liste */
-.outliner ul {
+.outliner {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -4px 0 6px;
+}
+
+.panel-header h2 {
+  margin: 0;
+}
+
+.icon-btn.small {
+  width: 28px;
+  height: 26px;
+}
+
+.active-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.active-folder span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-folder b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.active-folder button {
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.active-folder button:hover {
+  color: var(--text);
+}
+
+.outliner ul.tree {
+  flex: 1;
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 24px;
+  border-radius: 6px;
+}
+
+.outliner ul.tree.drop {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.outliner li.folder-row {
+  font-weight: 500;
+}
+
+.outliner li.folder-row.active {
+  background: var(--accent-soft);
+}
+
+.outliner li.drop {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.folder-icon {
+  color: var(--accent);
+}
+
+.chevron {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 18px;
+  margin-right: -4px;
+  color: var(--text-dim);
+  transition: transform 0.12s;
+}
+
+.chevron.open {
+  transform: rotate(90deg);
+}
+
+.outliner .count {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: var(--bg-2);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+
+.outliner li:hover .count {
+  display: none;
+}
+
+.root-drop {
+  justify-content: center;
+  margin-top: 6px;
+  border: 1px dashed var(--border);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  cursor: default !important;
 }
 
 .outliner li {
@@ -273,6 +390,11 @@ input {
   opacity: 1;
 }
 
+/* Skjulte rader viser bare øyet, ikke slett-knappen, til man holder over */
+.outliner li.hidden-obj:not(:hover) .row-btn.danger {
+  display: none;
+}
+
 .row-btn:hover {
   background: var(--bg-3);
   color: var(--text);
@@ -300,7 +422,7 @@ input {
   opacity: 0.7;
 }
 
-input.text {
+.text {
   width: 100%;
   background: var(--bg-0);
   border: 1px solid var(--border);
@@ -309,7 +431,7 @@ input.text {
   user-select: text;
 }
 
-input.text:focus,
+.text:focus,
 .num input:focus {
   outline: none;
   border-color: var(--accent);

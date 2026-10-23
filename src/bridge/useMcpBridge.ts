@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { useEditor } from "../store";
 import { handlers } from "./commands";
-import { BRIDGE_PORT, type BridgeHello, type BridgeRequest, type BridgeResponse } from "./protocol";
+import { BRIDGE_BUSY_CODE, BRIDGE_PORT, type BridgeHello, type BridgeRequest, type BridgeResponse } from "./protocol";
 
 const RECONNECT_MS = 2000;
+const BUSY_RETRY_MS = 5000;
 
 /**
  * Kobler appen til MCP-serveren (som Claude Code starter). Serveren eier
@@ -39,9 +40,10 @@ export function useMcpBridge() {
         socket?.send(JSON.stringify(res));
       };
 
-      socket.onclose = () => {
-        setBridgeStatus("disconnected");
-        if (!disposed) timer = window.setTimeout(connect, RECONNECT_MS);
+      socket.onclose = (ev) => {
+        const busy = ev.code === BRIDGE_BUSY_CODE;
+        setBridgeStatus(busy ? "busy" : "disconnected");
+        if (!disposed) timer = window.setTimeout(connect, busy ? BUSY_RETRY_MS : RECONNECT_MS);
       };
       socket.onerror = () => socket?.close();
     };

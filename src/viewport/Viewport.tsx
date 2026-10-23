@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { GizmoHelper, GizmoViewport, Grid, OrbitControls, Outlines, TransformControls } from "@react-three/drei";
 import { useEditor } from "../store";
+import { hiddenFolderIds } from "../folders";
 import type { SceneObject, Vec3 } from "../types";
 import { getGeometry } from "./geometries";
 import { setThreeGetter } from "./three-handle";
@@ -44,7 +45,7 @@ function Gizmo({ object, id }: { object: THREE.Object3D; id: string }) {
   );
 }
 
-function ObjectMesh({ obj, selected }: { obj: SceneObject; selected: boolean }) {
+function ObjectMesh({ obj, selected, visible }: { obj: SceneObject; selected: boolean; visible: boolean }) {
   const [mesh, setMesh] = useState<THREE.Mesh | null>(null);
   const select = useEditor((s) => s.select);
   const transparent = obj.opacity < 1;
@@ -64,7 +65,7 @@ function ObjectMesh({ obj, selected }: { obj: SceneObject; selected: boolean }) 
         position={obj.position}
         rotation={obj.rotation.map((d) => d * DEG) as Vec3}
         scale={obj.scale}
-        visible={obj.visible}
+        visible={visible}
         castShadow
         receiveShadow
         onClick={onClick}
@@ -81,7 +82,7 @@ function ObjectMesh({ obj, selected }: { obj: SceneObject; selected: boolean }) 
         {/* drei 10 har byttet om grenene i shaderen: uten `screenspace` er tykkelsen i piksler. */}
         {selected && <Outlines thickness={3} color="#ffb454" />}
       </mesh>
-      {selected && mesh && obj.visible && <Gizmo object={mesh} id={obj.id} />}
+      {selected && mesh && visible && <Gizmo object={mesh} id={obj.id} />}
     </>
   );
 }
@@ -94,11 +95,18 @@ function ThreeBridge() {
 
 function Scene() {
   const objects = useEditor((s) => s.objects);
+  const folders = useEditor((s) => s.folders);
   const selectedId = useEditor((s) => s.selectedId);
+  const hidden = useMemo(() => hiddenFolderIds(folders), [folders]);
   return (
     <>
       {objects.map((o) => (
-        <ObjectMesh key={o.id} obj={o} selected={o.id === selectedId} />
+        <ObjectMesh
+          key={o.id}
+          obj={o}
+          selected={o.id === selectedId}
+          visible={o.visible && !(o.folderId && hidden.has(o.folderId))}
+        />
       ))}
     </>
   );

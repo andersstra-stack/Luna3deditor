@@ -2,23 +2,29 @@ import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { useEditor } from "./store";
-import { SHAPES, type SceneFile, type SceneObject } from "./types";
+import { useEditor, type Snapshot } from "./store";
+import { hiddenFolderIds } from "./folders";
+import { SHAPES, type Folder, type SceneFile } from "./types";
 import { sceneMeshes } from "./viewport/three-handle";
 
 const SCENE_FILTER = { name: "Luna 3D-scene", extensions: ["luna.json", "json"] };
 
 export function serializeScene(): SceneFile {
-  return { format: "luna3d", version: 1, objects: useEditor.getState().objects };
+  const { objects, folders } = useEditor.getState();
+  return { format: "luna3d", version: 2, objects, folders };
 }
 
-function parseScene(text: string): SceneObject[] {
-  const data = JSON.parse(text) as Partial<SceneFile>;
+function parseScene(text: string): Snapshot {
+  const data = JSON.parse(text) as Partial<SceneFile> & { version?: number };
   if (data.format !== "luna3d" || !Array.isArray(data.objects)) throw new Error("Ikke en Luna 3D-scenefil");
   for (const o of data.objects) {
     if (!SHAPES.includes(o.type)) throw new Error(`Ukjent objekttype: ${o.type}`);
   }
-  return data.objects;
+  // Versjon 1 hadde ikke mapper.
+  const folders: Folder[] = Array.isArray(data.folders) ? data.folders : [];
+  const folderIds = new Set(folders.map((f) => f.id));
+  const objects = data.objects.map((o) => ({ ...o, folderId: o.folderId && folderIds.has(o.folderId) ? o.folderId : null }));
+  return { objects, folders };
 }
 
 /** Lagrer scenen. Uten sti spørres brukeren (eller forrige sti brukes). */
@@ -43,9 +49,9 @@ export async function openScene(path?: string): Promise<string | null> {
     target = typeof picked === "string" ? picked : null;
   }
   if (!target) return null;
-  const objects = parseScene(await invoke<string>("read_text_file", { path: target }));
+  const scene = parseScene(await invoke<string>("read_text_file", { path: target }));
   const state = useEditor.getState();
-  state.setObjects(objects);
+  state.setScene(scene);
   state.setFilePath(target);
   return target;
 }
@@ -56,20 +62,45 @@ export async function exportGlb(path?: string): Promise<string | null> {
   if (!target) target = await save({ filters: [{ name: "glTF binær", extensions: ["glb"] }], defaultPath: "scene.glb" });
   if (!target) return null;
 
-  // Rene kopier, slik at utvalgsomriss o.l. ikke blir med.
-  const clones = sceneMeshes()
-    .filter((m) => m.visible)
-    .map((m) => {
-      const c = new THREE.Mesh(m.geometry, m.material);
-      c.name = m.name;
-      c.position.copy(m.position);
-      c.quaternion.copy(m.quaternion);
-      c.scale.copy(m.scale);
-      return c;
-    });
-  if (!clones.length) throw new Error("Scenen er tom – ingenting å eksportere");
+  // Rene kopier (uten utvalgsomriss o.l.), med mappene som navngitte grupper.
+  const { objects, folders } = useEditor.getState();
+  const hidden = hiddenFolderIds(folders);
+  const meshById = new Map(sceneMeshes().map((m) => [m.userData.lunaId as string, m]));
+  const groups = new Map<string, THREE.Group>();
+  const roots: THREE.Object3D[] = [];
 
-  const result = await new GLTFExporter().parseAsync(clones, { binary: true });
+  const groupFor = (id: string | null): THREE.Object3D | null => {
+    const folder = id ? folders.find((f) => f.id === id) : undefined;
+    if (!folder) return null;
+    let group = groups.get(folder.id);
+    if (!group) {
+      group = new THREE.Group();
+      group.name = folder.name;
+      groups.set(folder.id, group);
+      const parent = groupFor(folder.parentId);
+      if (parent) parent.add(group);
+      else roots.push(group);
+    }
+    return group;
+  };
+
+  let count = 0;
+  for (const obj of objects) {
+    const mesh = meshById.get(obj.id);
+    if (!mesh || !obj.visible || (obj.folderId && hidden.has(obj.folderId))) continue;
+    const c = new THREE.Mesh(mesh.geometry, mesh.material);
+    c.name = obj.name;
+    c.position.copy(mesh.position);
+    c.quaternion.copy(mesh.quaternion);
+    c.scale.copy(mesh.scale);
+    const parent = groupFor(obj.folderId);
+    if (parent) parent.add(c);
+    else roots.push(c);
+    count++;
+  }
+  if (!count) throw new Error("Scenen er tom – ingenting å eksportere");
+
+  const result = await new GLTFExporter().parseAsync(roots, { binary: true });
   const bytes = new Uint8Array(result as ArrayBuffer);
   await invoke("write_binary_file", { path: target, contents: Array.from(bytes) });
   return target;

@@ -30,14 +30,25 @@ export interface SceneObject {
   roughness: number;
   opacity: number;
   visible: boolean;
+  /** Mappen objektet ligger i, eller null for scene-roten. */
+  folderId: string | null;
+}
+
+/** Mapper er kun for organisering – de har ingen egen posisjon. */
+export interface Folder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  visible: boolean;
 }
 
 export type TransformMode = "translate" | "rotate" | "scale";
 
 export interface SceneFile {
   format: "luna3d";
-  version: 1;
+  version: 2;
   objects: SceneObject[];
+  folders: Folder[];
 }
 
 export const DEFAULT_COLORS = ["#7aa2f7", "#9ece6a", "#e0af68", "#f7768e", "#bb9af7", "#7dcfff", "#ff9e64"];

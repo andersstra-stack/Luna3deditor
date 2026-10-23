@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor } from "../store";
+import { folderPath } from "../folders";
 import { SHAPE_LABELS, type SceneObject, type Vec3 } from "../types";
 import { Icon } from "./icons";
 
@@ -123,6 +124,31 @@ function Slider({ title, obj, field }: { title: string; obj: SceneObject; field:
   );
 }
 
+function FolderSelect({ obj }: { obj: SceneObject }) {
+  const folders = useEditor((s) => s.folders);
+  const options = useMemo(
+    () => folders.map((f) => ({ id: f.id, path: folderPath(folders, f.id) })).sort((a, b) => a.path.localeCompare(b.path, "nb")),
+    [folders],
+  );
+  return (
+    <div className="row">
+      <div className="row-title">Mappe</div>
+      <select
+        className="text"
+        value={obj.folderId ?? ""}
+        onChange={(e) => useEditor.getState().updateObject(obj.id, { folderId: e.target.value || null })}
+      >
+        <option value="">— Ingen (scene-roten) —</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.path}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function Inspector() {
   const obj = useEditor((s) => s.objects.find((o) => o.id === s.selectedId));
   const { updateObject, updateObjectLive, pushHistory, duplicateObject, deleteObjects } = useEditor.getState();
@@ -159,6 +185,11 @@ export function Inspector() {
             <dt>Ctrl+S</dt>
             <dd>Lagre</dd>
           </dl>
+          <h3>Mapper</h3>
+          <p>
+            Lag mapper med mappe-knappen i scenelista, og dra objekter inn i dem. Klikk på en mappe for å gjøre den aktiv – nye
+            former havner da i den.
+          </p>
           <h3>Claude</h3>
           <p>
             Når Claude Code er koblet til (grønn prikk øverst), kan du be Claude om å bygge, endre og se på scenen.
@@ -186,6 +217,8 @@ export function Inspector() {
           onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
         />
       </div>
+
+      <FolderSelect obj={obj} />
 
       <Vec3Row title="Posisjon (m)" obj={obj} field="position" step={0.01} />
       <Vec3Row title="Rotasjon (°)" obj={obj} field="rotation" step={0.5} />

@@ -20,10 +20,11 @@ npm run tauri dev
 | Fest til rutenett | **X** (0,25 m / 15° / 0,1) |
 | Kamera | Venstre mus roter · høyre mus panorer · hjul zoom · **F** vis alt |
 | Nøyaktige verdier | Høyre panel – skriv inn tall eller dra i X/Y/Z-bokstaven (Shift = fint) |
+| Mapper | Mappe-knappen i scenelista lager en mappe (inni den aktive). Dra objekter og mapper inn/ut, eller velg mappe i egenskapspanelet. Klikk en mappe for å gjøre den aktiv – nye former havner i den. Øyet skjuler hele mappa |
 | Dupliser / slett | **Ctrl+D** / **Delete** |
 | Angre / gjør om | **Ctrl+Z** / **Ctrl+Y** |
 | Lagre / åpne | **Ctrl+S** / **Ctrl+O** (`.luna.json`) |
-| Eksporter | Eksport-knappen → `.glb` (Blender, Roblox Studio, Unity, Godot …) |
+| Eksporter | Eksport-knappen → `.glb` (Blender, Roblox Studio, Unity, Godot …). Mappene blir navngitte grupper |
 
 ## Claude via MCP
 
@@ -35,7 +36,8 @@ Claude Code her blir du spurt om å godkjenne den. Når både Claude Code og app
 Claude Code ──stdio──▶ mcp-server/index.ts ──WebSocket 127.0.0.1:47317──▶ Luna 3D-appen
 ```
 
-Verktøy Claude får: `get_scene`, `add_objects`, `update_objects`, `delete_objects`, `select_object`,
+Verktøy Claude får: `get_scene`, `add_objects`, `update_objects`, `delete_objects`,
+`create_folders`, `update_folders`, `delete_folders`, `select_object`,
 `clear_scene`, `undo`, `redo`, `set_view`, `screenshot`, `save_scene`, `load_scene`, `export_glb`.
 
 Alt Claude gjør kan angres med Ctrl+Z, og vises i statuslinja nederst.

@@ -1,4 +1,4 @@
-import { useEditor } from "../store";
+import { useEditor, type BridgeStatus } from "../store";
 import { SHAPES, SHAPE_LABELS, type ShapeType, type TransformMode } from "../types";
 import { exportGlb, openScene, saveScene } from "../io";
 import { frameScene, viewTargetOnGround } from "../viewport/three-handle";
@@ -11,6 +11,12 @@ const MODES: { mode: TransformMode; label: string; key: string; icon: "move" | "
   { mode: "scale", label: "Skaler", key: "R", icon: "scale" },
 ];
 
+const BRIDGE_TEXT: Record<BridgeStatus, { label: string; title: string }> = {
+  connected: { label: "Claude tilkoblet", title: "Claude Code er koblet til via MCP og kan endre scenen" },
+  disconnected: { label: "Claude ikke tilkoblet", title: "Venter på Claude Code (MCP-serveren startes av Claude Code)" },
+  busy: { label: "Claude i annet vindu", title: "Et annet Luna 3D-vindu er allerede koblet til Claude" },
+};
+
 export function Toolbar() {
   const transformMode = useEditor((s) => s.transformMode);
   const snap = useEditor((s) => s.snap);
@@ -21,7 +27,7 @@ export function Toolbar() {
 
   const add = (type: ShapeType) => {
     const [x, z] = viewTargetOnGround();
-    addObject(type, { position: [x, type === "plane" ? 0 : 0.5, z] });
+    addObject(type, { position: [x, type === "plane" ? 0 : 0.5, z], folderId: useEditor.getState().activeFolderId });
   };
 
   const newScene = () => {
@@ -91,16 +97,9 @@ export function Toolbar() {
 
       <div className="spacer" />
 
-      <div
-        className={`claude-pill ${bridge}`}
-        title={
-          bridge === "connected"
-            ? "Claude Code er koblet til via MCP og kan endre scenen"
-            : "Venter på Claude Code (MCP-serveren startes av Claude Code)"
-        }
-      >
+      <div className={`claude-pill ${bridge}`} title={BRIDGE_TEXT[bridge].title}>
         <span className="dot" />
-        {bridge === "connected" ? "Claude tilkoblet" : "Claude ikke tilkoblet"}
+        {BRIDGE_TEXT[bridge].label}
       </div>
     </header>
   );

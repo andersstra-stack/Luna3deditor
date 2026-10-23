@@ -2,12 +2,17 @@
 // Holdes fri for imports slik at Node kan kjøre filen direkte.
 
 export const BRIDGE_PORT = 47317;
+/** WebSocket-lukkekode når et annet app-vindu allerede er koblet til. */
+export const BRIDGE_BUSY_CODE = 4001;
 
 export const BRIDGE_METHODS = [
   "get_scene",
   "add_objects",
   "update_objects",
   "delete_objects",
+  "create_folders",
+  "update_folders",
+  "delete_folders",
   "select",
   "clear_scene",
   "undo",

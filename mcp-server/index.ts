@@ -12,7 +12,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { WebSocketServer, WebSocket } from "ws";
 import { z } from "zod";
-import { BRIDGE_PORT, type BridgeMethod, type BridgeResponse } from "../src/bridge/protocol.ts";
+import { BRIDGE_BUSY_CODE, BRIDGE_PORT, type BridgeMethod, type BridgeResponse } from "../src/bridge/protocol.ts";
 
 const PORT = Number(process.env.LUNA_BRIDGE_PORT ?? BRIDGE_PORT);
 const log = (...args: unknown[]) => console.error("[luna3d-mcp]", ...args);
@@ -47,8 +47,13 @@ class AppBridge {
       log(this.listenError);
     });
     wss.on("connection", (ws) => {
+      // Første vindu beholder koblingen; ellers ville to vinduer sparket hverandre ut i en løkke.
+      if (this.socket?.readyState === WebSocket.OPEN) {
+        log("avviser ekstra app-vindu (et annet er allerede tilkoblet)");
+        ws.close(BRIDGE_BUSY_CODE, "busy");
+        return;
+      }
       log("appen koblet til");
-      this.socket?.close();
       this.socket = ws;
       ws.on("message", (data) => this.onMessage(String(data)));
       ws.on("close", () => {
@@ -118,6 +123,11 @@ const objectProps = {
   roughness: z.number().min(0).max(1).optional(),
   opacity: z.number().min(0).max(1).optional().describe("1 = solid, lower = transparent."),
   visible: z.boolean().optional(),
+  folderId: z
+    .string()
+    .nullable()
+    .optional()
+    .describe("Folder to place the object in (id from create_folders / get_scene). null = scene root."),
 };
 
 const INSTRUCTIONS = `Luna 3D is a simple 3D editor the user has open on their desktop. These tools edit its scene live.
@@ -131,6 +141,10 @@ All primitives are unit-sized and centered on their origin, so 'scale' equals th
 - plane: flat 1×1 square in the XZ plane (zero thickness)
 - capsule: 0.5 wide, 1 tall (along Y)
 To rest an object on the ground, set position.y = scale.y / 2 (planes: y = 0).
+
+Folders: purely organizational (like a file tree) — they have no transform of their own and can be nested.
+For anything with more than a handful of parts, put parts in descriptive folders (e.g. "House" > "Roof", "Walls").
+Create folders first with create_folders, then pass folderId in add_objects. Hidden folders hide everything inside them.
 
 Workflow tips: call get_scene first to see existing objects and their ids. Build composite things from several primitives
 with one add_objects call. Use screenshot to check your work visually — try different views. Every change is undoable by the user.`;
@@ -153,7 +167,7 @@ server.registerTool(
   "get_scene",
   {
     title: "Get scene",
-    description: "List every object in the Luna 3D scene with id, type, transform and material, plus the selected id.",
+    description: "List every folder and object in the Luna 3D scene (ids, folder tree, transforms, materials) plus the selected id.",
     inputSchema: {},
   },
   () => run("get_scene"),
@@ -194,6 +208,61 @@ server.registerTool(
 );
 
 server.registerTool(
+  "create_folders",
+  {
+    title: "Create folders",
+    description:
+      "Create one or more folders for organizing objects. Returns their ids. To nest, create the parent first and pass its id as parentId.",
+    inputSchema: {
+      folders: z
+        .array(
+          z.object({
+            name: z.string().describe("Folder name, e.g. 'Roof'"),
+            parentId: z.string().nullable().optional().describe("Parent folder id; omit or null for the scene root."),
+          }),
+        )
+        .min(1),
+    },
+  },
+  ({ folders }) => run("create_folders", { folders }),
+);
+
+server.registerTool(
+  "update_folders",
+  {
+    title: "Update folders",
+    description: "Rename, show/hide or move (re-parent) folders. To move objects between folders use update_objects with folderId.",
+    inputSchema: {
+      updates: z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string().optional(),
+            visible: z.boolean().optional().describe("false hides the folder and everything inside it"),
+            parentId: z.string().nullable().optional().describe("New parent folder id; null = scene root."),
+          }),
+        )
+        .min(1),
+    },
+  },
+  ({ updates }) => run("update_folders", { updates }),
+);
+
+server.registerTool(
+  "delete_folders",
+  {
+    title: "Delete folders",
+    description:
+      "Delete folders. By default their contents (objects and subfolders) are moved up to the parent folder. Set deleteContents to also delete everything inside.",
+    inputSchema: {
+      ids: z.array(z.string()).min(1),
+      deleteContents: z.boolean().optional(),
+    },
+  },
+  ({ ids, deleteContents }) => run("delete_folders", { ids, deleteContents }),
+);
+
+server.registerTool(
   "select_object",
   {
     title: "Select object",
@@ -207,7 +276,7 @@ server.registerTool(
   "clear_scene",
   {
     title: "Clear scene",
-    description: "Remove ALL objects from the scene (undoable). Only do this when the user wants a fresh start.",
+    description: "Remove ALL objects and folders from the scene (undoable). Only do this when the user wants a fresh start.",
     inputSchema: {},
   },
   () => run("clear_scene"),

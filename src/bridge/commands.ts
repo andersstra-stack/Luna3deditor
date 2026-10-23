@@ -1,4 +1,4 @@
-import { useEditor } from "../store";
+import { useEditor, type FolderUpdate } from "../store";
 import { exportGlb, openScene, saveScene } from "../io";
 import { SHAPES, type SceneObject, type ShapeType } from "../types";
 import { captureViewport, frameScene, VIEWS, type ViewName } from "../viewport/three-handle";
@@ -28,15 +28,16 @@ const summary = (o: SceneObject) => ({ id: o.id, name: o.name, type: o.type });
 
 export const handlers: Record<BridgeMethod, Handler> = {
   get_scene: () => {
-    const { objects, selectedId, filePath } = editor();
-    return { objects, selectedId, filePath };
+    const { objects, folders, selectedId, filePath } = editor();
+    return { folders, objects, selectedId, filePath };
   },
 
   add_objects: (p) => {
     const items = p.objects as (Partial<SceneObject> & { type: ShapeType })[];
     if (!Array.isArray(items) || !items.length) throw new Error("objects må være en ikke-tom liste");
     for (const i of items) if (!SHAPES.includes(i.type)) throw new Error(`Ukjent type "${i.type}"`);
-    const created = editor().addObjects(items);
+    // Claude må velge mappe eksplisitt – brukerens aktive mappe brukes ikke.
+    const created = editor().addObjects(items.map((i) => ({ ...i, folderId: i.folderId ?? null })));
     say(created.length === 1 ? `la til ${created[0].name}` : `la til ${created.length} objekter`);
     return created.map(summary);
   },
@@ -57,6 +58,29 @@ export const handlers: Record<BridgeMethod, Handler> = {
     editor().deleteObjects(ids);
     say(`slettet ${ids.length} objekt${ids.length === 1 ? "" : "er"}`);
     return { deleted: ids };
+  },
+
+  create_folders: (p) => {
+    const items = p.folders as { name?: string; parentId?: string | null }[];
+    if (!Array.isArray(items) || !items.length) throw new Error("folders må være en ikke-tom liste");
+    const created = editor().addFolders(items);
+    say(created.length === 1 ? `lagde mappen ${created[0].name}` : `lagde ${created.length} mapper`);
+    return created.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId }));
+  },
+
+  update_folders: (p) => {
+    const updates = p.updates as FolderUpdate[];
+    if (!Array.isArray(updates) || !updates.length) throw new Error("updates må være en ikke-tom liste");
+    editor().updateFolders(updates);
+    say(`endret ${updates.length} mappe${updates.length === 1 ? "" : "r"}`);
+    return { updated: updates.map((u) => u.id) };
+  },
+
+  delete_folders: (p) => {
+    const ids = p.ids as string[];
+    editor().deleteFolders(ids, p.deleteContents === true);
+    say(`slettet ${ids.length} mappe${ids.length === 1 ? "" : "r"}`);
+    return { deleted: ids, contentsDeleted: p.deleteContents === true };
   },
 
   select: (p) => {
