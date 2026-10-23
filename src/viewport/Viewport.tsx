@@ -303,6 +303,8 @@ function ThreeBridge() {
 
 function Scene({ accent }: { accent: string }) {
   const visible = useVisibleObjects();
+  // Nytt detaljnivå gir nye geometrier – nøkkelen tvinger formene (og hullene) til å bygges på nytt.
+  const detail = useUi((s) => s.geometryDetail);
   const selectedIds = useEditor((s) => s.selectedIds);
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
 
@@ -317,12 +319,12 @@ function Scene({ accent }: { accent: string }) {
     <>
       {visible.map((o) =>
         isNode(o.type) ? (
-          <NodeMarker key={o.id} obj={o} selected={selected.has(o.id)} accent={accent} />
+          <NodeMarker key={`${o.id}:${detail}`} obj={o} selected={selected.has(o.id)} accent={accent} />
         ) : isLight(o.type) ? (
-          <LightObject key={o.id} obj={o} selected={selected.has(o.id)} accent={accent} />
+          <LightObject key={`${o.id}:${detail}`} obj={o} selected={selected.has(o.id)} accent={accent} />
         ) : (
           <SolidMesh
-            key={o.id}
+            key={`${o.id}:${detail}`}
             obj={o}
             selected={selected.has(o.id)}
             accent={accent}

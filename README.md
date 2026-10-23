@@ -25,6 +25,7 @@ Tema velges under **Innstillinger** (tannhjulet øverst til høyre): de samme 10
 | Kamera | Venstre mus roter · midtknapp panorer · hjul zoom · **F** vis alt. **Fly fritt** som i Unity: hold høyre mus og se deg rundt, **W/A/S/D** fram/sidelengs, **Q/E** ned/opp, **Shift** fortere, hjulet endrer farten |
 | Plassering | Egenskapspanelet: **Legg ned på underlaget** (**End**), innrett flere objekter (min/midt/maks), speil og speilkopi. Mål på utvalget vises nede til venstre |
 | Hull | Huk av **Hull** på et objekt, så skjæres det bort fra de andre objektene i samme mappe (vinduer, dører, hakk) – live og redigerbart |
+| Lavpoly | **Innstillinger → Former → Lavpoly** gir færre segmenter på runde former (en kule: 2 208 → 168 trekanter) – for spill. Gjelder visning, hull og GLB-eksport |
 | Lys | Punktlys og spotlys under **Flere**; farge og lysstyrke i egenskapspanelet. Roter spotlyset for å sikte |
 | Markør-noder | **Flere → Node**: usynlige, navngitte punkter med retning for spillmotoren (dokkepunkter, hardpoints, motorer, spawn …). Pila er «forover» (lokal +Z), pinnen «opp» (+Y). Egne egenskaper (tall eller tekst) i egenskapspanelet. Kopier får neste nummer (`hp_01` → `hp_02`), og panelet varsler om like navn og mellomrom |
 | Nøyaktige verdier | Høyre panel – skriv inn tall eller dra i X/Y/Z-bokstaven (Shift = fint) |

@@ -11,7 +11,8 @@ export function SettingsDialog() {
   const open = useUi((s) => s.settingsOpen);
   const theme = useUi((s) => s.theme);
   const keepOrigin = useUi((s) => s.importKeepOrigin);
-  const { setTheme, setImportKeepOrigin, closeSettings } = useUi.getState();
+  const detail = useUi((s) => s.geometryDetail);
+  const { setTheme, setImportKeepOrigin, setGeometryDetail, closeSettings } = useUi.getState();
 
   useEffect(() => {
     if (!open) return;
@@ -56,6 +57,25 @@ export function SettingsDialog() {
               );
             })}
           </div>
+        </section>
+
+        <section>
+          <h3 className="settings-h3">Former</h3>
+          <label className={`toggle-row ${detail === "lowpoly" ? "on" : ""}`}>
+            <input
+              type="checkbox"
+              checked={detail === "lowpoly"}
+              onChange={() => setGeometryDetail(detail === "lowpoly" ? "smooth" : "lowpoly")}
+            />
+            <Icon name="shapes" size={16} />
+            <span>
+              Lavpoly
+              <small>
+                Færre segmenter på kuler, sylindre, kjegler og avrundede former – for spill. Gjelder visning, hull,
+                «Slå sammen» og GLB-eksport. Importerte modeller endres ikke.
+              </small>
+            </span>
+          </label>
         </section>
 
         <section>

@@ -43,6 +43,18 @@ function readSavedTheme(): Theme {
 }
 
 const KEEP_ORIGIN_KEY = "luna3d.importKeepOrigin";
+const DETAIL_KEY = "luna3d.geometryDetail";
+
+/** Hvor glatte formene (kuler, sylindre …) er: glatt for visning, lavpoly for spill. */
+export type GeometryDetail = "smooth" | "lowpoly";
+
+function readDetail(): GeometryDetail {
+  try {
+    return window.localStorage.getItem(DETAIL_KEY) === "lowpoly" ? "lowpoly" : "smooth";
+  } catch {
+    return "smooth";
+  }
+}
 
 function readKeepOrigin(): boolean {
   try {
@@ -62,6 +74,8 @@ interface UiState {
   /** Import: legg filas origo i scenens origo i stedet for å sentrere modellen der kameraet ser. */
   importKeepOrigin: boolean;
   setImportKeepOrigin: (on: boolean) => void;
+  geometryDetail: GeometryDetail;
+  setGeometryDetail: (d: GeometryDetail) => void;
   settingsOpen: boolean;
   openSettings: () => void;
   closeSettings: () => void;
@@ -86,6 +100,15 @@ export const useUi = create<UiState>((set) => ({
       /* ignore */
     }
     set({ importKeepOrigin: on });
+  },
+  geometryDetail: readDetail(),
+  setGeometryDetail: (d) => {
+    try {
+      window.localStorage.setItem(DETAIL_KEY, d);
+    } catch {
+      /* ignore */
+    }
+    set({ geometryDetail: d });
   },
   settingsOpen: false,
   openSettings: () => set({ settingsOpen: true }),

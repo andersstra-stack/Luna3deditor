@@ -14,6 +14,8 @@ MCP-verktøybeskrivelser er på engelsk.
 - `src/viewport/` – `Viewport.tsx` (Canvas, utvalg, lys; gizmoen sitter på et usynlig proxy-objekt midt i utvalget og
   overfører endringen til alle valgte), `geometries.ts` (delte geometrier per type), `snapping.ts` (objekt-snapping under dra),
   `csg.ts` (hull: three-bvh-csg, resultat i solidens lokale rom), `three-handle.ts` (three-tilstanden utenfor Canvas).
+- Detaljnivå: `geometryDetail` i `uiStore` («smooth»/«lowpoly», localStorage) styrer segmentene i `geometries.ts` (`SEGMENTS`);
+  cachen og CSG-kopiene er per nivå, og `Scene` bruker nivået i nøkkelen så formene bygges på nytt ved bytte.
 - `src/bounds.ts` – nøyaktige verdensbokser beregnet fra dataene (ikke fra 3D-visningen); brukes av snapping,
   plassering, målvisning og `get_scene`. `src/placement.ts` – til bakken, innrett, speil.
 - Utvalg: `selectedIds` (siste = hovedvalget, se `primaryId`). Nye former legges i `types.ts` (SHAPES, størrelse,

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
 import type { SceneObject } from "../types";
 import { objectBox, objectMatrix } from "../bounds";
-import { geometryOf } from "./geometries";
+import { geometryDetail, geometryOf } from "./geometries";
 
 const evaluator = new Evaluator();
 evaluator.attributes = ["position", "normal"];
@@ -11,7 +11,7 @@ evaluator.useGroups = false;
 // Egne kopier med bare attributtene CSG trenger (alle brushes må ha like attributter).
 const brushGeometries = new Map<string, THREE.BufferGeometry>();
 function brushGeometry(o: SceneObject): THREE.BufferGeometry {
-  const key = o.type === "mesh" ? `mesh:${o.meshId}` : o.type;
+  const key = o.type === "mesh" ? `mesh:${o.meshId}` : `${o.type}:${geometryDetail()}`;
   let geo = brushGeometries.get(key);
   if (!geo) {
     geo = geometryOf(o).clone();

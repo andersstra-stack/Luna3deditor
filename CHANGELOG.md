@@ -11,6 +11,9 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 ## [Unreleased]
 
 ### Added
+- **Lavpoly-former** (Innstillinger → Former): færre segmenter på kuler, sylindre, kjegler, smultringer, kapsler, rør og
+  avrundede kuber – for spill. Gjelder visning, hull, «Slå sammen» og GLB-eksport. Den detaljerte senga går fra ca.
+  191 000 til 20 000 trekanter.
 - **Slå sammen** (egenskapspanelet ved flervalg og MCP `merge_objects`), som Ctrl+J i Blender: valgte former og modeller
   blir én modell på samme sted, med navn, mappe og utseende fra hovedvalget. Bitene fra «Del opp i løse deler» får
   tilbake navnet sitt. Lys, noder og hull blir ikke med.
