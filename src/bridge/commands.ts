@@ -37,7 +37,7 @@ export const handlers: Record<BridgeMethod, Handler> = {
   apply_script: (p) => {
     const ops = p.ops as ScriptOp[];
     if (!Array.isArray(ops)) throw new Error("ops må være en liste");
-    return applyScriptOps(ops, (p.name as string | undefined) ?? "Claude-skript");
+    return applyScriptOps(ops, (p.name as string | undefined) ?? "Claude-skript", p.script as string | undefined);
   },
 
   add_objects: (p) => {

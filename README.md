@@ -33,7 +33,7 @@ Tema velges under **Innstillinger** (tannhjulet øverst til høyre): de samme 10
 | Angre / gjør om | **Ctrl+Z** / **Ctrl+Y** |
 | Lagre / åpne | **Ctrl+S** / **Ctrl+O** (`.luna.json`) |
 | Importer | **Ctrl+I**, importknappen eller dra filer inn i vinduet: **FBX, GLB/glTF, OBJ, STL**. Flere deler havner i en egen mappe, cm/mm skaleres til meter. Farger hentes fra materialer, hjørnefarger og teksturer/fargepaletter (bildet leses fra samme mappe – ved dra-og-slipp: dra modell og bilde inn sammen), og modellen deles opp i én del per farge. Modellen kan flyttes, skaleres, fargelegges, speiles og få hull, men ikke formredigeres. `.gltf` med eksterne filer støttes ikke – bruk `.glb` |
-| Python-skript | `</>`-knappen kjører en `.py`-fil som bygger/endrer scenen med `import luna3d as luna` (se `scripting/luna3d.py` og `scripting/eksempler/`). Ett angre-steg per kjøring. Krever Python 3 |
+| Python-skript | `</>`-knappen kjører en `.py`-fil som bygger/endrer scenen med `import luna3d as luna` (se `scripting/luna3d.py` og `scripting/eksempler/`). Ett angre-steg per kjøring. Kjøres samme fil igjen, erstattes forrige resultat («Løsne» i egenskapene beholder et objekt). Krever Python 3 |
 | Eksporter | Eksport-knappen → `.glb` (Blender, Roblox Studio, Unity, Godot …). Mappene blir navngitte grupper |
 
 ## Versjoner

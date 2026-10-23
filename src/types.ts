@@ -91,6 +91,8 @@ export interface SceneObject {
   intensity?: number;
   /** Kun importerte modeller: id i modellregisteret (se meshes.ts). */
   meshId?: string;
+  /** Skriptet (normalisert sti) som laget objektet – erstattes når skriptet kjøres igjen. */
+  script?: string;
 }
 
 /**
@@ -111,6 +113,8 @@ export interface Folder {
   name: string;
   parentId: string | null;
   visible: boolean;
+  /** Skriptet som laget mappa – gjenbrukes når skriptet kjøres igjen. */
+  script?: string;
 }
 
 export type TransformMode = "translate" | "rotate" | "scale";
@@ -143,6 +147,8 @@ export type ScriptOp =
   | { op: "delete"; ids: string[] };
 
 export interface ScriptResult {
+  /** Objekter fra forrige kjøring av samme skript som ble fjernet. */
+  replaced: number;
   created: string[];
   folders: string[];
   updated: number;

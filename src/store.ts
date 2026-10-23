@@ -70,7 +70,7 @@ export interface EditorState extends Snapshot {
   setActiveFolder: (id: string | null) => void;
 
   /** Bruker endringene fra et Python-skript som ett angre-steg. */
-  applyScript: (ops: ScriptOp[]) => ScriptResult;
+  applyScript: (ops: ScriptOp[], script?: string) => ScriptResult;
   setScene: (scene: Snapshot) => void;
   clearScene: () => void;
   select: (id: string | null, mode?: SelectMode) => void;
@@ -219,6 +219,7 @@ export const useEditor = create<EditorState>((set, get) => {
         const copy = makeObject(src.type, all, {
           ...src,
           name: src.name.replace(/ \d+$/, ""),
+          script: undefined,
           position: src.position.map((v, i) => v + offset[i]) as Vec3,
         });
         all.push(copy);
@@ -309,11 +310,16 @@ export const useEditor = create<EditorState>((set, get) => {
     setCollapsed: (id, value) => set({ collapsed: { ...get().collapsed, [id]: value } }),
     setActiveFolder: (activeFolderId) => set({ activeFolderId }),
 
-    applyScript: (ops) => {
-      let objects = [...get().objects];
-      const folders = [...get().folders];
+    applyScript: (ops, script) => {
+      // Samme skript kjørt på nytt: fjern det forrige resultatet (i samme angre-steg), men
+      // gjenbruk mappene, så plassering og ting brukeren selv har lagt i dem blir værende.
+      const previous = script ? get().objects.filter((o) => o.script === script).length : 0;
+      let objects = script ? get().objects.filter((o) => o.script !== script) : [...get().objects];
+      let folders = [...get().folders];
+      const oldFolders = script ? folders.filter((f) => f.script === script) : [];
+      const reused = new Set<string>();
       const keys = new Map<string, string>();
-      const result: ScriptResult = { created: [], folders: [], updated: 0, deleted: 0, keys: {} };
+      const result: ScriptResult = { replaced: previous, created: [], folders: [], updated: 0, deleted: 0, keys: {} };
 
       // "@…" er nøkler fra skriptet; ellers id-er som må finnes i scenen.
       const resolve = (ref: string, kind: "objekt" | "mappe") => {
@@ -336,18 +342,21 @@ export const useEditor = create<EditorState>((set, get) => {
 
       for (const op of ops) {
         if (op.op === "folder") {
-          const folder: Folder = {
-            id: newId("fld"),
-            name: uniqueName(op.name?.trim() || "Ny mappe", folders),
-            parentId: op.parent ? resolve(op.parent, "mappe") : null,
-            visible: true,
-          };
+          const name = op.name?.trim() || "Ny mappe";
+          const parentId = op.parent ? resolve(op.parent, "mappe") : null;
+          const old = oldFolders.find((f) => !reused.has(f.id) && f.name === name && f.parentId === parentId);
+          if (old) {
+            reused.add(old.id);
+            keys.set(op.key, old.id);
+            continue;
+          }
+          const folder: Folder = { id: newId("fld"), name: uniqueName(name, folders), parentId, visible: true, ...(script ? { script } : {}) };
           folders.push(folder);
           keys.set(op.key, folder.id);
           result.folders.push(folder.id);
         } else if (op.op === "add") {
           if (!(ADDABLE_SHAPES as readonly string[]).includes(op.type)) throw new Error(`Ukjent type «${op.type}» i skriptet`);
-          const obj = makeObject(op.type, objects, toProps(op.props));
+          const obj = makeObject(op.type, objects, { ...toProps(op.props), ...(script ? { script } : {}) });
           objects.push(obj);
           keys.set(op.key, obj.id);
           result.created.push(obj.id);
@@ -360,6 +369,20 @@ export const useEditor = create<EditorState>((set, get) => {
           const ids = new Set(op.ids.map((ref) => resolve(ref, "objekt")));
           objects = objects.filter((o) => !ids.has(o.id));
           result.deleted += ids.size;
+        }
+      }
+
+      // Gamle skriptmapper som ikke ble brukt denne gangen fjernes – så sant de er tomme.
+      let removedSome = true;
+      while (removedSome) {
+        removedSome = false;
+        for (const f of oldFolders) {
+          if (reused.has(f.id) || !folders.includes(f)) continue;
+          const inUse = objects.some((o) => o.folderId === f.id) || folders.some((c) => c.parentId === f.id);
+          if (!inUse) {
+            folders = folders.filter((x) => x !== f);
+            removedSome = true;
+          }
         }
       }
 

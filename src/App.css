@@ -1037,3 +1037,37 @@ select.text option {
 .titlebar-btn-close:active {
   background: #c50f1f;
 }
+
+/* ---------- Objekter fra Python-skript ---------- */
+.script-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 14px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+
+.script-source span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.script-source b {
+  color: var(--text);
+}
+
+.script-source small {
+  display: block;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.script-source .small-btn {
+  flex: none;
+  padding: 4px 8px;
+}

@@ -17,6 +17,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 - **Python-skript**: `.py`-filer kan bygge og endre scenen via modulen `luna3d` (løkker, matematikk, gjenbruk).
   Kjøres med `</>`-knappen i appen eller av Claude (MCP `run_python`, kan også lagre skriptet). Hele kjøringen
   er ett angre-steg, og et skript som feiler endrer ingenting. Eksempler i `scripting/eksempler/`.
+  Kjøres samme skriptfil igjen, **erstattes** forrige resultat (mappene gjenbrukes, egne tillegg i dem blir
+  liggende). Egenskapspanelet viser hvilket skript et objekt kommer fra, og «Løsne» beholder det.
 
 ## [0.6.0] — 2026-10-23
 

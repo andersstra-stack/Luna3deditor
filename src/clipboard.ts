@@ -64,7 +64,7 @@ export function pasteText(text: string): boolean {
   const state = useEditor.getState();
   const folderIds = new Set(state.folders.map((f) => f.id));
   const created = state.addObjects(
-    items.map(({ id: _id, ...o }) => ({
+    items.map(({ id: _id, script: _script, ...o }) => ({
       ...o,
       position: o.position.map((v, i) => v + offset[i]) as Vec3,
       // Inn i den aktive mappa; ellers samme mappe som originalen hvis den finnes her.

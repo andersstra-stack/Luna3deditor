@@ -202,6 +202,29 @@ function ColorRow({ objs }: { objs: SceneObject[] }) {
   );
 }
 
+/** Viser at objektene kommer fra et Python-skript (og erstattes når det kjøres igjen). */
+function ScriptSource({ objs }: { objs: SceneObject[] }) {
+  const tagged = objs.filter((o) => o.script);
+  if (!tagged.length) return null;
+  const scripts = [...new Set(tagged.map((o) => o.script!.split("/").pop()))];
+  return (
+    <div className="script-source" title="Kjøres skriptet igjen, erstattes disse objektene med det nye resultatet">
+      <Icon name="code" size={14} />
+      <span>
+        Fra skript <b>{scripts.join(", ")}</b>
+        <small>Erstattes når skriptet kjøres igjen</small>
+      </span>
+      <button
+        className="small-btn"
+        title="Behold objektet selv om skriptet kjøres igjen"
+        onClick={() => useEditor.getState().updateObjects(tagged.map((o) => ({ id: o.id, script: undefined })))}
+      >
+        Løsne
+      </button>
+    </div>
+  );
+}
+
 function HoleToggle({ objs }: { objs: SceneObject[] }) {
   const solids = objs.filter((o) => !isLight(o.type));
   if (!solids.length) return null;
@@ -401,6 +424,7 @@ export function Inspector() {
         <h2>Egenskaper</h2>
         <p className="multi-title">{objs.length} objekter valgt</p>
         <FolderSelect objs={objs} />
+        <ScriptSource objs={objs} />
         <ColorRow objs={objs} />
         <HoleToggle objs={objs} />
         <Placement objs={objs} />
@@ -430,6 +454,7 @@ export function Inspector() {
       </div>
 
       <FolderSelect objs={objs} />
+      <ScriptSource objs={objs} />
 
       <Vec3Row title="Posisjon (m)" obj={obj} field="position" step={0.01} />
       <Vec3Row title="Rotasjon (°)" obj={obj} field="rotation" step={0.5} />

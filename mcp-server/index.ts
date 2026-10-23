@@ -179,7 +179,9 @@ where one loop replaces hundreds of add_objects entries. The whole run is ONE un
 - luna.scene / luna.objects(name=, type=, folder=) / luna.folders(name=) / luna.get(id): the scene at start,
   objects include "bounds" {min, max}
 print() output is returned to you; exceptions return the traceback and change nothing. Save reusable scripts with
-save_to (e.g. a "skript" folder next to the user's scene). Examples: scripting/eksempler in the Luna 3D repo.
+save_to (e.g. a "skript" folder next to the user's scene). Objects made from a script FILE (path or save_to) remember it:
+running the same file again REPLACES what it made last time (folders with the same name are reused), so iterate by
+re-running the same save_to path. Inline code without save_to only adds. Examples: scripting/eksempler in the Luna 3D repo.
 
 Folders: purely organizational (like a file tree) — they have no transform of their own and can be nested.
 For anything with more than a handful of parts, put parts in descriptive folders (e.g. "House" > "Roof", "Walls").
@@ -474,7 +476,10 @@ server.registerTool(
     inputSchema: {
       code: z.string().optional().describe("Python source, e.g. 'import luna3d as luna\nfor i in range(10): luna.box(position=(i, 0.5, 0))'"),
       path: z.string().optional().describe("Absolute path to an existing .py file to run instead of code."),
-      save_to: z.string().optional().describe("Also save 'code' as a .py file at this absolute path, so it can be re-run or edited later."),
+      save_to: z
+        .string()
+        .optional()
+        .describe("Also save 'code' as a .py file at this absolute path. Re-running the same file replaces its previous result."),
     },
   },
   async ({ code, path, save_to }) => {
@@ -492,7 +497,11 @@ server.registerTool(
       const output = [run.printed && `Script output:\n${run.printed}`, run.stderr && `stderr:\n${run.stderr}`].filter(Boolean).join("\n\n");
       if (!run.ops) return fail(`The script failed (exit code ${run.code}) – nothing was changed.\n\n${output}`);
       const name = (save_to ?? path ?? "Claude-skript").split(/[\\/]/).pop();
-      const result = run.ops.length ? await bridge.call("apply_script", { ops: run.ops, name }) : { note: "The script made no changes." };
+      // Kjent fil (path/save_to): forrige resultat fra samme skript erstattes. Inline-kode legger bare til.
+      const scriptFile = path ?? save_to;
+      const result = run.ops.length
+        ? await bridge.call("apply_script", { ops: run.ops, name, script: scriptFile })
+        : { note: "The script made no changes." };
       const saved = code && save_to ? `Saved to ${save_to}\n\n` : "";
       return json({ ...result, ...(output ? { output } : {}), ...(saved ? { saved: save_to } : {}) });
     } catch (e) {

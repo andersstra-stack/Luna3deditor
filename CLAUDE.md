@@ -26,7 +26,9 @@ MCP-verktøybeskrivelser er på engelsk.
 - Python-skript: `scripting/luna3d.py` (API + `python -m luna3d skript.py`) samler endringer og skriver dem ut etter
   markøren `@@LUNA3D_OPS@@` når skriptet er ferdig. Kjøres av Rust (`run_python_script`, modulen pakkes som ressurs)
   eller MCP (`mcp-server/python.ts`); `src/scripting.ts` tolker utdata, `store.applyScript` gjør alt som ett angre-steg.
-  Nye egenskaper/former må legges inn i både `luna3d.py` (PROPS/SHAPES) og appen.
+  Nye egenskaper/former må legges inn i både `luna3d.py` (PROPS/SHAPES) og appen. Objekter/mapper fra en skriptfil får
+  `script` (normalisert sti, `scriptKey`); ny kjøring av samme fil erstatter dem (mapper med samme navn gjenbrukes).
+  Kopier og innlimte objekter mister merket.
 - `src/bridge/` – `protocol.ts` deles med MCP-serveren (ingen imports!), `commands.ts` er handlerne
   appen kjører, `useMcpBridge.ts` er WebSocket-klienten med auto-reconnect.
 - `mcp-server/index.ts` – kjøres direkte av Node 24 (type stripping, ingen build): kun slettbar

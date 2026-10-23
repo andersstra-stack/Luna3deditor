@@ -31,8 +31,12 @@ export function parseScriptOutput(stdout: string): { ops: ScriptOp[] | null; pri
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
+/** Samme skript skal gjenkjennes uansett skråstreker og store/små bokstaver (Windows). */
+export const scriptKey = (path: string) => path.replace(/[\\/]+/g, "/").toLowerCase();
+
 export function describeResult(r: ScriptResult): string {
   const parts = [
+    r.replaced && `erstattet ${plural(r.replaced, "objekt", "objekter")}`,
     r.created.length && `la til ${plural(r.created.length, "objekt", "objekter")}`,
     r.folders.length && plural(r.folders.length, "mappe", "mapper"),
     r.updated && `endret ${r.updated}`,
@@ -41,9 +45,12 @@ export function describeResult(r: ScriptResult): string {
   return parts.length ? parts.join(", ") : "ingen endringer";
 }
 
-/** Bruker skriptets endringer på scenen (ett angre-steg). */
-export function applyScriptOps(ops: ScriptOp[], name = "skript"): ScriptResult {
-  const result = useEditor.getState().applyScript(ops);
+/**
+ * Bruker skriptets endringer på scenen (ett angre-steg). Med `scriptPath` merkes det nye
+ * med skriptet, og resultatet fra forrige kjøring av samme skript erstattes.
+ */
+export function applyScriptOps(ops: ScriptOp[], name = "skript", scriptPath?: string): ScriptResult {
+  const result = useEditor.getState().applyScript(ops, scriptPath ? scriptKey(scriptPath) : undefined);
   useEditor.getState().setActivity(`${name}: ${describeResult(result)}`);
   return result;
 }
@@ -72,5 +79,5 @@ export async function runPythonScriptFile(path?: string) {
     const reason = out.stderr.trim().split(/\r?\n/).pop() || `avsluttet med kode ${out.code}`;
     throw new Error(`${name}: ${reason}`);
   }
-  return applyScriptOps(ops, name);
+  return applyScriptOps(ops, name, target);
 }
