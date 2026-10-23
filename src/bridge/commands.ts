@@ -7,6 +7,7 @@ import { round, type Axis } from "../bounds";
 import { anchorNote, noteWorldPosition, topOf } from "../notes";
 import { applyScriptOps, sceneForScripts } from "../scripting";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
+import { splitLooseParts } from "../meshSplit";
 import { captureViewport, frameScene, VIEWS, type ViewName } from "../viewport/three-handle";
 import type { BridgeMethod } from "./protocol";
 
@@ -183,6 +184,14 @@ export const handlers: Record<BridgeMethod, Handler> = {
     const ids = mirrorObjects(p.ids as string[], p.axis as Axis, p.copy === true, p.plane as number | undefined);
     say(p.copy ? "lagde speilkopier" : "speilet objekter");
     return { ids };
+  },
+
+  split_loose_parts: (p) => {
+    const ids = p.ids as string[];
+    if (!Array.isArray(ids) || !ids.length) throw new Error("ids må være en ikke-tom liste");
+    const result = splitLooseParts(ids);
+    say(result.split.length ? `delte ${result.split.map((s) => s.name).join(", ")} i løse deler` : "fant ingenting å dele");
+    return result;
   },
 
   clear_scene: () => {

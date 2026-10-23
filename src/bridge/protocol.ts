@@ -14,6 +14,7 @@ export const BRIDGE_METHODS = [
   "drop_to_ground",
   "align_objects",
   "mirror_objects",
+  "split_loose_parts",
   "create_folders",
   "update_folders",
   "delete_folders",

@@ -74,6 +74,8 @@ export interface EditorState extends Snapshot {
   updateObjectsLive: (updates: ObjectUpdate[]) => void;
   deleteObjects: (ids: string[]) => void;
   duplicateObjects: (ids: string[], offset?: Vec3) => SceneObject[];
+  /** Fjerner `ids` og legger til `items` som ett angre-steg (f.eks. en modell delt i biter). De nye velges. */
+  replaceObjects: (ids: string[], items: NewObject[]) => SceneObject[];
 
   addFolders: (items: { name?: string; parentId?: string | null }[]) => Folder[];
   updateFolders: (updates: FolderUpdate[]) => void;
@@ -259,6 +261,19 @@ export const useEditor = create<EditorState>((set, get) => {
       }
       if (copies.length) commit({ objects: all }, { selectedIds: copies.map((c) => c.id) });
       return copies;
+    },
+
+    replaceObjects: (ids, items) => {
+      const remove = new Set(ids);
+      const all = get().objects.filter((o) => !remove.has(o.id));
+      const created: SceneObject[] = [];
+      for (const item of items) {
+        const obj = makeObject(item.type, all, item);
+        all.push(obj);
+        created.push(obj);
+      }
+      commit({ objects: all }, { selectedIds: created.map((o) => o.id) });
+      return created;
     },
 
     addFolders: (items) => {

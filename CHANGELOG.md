@@ -11,6 +11,9 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 ## [Unreleased]
 
 ### Added
+- **Del opp i løse deler** for importerte modeller (egenskapspanelet og MCP `split_loose_parts`), som «Separate by
+  Loose Parts» i Blender: bitene som ikke henger sammen blir egne objekter (`navn.1`, `navn.2` …, største først) på samme
+  sted og med samme utseende. Heiskabinen i hangaren blir f.eks. fire stolper, to rekkverk, tak, gulv og lampe.
 - **Behold filas origo ved import** (Innstillinger → Import, og `keep_origin` i MCP `import_model`): modellens origo havner
   i scenens origo i stedet for at modellen sentreres der kameraet ser. Deler som hører sammen, som hangaren og interiøret
   fra Nova Homestead, passer da sammen uten justering.

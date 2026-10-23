@@ -227,7 +227,8 @@ For anything with more than a handful of parts, put parts in descriptive folders
 Create folders first with create_folders, then pass folderId in add_objects. Hidden folders hide everything inside them.
 
 Helpers: duplicate_objects (repeat parts with an offset), mirror_objects (symmetric models: build one side, mirror-copy
-across x = 0), align_objects, drop_to_ground.
+across x = 0), align_objects, drop_to_ground. split_loose_parts splits imported meshes into their unconnected pieces
+(like Blender's "Separate by Loose Parts") so single pieces can be moved, recolored or deleted.
 
 Workflow tips: call get_scene first to see existing objects and their ids. Build composite things from several shapes
 with one add_objects call. Use screenshot to check your work visually — try different views. Every change is undoable by the user.`;
@@ -609,6 +610,17 @@ server.registerTool(
     inputSchema: { notes: z.array(z.union([z.string(), z.number()])).min(1) },
   },
   ({ notes }) => run("delete_notes", { notes }),
+);
+
+server.registerTool(
+  "split_loose_parts",
+  {
+    title: "Split into loose parts",
+    description:
+      "Split imported models (type 'mesh') into their unconnected pieces, like Blender's 'Separate by Loose Parts'. Each piece becomes its own object named '<name>.1', '<name>.2' … (largest first) in the same folder, with the same look. One undo step. Returns the new ids and what was skipped (not a mesh, already one piece, or more than 500 pieces).",
+    inputSchema: { ids: z.array(z.string()).min(1).describe("Ids of the mesh objects to split") },
+  },
+  ({ ids }) => run("split_loose_parts", { ids }),
 );
 
 server.registerTool(

@@ -24,6 +24,8 @@ MCP-verktøybeskrivelser er på engelsk.
   angre-historikken, base64 i scenefil v3 og i utklippstavla). Bruk alltid `geometryOf(o)`, ikke `getGeometry(o.type)`.
   FBX-enheten leses fra `UnitScaleFactor`; FBX snus 180° om Y (se `importModelData`) så eksportert GLB står likt med FBX-en i
   Unity. Empties blir noder; Custom Properties leses av `src/fbxProps.ts` (FBXLoader tar dem ikke med).
+  «Del opp i løse deler»: `src/meshSplit.ts` (hjørner på samme sted regnes som felles; nye mesher i registeret, byttet inn
+  med `store.replaceObjects` som ett angre-steg).
   Modeller speiles med negativ størrelse (de er ikke symmetriske); `add_objects` kan ikke lage `mesh` direkte.
 - Python-skript: `scripting/luna3d.py` (API + `python -m luna3d skript.py`) samler endringer og skriver dem ut etter
   markøren `@@LUNA3D_OPS@@` når skriptet er ferdig. Kjøres av Rust (`run_python_script`, modulen pakkes som ressurs)

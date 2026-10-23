@@ -5,6 +5,7 @@ import { SHAPE_LABELS, isHelper, isLight, isNode, type NodeProps, type SceneObje
 import { AXES, type Axis } from "../bounds";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { nodeAxes, nodeNameProblem } from "../nodes";
+import { splitLooseParts } from "../meshSplit";
 import { reportError } from "./StatusBar";
 import { Icon } from "./icons";
 
@@ -405,6 +406,23 @@ function Placement({ objs }: { objs: SceneObject[] }) {
   );
 }
 
+/** Importerte modeller: del i bitene som ikke henger sammen (som «By Loose Parts» i Blender). */
+function ModelTools({ objs }: { objs: SceneObject[] }) {
+  const meshes = objs.filter((o) => o.type === "mesh");
+  if (!meshes.length) return null;
+  return (
+    <div className="btn-row">
+      <button
+        className="small-btn"
+        title="Del modellen i bitene som ikke henger sammen – hver bit blir et eget objekt"
+        onClick={run(() => splitLooseParts(meshes.map((o) => o.id)))}
+      >
+        <Icon name="shapes" size={14} /> Del opp i løse deler
+      </button>
+    </div>
+  );
+}
+
 function Actions({ objs }: { objs: SceneObject[] }) {
   const { duplicateObjects, deleteObjects } = useEditor.getState();
   const ids = objs.map((o) => o.id);
@@ -517,6 +535,7 @@ export function Inspector() {
         <ColorRow objs={objs} />
         <HoleToggle objs={objs} />
         <Placement objs={objs} />
+        <ModelTools objs={objs} />
         <Actions objs={objs} />
       </aside>
     );
@@ -567,6 +586,7 @@ export function Inspector() {
       )}
 
       <Placement objs={objs} />
+      <ModelTools objs={objs} />
       <Actions objs={objs} />
     </aside>
   );
