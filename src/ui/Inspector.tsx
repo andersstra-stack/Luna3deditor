@@ -339,6 +339,8 @@ function Help() {
         <dd>Legg ned på underlaget</dd>
         <dt>Ctrl+A</dt>
         <dd>Velg alt</dd>
+        <dt>Ctrl+C / X / V</dt>
+        <dd>Kopier / klipp ut / lim inn</dd>
         <dt>Ctrl+D</dt>
         <dd>Dupliser</dd>
         <dt>Delete</dt>

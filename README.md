@@ -25,6 +25,7 @@ npm run tauri dev
 | Lys | Punktlys og spotlys under **Flere**; farge og lysstyrke i egenskapspanelet. Roter spotlyset for å sikte |
 | Nøyaktige verdier | Høyre panel – skriv inn tall eller dra i X/Y/Z-bokstaven (Shift = fint) |
 | Mapper | Mappe-knappen i scenelista lager en mappe (inni den aktive). Dra objekter og mapper inn/ut, eller velg mappe i egenskapspanelet. Klikk en mappe for å velge alt i den (gizmoen flytter da hele mappa) – nye former havner også i den. Øyet skjuler hele mappa |
+| Kopier / lim inn | **Ctrl+C** / **Ctrl+X** / **Ctrl+V** – via utklippstavla, så det virker også mellom to vinduer. Limes inn i den aktive mappa |
 | Dupliser / slett | **Ctrl+D** / **Delete** |
 | Angre / gjør om | **Ctrl+Z** / **Ctrl+Y** |
 | Lagre / åpne | **Ctrl+S** / **Ctrl+O** (`.luna.json`) |

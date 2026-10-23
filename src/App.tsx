@@ -6,11 +6,39 @@ import { useMcpBridge } from "./bridge/useMcpBridge";
 import { Viewport } from "./viewport/Viewport";
 import { frameScene } from "./viewport/three-handle";
 import { dropToGround } from "./placement";
+import { copySelection, pasteText } from "./clipboard";
 import { SelectionInfo } from "./ui/SelectionInfo";
 import { Toolbar } from "./ui/Toolbar";
 import { Outliner } from "./ui/Outliner";
 import { Inspector } from "./ui/Inspector";
 import { StatusBar, reportError } from "./ui/StatusBar";
+
+/** Ctrl+C / Ctrl+X / Ctrl+V for objekter. Tekstfelt beholder vanlig kopier/lim inn. */
+function useClipboard() {
+  useEffect(() => {
+    const inTextField = (e: Event) => !!(e.target as HTMLElement | null)?.closest?.("input, textarea, select");
+    const onCopyOrCut = (e: ClipboardEvent) => {
+      if (inTextField(e) || window.getSelection()?.toString()) return;
+      const text = copySelection(e.type === "cut");
+      if (!text) return;
+      e.clipboardData?.setData("text/plain", text);
+      e.preventDefault();
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      if (inTextField(e)) return;
+      const text = e.clipboardData?.getData("text/plain");
+      if (text && pasteText(text)) e.preventDefault();
+    };
+    document.addEventListener("copy", onCopyOrCut);
+    document.addEventListener("cut", onCopyOrCut);
+    document.addEventListener("paste", onPaste);
+    return () => {
+      document.removeEventListener("copy", onCopyOrCut);
+      document.removeEventListener("cut", onCopyOrCut);
+      document.removeEventListener("paste", onPaste);
+    };
+  }, []);
+}
 
 function useShortcuts() {
   useEffect(() => {
@@ -50,6 +78,7 @@ function useShortcuts() {
 export default function App() {
   useMcpBridge();
   useShortcuts();
+  useClipboard();
   return (
     <div className="app">
       <Toolbar />
