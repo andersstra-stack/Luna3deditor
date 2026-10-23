@@ -10,6 +10,10 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Fixed
+- MCP-broen kommer seg av seg selv når porten er opptatt (f.eks. av en gammel Claude-økt): serveren prøver å lytte
+  på nytt hvert 3. sekund i stedet for å gi opp til Claude Code kobler den til på nytt.
+
 ## [0.8.0] — 2026-10-23
 
 ### Added

@@ -22,6 +22,7 @@ import { ADDABLE_SHAPES } from "../src/types.ts";
 const VERSION: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 const PORT = Number(process.env.LUNA_BRIDGE_PORT ?? BRIDGE_PORT);
 const log = (...args: unknown[]) => console.error("[luna3d-mcp]", ...args);
+const LISTEN_RETRY_MS = 3000;
 
 // Kun appen (dev-server eller bygget Tauri-app) får koble til – ikke tilfeldige nettsider.
 const ALLOWED_ORIGINS = new Set(["http://localhost:1420", "http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"]);
@@ -39,18 +40,31 @@ class AppBridge {
   seq = 0;
 
   constructor(port: number) {
+    this.listen(port);
+  }
+
+  listen(port: number) {
     const wss = new WebSocketServer({
       host: "127.0.0.1",
       port,
       verifyClient: ({ origin }: { origin?: string }) => !origin || ALLOWED_ORIGINS.has(origin),
     });
-    wss.on("listening", () => log(`venter på Luna 3D-appen på ws://127.0.0.1:${port}`));
+    wss.on("listening", () => {
+      this.listenError = null;
+      log(`venter på Luna 3D-appen på ws://127.0.0.1:${port}`);
+    });
     wss.on("error", (err: NodeJS.ErrnoException) => {
-      this.listenError =
-        err.code === "EADDRINUSE"
-          ? `Port ${port} er opptatt – trolig kjører en annen Claude-økt med Luna 3D-broen allerede. Lukk den, eller sett LUNA_BRIDGE_PORT.`
-          : `Kunne ikke starte broen: ${err.message}`;
-      log(this.listenError);
+      const busy = err.code === "EADDRINUSE";
+      const error = busy
+        ? `Port ${port} er opptatt – trolig kjører en annen Claude-økt med Luna 3D-broen allerede. Lukk den, eller sett LUNA_BRIDGE_PORT. Prøver igjen av seg selv.`
+        : `Kunne ikke starte broen: ${err.message}`;
+      if (error !== this.listenError) log(error);
+      this.listenError = error;
+      // Porten blir ledig når den andre økten avslutter – prøv igjen, så broen kommer seg uten omstart.
+      if (busy) {
+        wss.close();
+        setTimeout(() => this.listen(port), LISTEN_RETRY_MS).unref();
+      }
     });
     wss.on("connection", (ws) => {
       // Første vindu beholder koblingen; ellers ville to vinduer sparket hverandre ut i en løkke.
