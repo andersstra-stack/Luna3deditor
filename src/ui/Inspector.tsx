@@ -349,6 +349,8 @@ function Help() {
         <dd>Angre / gjør om</dd>
         <dt>Ctrl+S</dt>
         <dd>Lagre</dd>
+        <dt>Ctrl+I</dt>
+        <dd>Importer 3D-modell</dd>
       </dl>
       <h3>Mapper</h3>
       <p>
@@ -359,6 +361,11 @@ function Help() {
       <p>
         Gjør et objekt til «hull» i egenskapene, så skjærer det seg inn i de andre objektene i samme mappe – f.eks. vinduer i en
         vegg.
+      </p>
+      <h3>Importere modeller</h3>
+      <p>
+        FBX, GLB/glTF, OBJ og STL: importknappen, Ctrl+I eller dra fila inn i vinduet. Modeller med flere deler havner i en egen
+        mappe. Store modeller (cm/mm) skaleres automatisk til meter. Farger fra teksturbilder hentes fra samme mappe – drar du filer inn, ta med bildet. Modellen deles i én del per farge.
       </p>
       <h3>Claude</h3>
       <p>Når Claude Code er koblet til (grønn prikk øverst), kan du be Claude om å bygge, endre og se på scenen.</p>

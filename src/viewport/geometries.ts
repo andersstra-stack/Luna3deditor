@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { ShapeType } from "../types";
+import type { SceneObject, ShapeType } from "../types";
+import { meshGeometry } from "../meshes";
 
 // Én delt geometri per type – alle er enhetsstore og sentrert i origo.
 const cache = new Map<ShapeType, THREE.BufferGeometry>();
@@ -81,6 +82,9 @@ function build(type: ShapeType): THREE.BufferGeometry {
     case "spotLight":
       // Kjegle som peker nedover (-Y), samme vei som lyset.
       return new THREE.ConeGeometry(0.5, 1, 24).rotateX(Math.PI);
+    case "mesh":
+      // Importerte modeller har egen geometri – se geometryOf().
+      return new THREE.BoxGeometry(1, 1, 1);
   }
 }
 
@@ -91,4 +95,9 @@ export function getGeometry(type: ShapeType): THREE.BufferGeometry {
     cache.set(type, geo);
   }
   return geo;
+}
+
+/** Geometrien til et objekt – for importerte modeller fra modellregisteret. */
+export function geometryOf(o: Pick<SceneObject, "type" | "meshId">): THREE.BufferGeometry {
+  return o.type === "mesh" && o.meshId ? meshGeometry(o.meshId) : getGeometry(o.type);
 }

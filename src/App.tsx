@@ -7,6 +7,7 @@ import { Viewport } from "./viewport/Viewport";
 import { frameScene } from "./viewport/three-handle";
 import { dropToGround } from "./placement";
 import { copySelection, pasteText } from "./clipboard";
+import { IMPORT_EXTENSIONS, importDroppedFiles, importModelFile } from "./importer";
 import { SelectionInfo } from "./ui/SelectionInfo";
 import { Toolbar } from "./ui/Toolbar";
 import { Outliner } from "./ui/Outliner";
@@ -40,6 +41,36 @@ function useClipboard() {
   }, []);
 }
 
+/** Slipp 3D-filer (FBX, GLB, OBJ, STL) hvor som helst i vinduet for å importere dem. */
+function useFileDrop() {
+  useEffect(() => {
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes("Files");
+    const onDragOver = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = "copy";
+    };
+    const onDrop = async (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      try {
+        // Bilder (fargepaletter/teksturer) og .mtl som slippes sammen med modellen brukes til farger.
+        const { imported, skipped } = await importDroppedFiles(Array.from(e.dataTransfer!.files));
+        if (skipped.length) reportError(new Error(`Kan ikke importere ${skipped.join(", ")} – støttet: ${IMPORT_EXTENSIONS.join(", ")}`));
+        else if (!imported.length) reportError(new Error("Ingen 3D-modell blant filene"));
+      } catch (err) {
+        reportError(err);
+      }
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, []);
+}
+
 function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -55,6 +86,7 @@ function useShortcuts() {
       else if (ctrl && (key === "y" || (key === "z" && e.shiftKey))) s.redo();
       else if (ctrl && key === "s") saveScene().catch(reportError);
       else if (ctrl && key === "o") openScene().catch(reportError);
+      else if (ctrl && key === "i") importModelFile().catch(reportError);
       else if (ctrl && key === "d" && sel.length) s.duplicateObjects(sel);
       else if (ctrl && key === "a") s.selectMany(s.objects.map((o) => o.id));
       else if (ctrl) return;
@@ -79,6 +111,7 @@ export default function App() {
   useMcpBridge();
   useShortcuts();
   useClipboard();
+  useFileDrop();
   return (
     <div className="app">
       <Toolbar />

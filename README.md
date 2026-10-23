@@ -29,6 +29,7 @@ npm run tauri dev
 | Dupliser / slett | **Ctrl+D** / **Delete** |
 | Angre / gjør om | **Ctrl+Z** / **Ctrl+Y** |
 | Lagre / åpne | **Ctrl+S** / **Ctrl+O** (`.luna.json`) |
+| Importer | **Ctrl+I**, importknappen eller dra filer inn i vinduet: **FBX, GLB/glTF, OBJ, STL**. Flere deler havner i en egen mappe, cm/mm skaleres til meter. Farger hentes fra materialer, hjørnefarger og teksturer/fargepaletter (bildet leses fra samme mappe – ved dra-og-slipp: dra modell og bilde inn sammen), og modellen deles opp i én del per farge. Modellen kan flyttes, skaleres, fargelegges, speiles og få hull, men ikke formredigeres. `.gltf` med eksterne filer støttes ikke – bruk `.glb` |
 | Eksporter | Eksport-knappen → `.glb` (Blender, Roblox Studio, Unity, Godot …). Mappene blir navngitte grupper |
 
 ## Claude via MCP

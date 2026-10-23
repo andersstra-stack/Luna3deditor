@@ -71,7 +71,7 @@ export function alignObjects(ids: string[], axis: Axis, mode: AlignMode, targetI
 }
 
 /** Speilvendt kopi av ett objekt om planet `axis = plane`. */
-function mirrored(o: SceneObject, axis: Axis, plane: number): Pick<SceneObject, "position" | "rotation"> {
+function mirrored(o: SceneObject, axis: Axis, plane: number): Pick<SceneObject, "position" | "rotation" | "scale"> {
   const i = axisIndex(axis);
   const position = [...o.position] as Vec3;
   position[i] = round(2 * plane - position[i]);
@@ -80,12 +80,16 @@ function mirrored(o: SceneObject, axis: Axis, plane: number): Pick<SceneObject, 
   const m = new THREE.Matrix4().makeScale(...(AXES.map((a) => (a === axis ? -1 : 1)) as Vec3));
   const r = new THREE.Matrix4().makeRotationFromQuaternion(objectQuaternion(o));
   const result = m.clone().multiply(r).multiply(m);
-  if (!SYMMETRIC_AXES[o.type].includes(axis)) {
+  const scale = [...o.scale] as Vec3;
+  if (o.type === "mesh") {
+    // Importerte modeller kan ha hvilken som helst form: speil selve geometrien med negativ størrelse.
+    scale[i] = -scale[i];
+  } else if (!SYMMETRIC_AXES[o.type].includes(axis)) {
     result.multiply(axis === "x" ? new THREE.Matrix4().makeRotationY(Math.PI) : new THREE.Matrix4().makeRotationX(Math.PI));
   }
   const e = new THREE.Euler().setFromRotationMatrix(result, "XYZ");
   const rotation = [e.x, e.y, e.z].map((v) => round(v / DEG, 0.01)) as Vec3;
-  return { position, rotation };
+  return { position, rotation, scale };
 }
 
 /**

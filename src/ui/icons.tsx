@@ -61,11 +61,12 @@ export function ShapeIcon({ type, size = 18 }: { type: ShapeType; size?: number 
         </>
       )}
       {type === "spotLight" && <path d="M9 3h6l-1 6h-4zM10 9 5 20h14L14 9M8 14h8" />}
+      {type === "mesh" && <path d="M12 2.5 20.5 8l-2 10-6.5 3.5L5 18 3.5 8.5zM12 2.5l.5 9.5 8-4M12.5 12 5 18M12.5 12l-.5 9.5M3.5 8.5l9 3.5" />}
     </svg>
   );
 }
 
-type IconName = "move" | "rotate" | "scale" | "undo" | "redo" | "magnet" | "eye" | "eyeOff" | "trash" | "copy" | "file" | "folder" | "save" | "export" | "frame" | "folderOpen" | "folderPlus" | "chevron" | "snapObject" | "shapes" | "ground" | "mirror" | "hole";
+type IconName = "move" | "rotate" | "scale" | "undo" | "redo" | "magnet" | "eye" | "eyeOff" | "trash" | "copy" | "file" | "folder" | "save" | "export" | "frame" | "folderOpen" | "folderPlus" | "chevron" | "snapObject" | "shapes" | "ground" | "mirror" | "hole" | "import";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   return (
@@ -129,6 +130,7 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
           <circle cx="12" cy="12" r="4.5" strokeDasharray="2.5 2" />
         </>
       )}
+      {name === "import" && <path d="M12 3v11M8 10l4 4 4-4M4 14v6h16v-6M2 14l4-4M22 14l-4-4" />}
       {name === "frame" && <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />}
     </svg>
   );

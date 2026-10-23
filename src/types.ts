@@ -5,7 +5,10 @@ export type Vec3 = [number, number, number];
 export const BASIC_SHAPES = ["box", "sphere", "cylinder", "cone", "torus", "plane", "capsule"] as const;
 export const EXTRA_SHAPES = ["wedge", "prism", "pyramid", "stairs", "hemisphere", "tube", "roundedBox"] as const;
 export const LIGHTS = ["pointLight", "spotLight"] as const;
-export const SHAPES = [...BASIC_SHAPES, ...EXTRA_SHAPES, ...LIGHTS] as const;
+/** Former og lys som kan legges til direkte (verktøylinja, MCP add_objects). */
+export const ADDABLE_SHAPES = [...BASIC_SHAPES, ...EXTRA_SHAPES, ...LIGHTS] as const;
+/** Alle objekttyper. "mesh" er en importert modell (FBX/GLB/OBJ/STL) med geometri i et modellregister. */
+export const SHAPES = [...ADDABLE_SHAPES, "mesh"] as const;
 export type ShapeType = (typeof SHAPES)[number];
 
 export const isLight = (t: ShapeType) => t === "pointLight" || t === "spotLight";
@@ -27,6 +30,7 @@ export const SHAPE_LABELS: Record<ShapeType, string> = {
   roundedBox: "Avrundet kube",
   pointLight: "Punktlys",
   spotLight: "Spotlys",
+  mesh: "Modell",
 };
 
 /** Standardstørrelse når formen legges til (scale = størrelse i meter). */
@@ -59,6 +63,7 @@ export const SYMMETRIC_AXES: Record<ShapeType, string> = {
   roundedBox: "xyz",
   pointLight: "xyz",
   spotLight: "xz",
+  mesh: "",
 };
 
 /**
@@ -84,6 +89,20 @@ export interface SceneObject {
   hole?: boolean;
   /** Kun lys: lysstyrke (candela). */
   intensity?: number;
+  /** Kun importerte modeller: id i modellregisteret (se meshes.ts). */
+  meshId?: string;
+}
+
+/**
+ * Geometrien til en importert modell, normalisert til enhetsboksen (som alle andre former).
+ * Tallene lagres som base64 (Float32/Uint32) i scenefila.
+ */
+export interface MeshAsset {
+  id: string;
+  name: string;
+  positions: Float32Array;
+  normals: Float32Array;
+  index?: Uint32Array;
 }
 
 /** Mapper er kun for organisering – de har ingen egen posisjon. */
@@ -98,9 +117,19 @@ export type TransformMode = "translate" | "rotate" | "scale";
 
 export interface SceneFile {
   format: "luna3d";
-  version: 2;
+  version: 3;
   objects: SceneObject[];
   folders: Folder[];
+  /** Geometri for importerte modeller (versjon 3+). */
+  meshes?: SerializedMesh[];
+}
+
+export interface SerializedMesh {
+  id: string;
+  name: string;
+  positions: string;
+  normals: string;
+  index?: string;
 }
 
 export const DEFAULT_COLORS = ["#7aa2f7", "#9ece6a", "#e0af68", "#f7768e", "#bb9af7", "#7dcfff", "#ff9e64"];

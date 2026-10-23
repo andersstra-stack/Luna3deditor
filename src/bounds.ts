@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { SceneObject } from "./types";
-import { getGeometry } from "./viewport/geometries";
+import { geometryOf } from "./viewport/geometries";
 
 const DEG = Math.PI / 180;
 
@@ -23,7 +23,7 @@ export function objectBox(o: SceneObject): THREE.Box3 {
   if (!box) {
     box = new THREE.Box3();
     const m = objectMatrix(o);
-    const pos = getGeometry(o.type).getAttribute("position");
+    const pos = geometryOf(o).getAttribute("position");
     for (let i = 0; i < pos.count; i++) box.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(m));
     boxCache.set(o, box);
   }

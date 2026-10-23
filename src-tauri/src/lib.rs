@@ -11,6 +11,14 @@ fn read_text_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("Kunne ikke lese {path}: {e}"))
 }
 
+/// Brukes til modellimport. Returneres som rå bytes (ArrayBuffer i JS), ikke som JSON-tall.
+#[tauri::command]
+fn read_binary_file(path: String) -> Result<tauri::ipc::Response, String> {
+    fs::read(&path)
+        .map(tauri::ipc::Response::new)
+        .map_err(|e| format!("Kunne ikke lese {path}: {e}"))
+}
+
 /// Brukes til GLB-eksport.
 #[tauri::command]
 fn write_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> {
@@ -25,6 +33,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             write_text_file,
             read_text_file,
+            read_binary_file,
             write_binary_file
         ])
         .run(tauri::generate_context!())

@@ -11,6 +11,7 @@ import {
   type TransformMode,
 } from "../types";
 import { exportGlb, openScene, saveScene } from "../io";
+import { importModelFile } from "../importer";
 import { frameScene, viewTargetOnGround } from "../viewport/three-handle";
 import { Icon, ShapeIcon } from "./icons";
 import { reportError } from "./StatusBar";
@@ -84,6 +85,13 @@ export function Toolbar() {
         </button>
         <button className="icon-btn" title="Lagre (Ctrl+S)" onClick={() => saveScene().catch(reportError)}>
           <Icon name="save" />
+        </button>
+        <button
+          className="icon-btn"
+          title="Importer 3D-modell – FBX, GLB/glTF, OBJ, STL (Ctrl+I). Du kan også dra filer inn i vinduet."
+          onClick={() => importModelFile().catch(reportError)}
+        >
+          <Icon name="import" />
         </button>
         <button className="icon-btn" title="Eksporter GLB (til Blender, Roblox, Unity…)" onClick={() => exportGlb().catch(reportError)}>
           <Icon name="export" />

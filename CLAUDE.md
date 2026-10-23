@@ -18,6 +18,11 @@ MCP-verktøybeskrivelser er på engelsk.
   plassering, målvisning og `get_scene`. `src/placement.ts` – til bakken, innrett, speil.
 - Utvalg: `selectedIds` (siste = hovedvalget, se `primaryId`). Nye former legges i `types.ts` (SHAPES, størrelse,
   `SYMMETRIC_AXES` for speiling) og `geometries.ts` – alle må være enhetsstore, sentrert og lukkede (for CSG).
+- Import: `src/importer.ts` (FBX/GLB/OBJ/STL via three-loaders → én `type: "mesh"` per mesh, normalisert til
+  enhetsboksen, enhetsgjetting cm/mm → m, STL snus fra Z-opp). Teksturer (f.eks. lowpoly-fargepaletter) lastes i to runder via
+  LoadingManager-URL-modifier fra samme mappe; fargen per trekant leses fra bildet og meshen deles opp per farge. Geometrien ligger i `src/meshes.ts` (register utenfor
+  angre-historikken, base64 i scenefil v3 og i utklippstavla). Bruk alltid `geometryOf(o)`, ikke `getGeometry(o.type)`.
+  Modeller speiles med negativ størrelse (de er ikke symmetriske); `add_objects` kan ikke lage `mesh` direkte.
 - `src/bridge/` – `protocol.ts` deles med MCP-serveren (ingen imports!), `commands.ts` er handlerne
   appen kjører, `useMcpBridge.ts` er WebSocket-klienten med auto-reconnect.
 - `mcp-server/index.ts` – kjøres direkte av Node 24 (type stripping, ingen build): kun slettbar

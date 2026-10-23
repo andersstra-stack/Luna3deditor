@@ -1,22 +1,23 @@
 import * as THREE from "three";
 import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
-import type { SceneObject, ShapeType } from "../types";
+import type { SceneObject } from "../types";
 import { objectBox, objectMatrix } from "../bounds";
-import { getGeometry } from "./geometries";
+import { geometryOf } from "./geometries";
 
 const evaluator = new Evaluator();
 evaluator.attributes = ["position", "normal"];
 evaluator.useGroups = false;
 
 // Egne kopier med bare attributtene CSG trenger (alle brushes må ha like attributter).
-const brushGeometries = new Map<ShapeType, THREE.BufferGeometry>();
-function brushGeometry(type: ShapeType): THREE.BufferGeometry {
-  let geo = brushGeometries.get(type);
+const brushGeometries = new Map<string, THREE.BufferGeometry>();
+function brushGeometry(o: SceneObject): THREE.BufferGeometry {
+  const key = o.type === "mesh" ? `mesh:${o.meshId}` : o.type;
+  let geo = brushGeometries.get(key);
   if (!geo) {
-    geo = getGeometry(type).clone();
+    geo = geometryOf(o).clone();
     for (const name of Object.keys(geo.attributes)) if (name !== "position" && name !== "normal") geo.deleteAttribute(name);
     geo.clearGroups();
-    brushGeometries.set(type, geo);
+    brushGeometries.set(key, geo);
   }
   return geo;
 }
@@ -33,12 +34,12 @@ export function overlappingHoles(solid: SceneObject, holes: SceneObject[]): Scen
  * slik at meshen kan beholde vanlig posisjon/rotasjon/størrelse.
  */
 export function cutGeometry(solid: SceneObject, holes: SceneObject[]): THREE.BufferGeometry {
-  let result = new Brush(brushGeometry(solid.type));
+  let result = new Brush(brushGeometry(solid));
   result.updateMatrixWorld();
   const toLocal = objectMatrix(solid).invert();
 
   for (const hole of holes) {
-    const brush = new Brush(brushGeometry(hole.type));
+    const brush = new Brush(brushGeometry(hole));
     // Matrisen settes direkte (ikke via decompose) så skjevhet fra ujevnt skalerte, roterte former bevares.
     brush.matrixAutoUpdate = false;
     brush.matrix.copy(toLocal).multiply(objectMatrix(hole));

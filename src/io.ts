@@ -6,12 +6,13 @@ import { useEditor, type Snapshot } from "./store";
 import { hiddenFolderIds } from "./folders";
 import { SHAPES, isLight, type Folder, type SceneFile } from "./types";
 import { sceneMeshes } from "./viewport/three-handle";
+import { deserializeMesh, hasMesh, registerMesh, serializeUsedMeshes } from "./meshes";
 
 const SCENE_FILTER = { name: "Luna 3D-scene", extensions: ["luna.json", "json"] };
 
 export function serializeScene(): SceneFile {
   const { objects, folders } = useEditor.getState();
-  return { format: "luna3d", version: 2, objects, folders };
+  return { format: "luna3d", version: 3, objects, folders, meshes: serializeUsedMeshes(objects) };
 }
 
 function parseScene(text: string): Snapshot {
@@ -20,10 +21,13 @@ function parseScene(text: string): Snapshot {
   for (const o of data.objects) {
     if (!SHAPES.includes(o.type)) throw new Error(`Ukjent objekttype: ${o.type}`);
   }
-  // Versjon 1 hadde ikke mapper.
+  // Versjon 1 hadde ikke mapper, versjon 2 ikke importerte modeller.
+  for (const m of data.meshes ?? []) registerMesh(deserializeMesh(m));
   const folders: Folder[] = Array.isArray(data.folders) ? data.folders : [];
   const folderIds = new Set(folders.map((f) => f.id));
-  const objects = data.objects.map((o) => ({ ...o, folderId: o.folderId && folderIds.has(o.folderId) ? o.folderId : null }));
+  const objects = data.objects
+    .filter((o) => o.type !== "mesh" || hasMesh(o.meshId))
+    .map((o) => ({ ...o, folderId: o.folderId && folderIds.has(o.folderId) ? o.folderId : null }));
   return { objects, folders };
 }
 

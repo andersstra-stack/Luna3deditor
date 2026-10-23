@@ -1,6 +1,7 @@
 import { useEditor, type FolderUpdate } from "../store";
 import { exportGlb, openScene, saveScene } from "../io";
-import { SHAPES, type SceneObject, type ShapeType, type Vec3 } from "../types";
+import { importModelFile } from "../importer";
+import { ADDABLE_SHAPES, type SceneObject, type ShapeType, type Vec3 } from "../types";
 import { objectBox, round, type Axis } from "../bounds";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { captureViewport, frameScene, VIEWS, type ViewName } from "../viewport/three-handle";
@@ -42,7 +43,11 @@ export const handlers: Record<BridgeMethod, Handler> = {
   add_objects: (p) => {
     const items = p.objects as (Partial<SceneObject> & { type: ShapeType })[];
     if (!Array.isArray(items) || !items.length) throw new Error("objects må være en ikke-tom liste");
-    for (const i of items) if (!SHAPES.includes(i.type)) throw new Error(`Ukjent type "${i.type}"`);
+    for (const i of items) {
+      if (!ADDABLE_SHAPES.includes(i.type as (typeof ADDABLE_SHAPES)[number])) {
+        throw new Error(i.type === "mesh" ? "Modeller legges til med import_model (eller duplicate_objects)" : `Ukjent type "${i.type}"`);
+      }
+    }
     // Claude må velge mappe eksplisitt – brukerens aktive mappe brukes ikke.
     const created = editor().addObjects(items.map((i) => ({ ...i, folderId: i.folderId ?? null })));
     say(created.length === 1 ? `la til ${created[0].name}` : `la til ${created.length} objekter`);
@@ -164,6 +169,15 @@ export const handlers: Record<BridgeMethod, Handler> = {
     const path = await openScene(requireString(p, "path"));
     say(`åpnet ${path}`);
     return { path, objects: editor().objects.length };
+  },
+
+  import_model: async (p) => {
+    const result = await importModelFile(requireString(p, "path"), {
+      folderId: (p.folderId as string | null | undefined) ?? null,
+      position: p.position as Vec3 | undefined,
+    });
+    say(`importerte ${p.path}`);
+    return result;
   },
 
   export_glb: async (p) => {

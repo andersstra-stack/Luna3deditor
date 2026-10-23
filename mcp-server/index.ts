@@ -13,7 +13,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { WebSocketServer, WebSocket } from "ws";
 import { z } from "zod";
 import { BRIDGE_BUSY_CODE, BRIDGE_PORT, type BridgeMethod, type BridgeResponse } from "../src/bridge/protocol.ts";
-import { SHAPES } from "../src/types.ts";
+import { ADDABLE_SHAPES } from "../src/types.ts";
 
 const PORT = Number(process.env.LUNA_BRIDGE_PORT ?? BRIDGE_PORT);
 const log = (...args: unknown[]) => console.error("[luna3d-mcp]", ...args);
@@ -158,6 +158,11 @@ things flush against each other (e.g. new.position.x = other.bounds.max.x + new.
 Holes (CSG): set hole: true on an object to cut it out of every other (non-hole) object in the SAME folder it overlaps —
 e.g. windows and doors in a wall: put the wall and box-shaped holes in one folder. Holes are live and stay editable.
 
+Imported models: import_model loads an FBX, GLB/glTF, OBJ or STL file from disk. Each mesh in the file becomes an object of
+type "mesh" (several parts are put in their own folder). Like every other shape they are normalized to a unit box, so 'scale'
+is their size in meters; centimeter/millimeter files are scaled to meters automatically. Meshes can be moved, scaled, recolored,
+mirrored, duplicated and cut with holes, but their geometry can't be edited.
+
 Folders: purely organizational (like a file tree) — they have no transform of their own and can be nested.
 For anything with more than a handful of parts, put parts in descriptive folders (e.g. "House" > "Roof", "Walls").
 Create folders first with create_folders, then pass folderId in add_objects. Hidden folders hide everything inside them.
@@ -199,7 +204,7 @@ server.registerTool(
     title: "Add objects",
     description: "Add one or more shapes or lights to the scene. Returns their new ids. Prefer adding all parts of a model in one call.",
     inputSchema: {
-      objects: z.array(z.object({ type: z.enum(SHAPES), ...objectProps })).min(1),
+      objects: z.array(z.object({ type: z.enum(ADDABLE_SHAPES), ...objectProps })).min(1),
     },
   },
   ({ objects }) => run("add_objects", { objects }),
@@ -425,6 +430,21 @@ server.registerTool(
     inputSchema: { path: z.string().describe("Absolute file path") },
   },
   ({ path }) => run("load_scene", { path }),
+);
+
+server.registerTool(
+  "import_model",
+  {
+    title: "Import 3D model",
+    description:
+      "Import an FBX, GLB/glTF (embedded only), OBJ or STL file from disk into the scene. Returns the new object ids, the folder created for multi-part models, the applied unit scale and the overall size in meters. By default it is placed on the ground where the user's camera looks.",
+    inputSchema: {
+      path: z.string().describe("Absolute path to the model file"),
+      folderId: z.string().nullable().optional().describe("Folder to import into (default: scene root)."),
+      position: vec3.optional().describe("Where to put the model: [x, y, z] = center of its footprint at height y (default: on the ground where the camera looks)."),
+    },
+  },
+  ({ path, folderId, position }) => run("import_model", { path, folderId, position }),
 );
 
 server.registerTool(

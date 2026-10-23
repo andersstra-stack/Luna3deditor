@@ -7,7 +7,7 @@ import { useEditor } from "../store";
 import { hiddenFolderIds } from "../folders";
 import { boxOf, objectBox, objectMatrix, round } from "../bounds";
 import { isLight, type SceneObject, type Vec3 } from "../types";
-import { getGeometry } from "./geometries";
+import { geometryOf, getGeometry } from "./geometries";
 import { cutGeometry, overlappingHoles } from "./csg";
 import { snapOffset, type SnapContext } from "./snapping";
 import { setThreeGetter } from "./three-handle";
@@ -162,9 +162,18 @@ function SolidMesh({ obj, selected, holes }: { obj: SceneObject; selected: boole
   // Hull i samme mappe skjæres bort live (CSG). Uten hull brukes den delte geometrien.
   const holesKey = holes.map((h) => `${h.id}:${h.type}:${h.position}:${h.rotation}:${h.scale}`).join("|");
   const geometry = useMemo(
-    () => (holes.length ? cutGeometry(obj, holes) : getGeometry(obj.type)),
+    () => {
+      if (!holes.length) return geometryOf(obj);
+      try {
+        return cutGeometry(obj, holes);
+      } catch (e) {
+        // Importerte modeller er ikke alltid "vanntette" – da vises modellen uten hull.
+        console.warn("Kunne ikke skjære hull i", obj.name, e);
+        return geometryOf(obj);
+      }
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [obj.type, obj.position, obj.rotation, obj.scale, holesKey],
+    [obj.type, obj.meshId, obj.position, obj.rotation, obj.scale, holesKey],
   );
   const isCut = holes.length > 0;
   useEffect(() => () => void (isCut && geometry.dispose()), [geometry, isCut]);
