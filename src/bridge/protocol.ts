@@ -27,6 +27,7 @@ export const BRIDGE_METHODS = [
   "load_scene",
   "export_glb",
   "import_model",
+  "apply_script",
 ] as const;
 export type BridgeMethod = (typeof BRIDGE_METHODS)[number];
 

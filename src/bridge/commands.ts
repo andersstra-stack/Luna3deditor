@@ -1,8 +1,9 @@
 import { useEditor, type FolderUpdate } from "../store";
 import { exportGlb, openScene, saveScene } from "../io";
 import { importModelFile } from "../importer";
-import { ADDABLE_SHAPES, type SceneObject, type ShapeType, type Vec3 } from "../types";
-import { objectBox, round, type Axis } from "../bounds";
+import { ADDABLE_SHAPES, type SceneObject, type ScriptOp, type ShapeType, type Vec3 } from "../types";
+import type { Axis } from "../bounds";
+import { applyScriptOps, sceneForScripts } from "../scripting";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { captureViewport, frameScene, VIEWS, type ViewName } from "../viewport/three-handle";
 import type { BridgeMethod } from "./protocol";
@@ -30,14 +31,13 @@ function checkView(view: unknown): ViewName {
 const summary = (o: SceneObject) => ({ id: o.id, name: o.name, type: o.type });
 
 export const handlers: Record<BridgeMethod, Handler> = {
-  get_scene: () => {
-    const { objects, folders, selectedIds, filePath } = editor();
-    // Nøyaktige omsluttende bokser (verdensrom) gjør det lett å plassere ting inntil hverandre.
-    const withBounds = objects.map((o) => {
-      const b = objectBox(o);
-      return { ...o, bounds: { min: b.min.toArray().map((v) => round(v)), max: b.max.toArray().map((v) => round(v)) } };
-    });
-    return { folders, objects: withBounds, selectedIds, filePath };
+  // Nøyaktige omsluttende bokser (verdensrom) gjør det lett å plassere ting inntil hverandre.
+  get_scene: () => sceneForScripts(),
+
+  apply_script: (p) => {
+    const ops = p.ops as ScriptOp[];
+    if (!Array.isArray(ops)) throw new Error("ops må være en liste");
+    return applyScriptOps(ops, (p.name as string | undefined) ?? "Claude-skript");
   },
 
   add_objects: (p) => {

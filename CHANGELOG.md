@@ -14,6 +14,9 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 - **Egen titellinje** (som LunaChat): Windows-rammen er fjernet og erstattet av en temafarget tittelrad med merke,
   scenens filnavn i midten og minimer/maksimer/lukk. Verktøyene ligger på egen rad under. Tittelraden flytter
   vinduet (dobbeltklikk maksimerer), og tittelen i oppgavelinja følger scenen.
+- **Python-skript**: `.py`-filer kan bygge og endre scenen via modulen `luna3d` (løkker, matematikk, gjenbruk).
+  Kjøres med `</>`-knappen i appen eller av Claude (MCP `run_python`, kan også lagre skriptet). Hele kjøringen
+  er ett angre-steg, og et skript som feiler endrer ingenting. Eksempler i `scripting/eksempler/`.
 
 ## [0.6.0] — 2026-10-23
 

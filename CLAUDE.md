@@ -23,6 +23,10 @@ MCP-verktøybeskrivelser er på engelsk.
   LoadingManager-URL-modifier fra samme mappe; fargen per trekant leses fra bildet og meshen deles opp per farge. Geometrien ligger i `src/meshes.ts` (register utenfor
   angre-historikken, base64 i scenefil v3 og i utklippstavla). Bruk alltid `geometryOf(o)`, ikke `getGeometry(o.type)`.
   Modeller speiles med negativ størrelse (de er ikke symmetriske); `add_objects` kan ikke lage `mesh` direkte.
+- Python-skript: `scripting/luna3d.py` (API + `python -m luna3d skript.py`) samler endringer og skriver dem ut etter
+  markøren `@@LUNA3D_OPS@@` når skriptet er ferdig. Kjøres av Rust (`run_python_script`, modulen pakkes som ressurs)
+  eller MCP (`mcp-server/python.ts`); `src/scripting.ts` tolker utdata, `store.applyScript` gjør alt som ett angre-steg.
+  Nye egenskaper/former må legges inn i både `luna3d.py` (PROPS/SHAPES) og appen.
 - `src/bridge/` – `protocol.ts` deles med MCP-serveren (ingen imports!), `commands.ts` er handlerne
   appen kjører, `useMcpBridge.ts` er WebSocket-klienten med auto-reconnect.
 - `mcp-server/index.ts` – kjøres direkte av Node 24 (type stripping, ingen build): kun slettbar

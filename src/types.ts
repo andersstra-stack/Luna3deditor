@@ -132,4 +132,23 @@ export interface SerializedMesh {
   index?: string;
 }
 
+/**
+ * Endringer fra et Python-skript (scripting/luna3d.py). Nøkler som begynner med «@» peker på
+ * mapper/objekter laget tidligere i samme skript; ellers er det id-er fra scenen.
+ */
+export type ScriptOp =
+  | { op: "folder"; key: string; name: string; parent?: string | null }
+  | { op: "add"; key: string; type: ShapeType; props: Record<string, unknown> }
+  | { op: "update"; id: string; props: Record<string, unknown> }
+  | { op: "delete"; ids: string[] };
+
+export interface ScriptResult {
+  created: string[];
+  folders: string[];
+  updated: number;
+  deleted: number;
+  /** Skriptets nøkler (@o1, @f1 …) → id-er i scenen. */
+  keys: Record<string, string>;
+}
+
 export const DEFAULT_COLORS = ["#7aa2f7", "#9ece6a", "#e0af68", "#f7768e", "#bb9af7", "#7dcfff", "#ff9e64"];

@@ -12,6 +12,7 @@ import {
 } from "../types";
 import { exportGlb, openScene, saveScene } from "../io";
 import { importModelFile } from "../importer";
+import { runPythonScriptFile } from "../scripting";
 import { useUi } from "./uiStore";
 import { frameScene, viewTargetOnGround } from "../viewport/three-handle";
 import { Icon, ShapeIcon } from "./icons";
@@ -88,6 +89,13 @@ export function Toolbar() {
           onClick={() => importModelFile().catch(reportError)}
         >
           <Icon name="import" />
+        </button>
+        <button
+          className="icon-btn"
+          title="Kjør Python-skript (.py) som bygger eller endrer scenen – se scripting/eksempler"
+          onClick={() => runPythonScriptFile().catch(reportError)}
+        >
+          <Icon name="code" />
         </button>
         <button className="icon-btn" title="Eksporter GLB (til Blender, Roblox, Unity…)" onClick={() => exportGlb().catch(reportError)}>
           <Icon name="export" />

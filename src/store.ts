@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import {
+  ADDABLE_SHAPES,
   DEFAULT_COLORS,
   DEFAULT_INTENSITY,
   DEFAULT_SCALE,
@@ -7,6 +8,8 @@ import {
   isLight,
   type Folder,
   type SceneObject,
+  type ScriptOp,
+  type ScriptResult,
   type ShapeType,
   type TransformMode,
   type Vec3,
@@ -66,6 +69,8 @@ export interface EditorState extends Snapshot {
   setCollapsed: (id: string, collapsed: boolean) => void;
   setActiveFolder: (id: string | null) => void;
 
+  /** Bruker endringene fra et Python-skript som ett angre-steg. */
+  applyScript: (ops: ScriptOp[]) => ScriptResult;
   setScene: (scene: Snapshot) => void;
   clearScene: () => void;
   select: (id: string | null, mode?: SelectMode) => void;
@@ -303,6 +308,66 @@ export const useEditor = create<EditorState>((set, get) => {
 
     setCollapsed: (id, value) => set({ collapsed: { ...get().collapsed, [id]: value } }),
     setActiveFolder: (activeFolderId) => set({ activeFolderId }),
+
+    applyScript: (ops) => {
+      let objects = [...get().objects];
+      const folders = [...get().folders];
+      const keys = new Map<string, string>();
+      const result: ScriptResult = { created: [], folders: [], updated: 0, deleted: 0, keys: {} };
+
+      // "@…" er nøkler fra skriptet; ellers id-er som må finnes i scenen.
+      const resolve = (ref: string, kind: "objekt" | "mappe") => {
+        if (ref.startsWith("@")) {
+          const id = keys.get(ref);
+          if (!id) throw new Error(`Ukjent nøkkel ${ref} i skriptet`);
+          return id;
+        }
+        const exists = kind === "mappe" ? folders.some((f) => f.id === ref) : objects.some((o) => o.id === ref);
+        if (!exists) throw new Error(`Fant ikke ${kind} ${ref}`);
+        return ref;
+      };
+      const toProps = (props: Record<string, unknown>): Partial<SceneObject> => {
+        const { folder, ...rest } = props;
+        return {
+          ...(rest as Partial<SceneObject>),
+          ...(folder !== undefined ? { folderId: folder === null ? null : resolve(String(folder), "mappe") } : {}),
+        };
+      };
+
+      for (const op of ops) {
+        if (op.op === "folder") {
+          const folder: Folder = {
+            id: newId("fld"),
+            name: uniqueName(op.name?.trim() || "Ny mappe", folders),
+            parentId: op.parent ? resolve(op.parent, "mappe") : null,
+            visible: true,
+          };
+          folders.push(folder);
+          keys.set(op.key, folder.id);
+          result.folders.push(folder.id);
+        } else if (op.op === "add") {
+          if (!(ADDABLE_SHAPES as readonly string[]).includes(op.type)) throw new Error(`Ukjent type «${op.type}» i skriptet`);
+          const obj = makeObject(op.type, objects, toProps(op.props));
+          objects.push(obj);
+          keys.set(op.key, obj.id);
+          result.created.push(obj.id);
+        } else if (op.op === "update") {
+          const id = resolve(op.id, "objekt");
+          const props = toProps(op.props);
+          objects = objects.map((o) => (o.id === id ? { ...o, ...props, id: o.id, type: o.type } : o));
+          result.updated++;
+        } else if (op.op === "delete") {
+          const ids = new Set(op.ids.map((ref) => resolve(ref, "objekt")));
+          objects = objects.filter((o) => !ids.has(o.id));
+          result.deleted += ids.size;
+        }
+      }
+
+      result.keys = Object.fromEntries(keys);
+      const alive = new Set(objects.map((o) => o.id));
+      commit({ objects, folders }, { selectedIds: result.created.filter((id) => alive.has(id)) });
+      return result;
+    },
 
     setScene: ({ objects, folders }) => commit({ objects, folders }, { selectedIds: [], activeFolderId: null }),
     clearScene: () => commit({ objects: [], folders: [] }, { selectedIds: [], activeFolderId: null }),

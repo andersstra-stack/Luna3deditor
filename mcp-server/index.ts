@@ -12,7 +12,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { WebSocketServer, WebSocket } from "ws";
 import { z } from "zod";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { runPythonScript } from "./python.ts";
 import { BRIDGE_BUSY_CODE, BRIDGE_PORT, type BridgeMethod, type BridgeResponse } from "../src/bridge/protocol.ts";
 import { ADDABLE_SHAPES } from "../src/types.ts";
 
@@ -164,6 +167,19 @@ Imported models: import_model loads an FBX, GLB/glTF, OBJ or STL file from disk.
 type "mesh" (several parts are put in their own folder). Like every other shape they are normalized to a unit box, so 'scale'
 is their size in meters; centimeter/millimeter files are scaled to meters automatically. Meshes can be moved, scaled, recolored,
 mirrored, duplicated and cut with holes, but their geometry can't be edited.
+
+Python scripts: run_python runs Python code (or a .py file) that builds or edits the scene through the luna3d
+module – best for anything repetitive or mathematical (fences, stairs, grids, rings, terrain, arrays of parts),
+where one loop replaces hundreds of add_objects entries. The whole run is ONE undo step. API (import luna3d as luna):
+- luna.box/sphere/cylinder/cone/torus/plane/capsule/wedge/prism/pyramid/stairs/hemisphere/tube/rounded_box/
+  point_light/spot_light(name=, position=(x,y,z), rotation=(deg,deg,deg), scale=(x,y,z), color="#rrggbb",
+  metalness=, roughness=, opacity=, hole=, intensity=, folder=) -> key; or luna.add("box", ...)
+- luna.folder(name, parent=None) -> key (use as folder=/parent=)
+- luna.update(id_or_key, **props), luna.delete(*ids)
+- luna.scene / luna.objects(name=, type=, folder=) / luna.folders(name=) / luna.get(id): the scene at start,
+  objects include "bounds" {min, max}
+print() output is returned to you; exceptions return the traceback and change nothing. Save reusable scripts with
+save_to (e.g. a "skript" folder next to the user's scene). Examples: scripting/eksempler in the Luna 3D repo.
 
 Folders: purely organizational (like a file tree) — they have no transform of their own and can be nested.
 For anything with more than a handful of parts, put parts in descriptive folders (e.g. "House" > "Roof", "Walls").
@@ -447,6 +463,44 @@ server.registerTool(
     },
   },
   ({ path, folderId, position }) => run("import_model", { path, folderId, position }),
+);
+
+server.registerTool(
+  "run_python",
+  {
+    title: "Run Python script",
+    description:
+      "Run a Python script that builds or edits the scene with the luna3d module (see the server instructions for the API). Give either 'code' or 'path' to an existing .py file. All changes are applied as one undo step; print() output and errors are returned.",
+    inputSchema: {
+      code: z.string().optional().describe("Python source, e.g. 'import luna3d as luna\nfor i in range(10): luna.box(position=(i, 0.5, 0))'"),
+      path: z.string().optional().describe("Absolute path to an existing .py file to run instead of code."),
+      save_to: z.string().optional().describe("Also save 'code' as a .py file at this absolute path, so it can be re-run or edited later."),
+    },
+  },
+  async ({ code, path, save_to }) => {
+    const fail = (text: string) => ({ content: [{ type: "text" as const, text }], isError: true });
+    if (!code === !path) return fail("Give exactly one of 'code' or 'path'.");
+    const tmp = mkdtempSync(join(tmpdir(), "luna3d-script-"));
+    try {
+      let script = path!;
+      if (code) {
+        script = save_to ?? join(tmp, "script.py");
+        writeFileSync(script, code, "utf8");
+      }
+      const scene = await bridge.call("get_scene");
+      const run = await runPythonScript(script, scene);
+      const output = [run.printed && `Script output:\n${run.printed}`, run.stderr && `stderr:\n${run.stderr}`].filter(Boolean).join("\n\n");
+      if (!run.ops) return fail(`The script failed (exit code ${run.code}) – nothing was changed.\n\n${output}`);
+      const name = (save_to ?? path ?? "Claude-skript").split(/[\\/]/).pop();
+      const result = run.ops.length ? await bridge.call("apply_script", { ops: run.ops, name }) : { note: "The script made no changes." };
+      const saved = code && save_to ? `Saved to ${save_to}\n\n` : "";
+      return json({ ...result, ...(output ? { output } : {}), ...(saved ? { saved: save_to } : {}) });
+    } catch (e) {
+      return fail((e as Error).message);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  },
 );
 
 server.registerTool(
