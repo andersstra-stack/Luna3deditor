@@ -17,10 +17,19 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
   i egenskapspanelet, som Custom Properties i Blender. Kopier får neste nummer, speiling snur retningen riktig, og panelet
   varsler om like navn, mellomrom og `.001`. Markøren holder en minste størrelse på skjermen.
 - **GLB-eksporten** tar med nodene som tomme noder med egenskapene som `extras`. Unity-siden leser dem med glTFast.
+- **Import av noder**: tomme noder (Empties) i FBX- og GLB-filer blir markør-noder, med Custom Properties fra FBX
+  og `extras` fra GLB som egenskaper. Nodene i hangaren fra Nova Homestead kommer f.eks. med `ship_class`, `max_length` osv.
 - Claude og Python-skript kan lage noder (`add_objects` med `type: "node"` og `props`, `luna.node(..., props={...})`);
   `get_scene` viser nodenes retning (`forward`/`up`) i verdensrommet.
+- **Fri flyging i scenen** som i Unity: hold høyre musknapp for å se deg rundt og fly med W/A/S/D, Q/E (ned/opp) og
+  Shift (fortere); hjulet endrer farten. Panorering er flyttet til midtknappen. Kameraets nær-/fjernplan følger avstanden,
+  så også stasjoner på flere kilometer vises.
 
 ### Fixed
+- FBX-import bruker enheten fila oppgir (`UnitScaleFactor`) i stedet for å gjette ut fra størrelsen. Store modeller i
+  meter (f.eks. hangaren på 800 m med innflyging) ble krympet ×0,01.
+- FBX snus 180° om Y ved import, så en GLB eksportert fra Luna havner likt med FBX-en i Unity (Unity leser FBX som
+  Blender (x, y, z) → (x, z, y), mens glTFast speiler X).
 - MCP-broen kommer seg av seg selv når porten er opptatt (f.eks. av en gammel Claude-økt): serveren prøver å lytte
   på nytt hvert 3. sekund i stedet for å gi opp til Claude Code kobler den til på nytt.
 

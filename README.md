@@ -22,7 +22,7 @@ Tema velges under **Innstillinger** (tannhjulet øverst til høyre): de samme 10
 | Flytt / roter / skaler | Dra i gizmoen – bytt modus med **W / E / R** |
 | Fest til objekter | **C** (på som standard): flater legger seg helt inntil hverandre og bakken når du flytter, uten mellomrom |
 | Fest til rutenett | **X** (0,25 m / 15° / 0,1) |
-| Kamera | Venstre mus roter · høyre mus panorer · hjul zoom · **F** vis alt |
+| Kamera | Venstre mus roter · midtknapp panorer · hjul zoom · **F** vis alt. **Fly fritt** som i Unity: hold høyre mus og se deg rundt, **W/A/S/D** fram/sidelengs, **Q/E** ned/opp, **Shift** fortere, hjulet endrer farten |
 | Plassering | Egenskapspanelet: **Legg ned på underlaget** (**End**), innrett flere objekter (min/midt/maks), speil og speilkopi. Mål på utvalget vises nede til venstre |
 | Hull | Huk av **Hull** på et objekt, så skjæres det bort fra de andre objektene i samme mappe (vinduer, dører, hakk) – live og redigerbart |
 | Lys | Punktlys og spotlys under **Flere**; farge og lysstyrke i egenskapspanelet. Roter spotlyset for å sikte |
@@ -33,7 +33,7 @@ Tema velges under **Innstillinger** (tannhjulet øverst til høyre): de samme 10
 | Dupliser / slett | **Ctrl+D** / **Delete** |
 | Angre / gjør om | **Ctrl+Z** / **Ctrl+Y** |
 | Lagre / åpne | **Ctrl+S** / **Ctrl+O** (`.luna.json`) |
-| Importer | **Ctrl+I**, importknappen eller dra filer inn i vinduet: **FBX, GLB/glTF, OBJ, STL**. Flere deler havner i en egen mappe, cm/mm skaleres til meter. Farger hentes fra materialer, hjørnefarger og teksturer/fargepaletter (bildet leses fra samme mappe – ved dra-og-slipp: dra modell og bilde inn sammen), og modellen deles opp i én del per farge. Modellen kan flyttes, skaleres, fargelegges, speiles og få hull, men ikke formredigeres. `.gltf` med eksterne filer støttes ikke – bruk `.glb` |
+| Importer | **Ctrl+I**, importknappen eller dra filer inn i vinduet: **FBX, GLB/glTF, OBJ, STL**. Flere deler havner i en egen mappe, cm/mm skaleres til meter. Farger hentes fra materialer, hjørnefarger og teksturer/fargepaletter (bildet leses fra samme mappe – ved dra-og-slipp: dra modell og bilde inn sammen), og modellen deles opp i én del per farge. Modellen kan flyttes, skaleres, fargelegges, speiles og få hull, men ikke formredigeres. Tomme noder (Empties) i FBX/GLB blir markør-noder med egenskapene sine. FBX snus 180° om Y, så GLB-eksporten står likt med FBX-en i Unity. `.gltf` med eksterne filer støttes ikke – bruk `.glb` |
 | Python-skript | `</>`-knappen kjører en `.py`-fil som bygger/endrer scenen med `import luna3d as luna` (se `scripting/luna3d.py` og `scripting/eksempler/`). Ett angre-steg per kjøring. Kjøres samme fil igjen, erstattes forrige resultat («Løsne» i egenskapene beholder et objekt). Krever Python 3 |
 | Kommentar-pinner | Pinneknappen eller **N**, klikk på et objekt/bakken og skriv hva som må gjøres. Fanen «Kommentarer» i venstre panel lister dem. Claude kan lese, svare og markere dem som løst – og sette egne (lilla) |
 | Eksporter | Eksport-knappen → `.glb` (Blender, Roblox Studio, Unity, Godot …). Mappene blir navngitte grupper. Noder blir tomme noder med egenskapene som glTF `extras` |

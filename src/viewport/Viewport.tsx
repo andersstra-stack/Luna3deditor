@@ -12,6 +12,7 @@ import { cutGeometry, overlappingHoles } from "./csg";
 import { snapOffset, type SnapContext } from "./snapping";
 import { setThreeGetter } from "./three-handle";
 import { NoteGroundCatcher, NotePins, placeNote } from "./Notes";
+import { FlyControls } from "./FlyControls";
 import { themeColors, useUi } from "../ui/uiStore";
 
 const DEG = Math.PI / 180;
@@ -274,6 +275,26 @@ function NodeMarker({ obj, selected, accent }: { obj: SceneObject; selected: boo
   );
 }
 
+/**
+ * Nær- og fjernplanet følger avstanden til det kameraet ser på, så både små ting og
+ * stasjoner på flere kilometer vises uten å bli klippet eller flimre.
+ */
+function CameraRange() {
+  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
+  const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3 } | null;
+  useFrame(() => {
+    const dist = controls ? camera.position.distanceTo(controls.target) : 10;
+    const near = THREE.MathUtils.clamp(dist / 2000, 0.02, 5);
+    const far = Math.max(1000, dist * 60);
+    if (Math.abs(camera.near - near) / near > 0.2 || Math.abs(camera.far - far) / far > 0.2) {
+      camera.near = near;
+      camera.far = far;
+      camera.updateProjectionMatrix();
+    }
+  });
+  return null;
+}
+
 function ThreeBridge() {
   const get = useThree((s) => s.get);
   useEffect(() => setThreeGetter(get), [get]);
@@ -374,7 +395,15 @@ export function Viewport() {
       <Scene accent={colors.accent} />
       <NotePins />
       <NoteGroundCatcher />
-      <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
+      {/* Høyre mus er fri flyging (FlyControls), så panorering ligger på midtknappen. */}
+      <OrbitControls
+        makeDefault
+        enableDamping
+        dampingFactor={0.12}
+        mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }}
+      />
+      <FlyControls />
+      <CameraRange />
       <GizmoHelper alignment="bottom-right" margin={[72, 72]}>
         <GizmoViewport axisColors={["#f7768e", "#9ece6a", "#7aa2f7"]} labelColor="#1d2030" />
       </GizmoHelper>

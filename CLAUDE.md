@@ -22,6 +22,8 @@ MCP-verktøybeskrivelser er på engelsk.
   enhetsboksen, enhetsgjetting cm/mm → m, STL snus fra Z-opp). Teksturer (f.eks. lowpoly-fargepaletter) lastes i to runder via
   LoadingManager-URL-modifier fra samme mappe; fargen per trekant leses fra bildet og meshen deles opp per farge. Geometrien ligger i `src/meshes.ts` (register utenfor
   angre-historikken, base64 i scenefil v3 og i utklippstavla). Bruk alltid `geometryOf(o)`, ikke `getGeometry(o.type)`.
+  FBX-enheten leses fra `UnitScaleFactor`; FBX snus 180° om Y (se `importModelData`) så eksportert GLB står likt med FBX-en i
+  Unity. Empties blir noder; Custom Properties leses av `src/fbxProps.ts` (FBXLoader tar dem ikke med).
   Modeller speiles med negativ størrelse (de er ikke symmetriske); `add_objects` kan ikke lage `mesh` direkte.
 - Python-skript: `scripting/luna3d.py` (API + `python -m luna3d skript.py`) samler endringer og skriver dem ut etter
   markøren `@@LUNA3D_OPS@@` når skriptet er ferdig. Kjøres av Rust (`run_python_script`, modulen pakkes som ressurs)

@@ -10,7 +10,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { newId, useEditor } from "./store";
 import { registerMesh } from "./meshes";
 import { round } from "./bounds";
-import { DEFAULT_COLORS, type Vec3 } from "./types";
+import { fbxUserProps } from "./fbxProps";
+import { DEFAULT_COLORS, type NodeProps, type Vec3 } from "./types";
 import { viewTargetOnGround } from "./viewport/three-handle";
 
 export const IMPORT_EXTENSIONS = ["fbx", "glb", "gltf", "obj", "stl"];
@@ -22,6 +23,14 @@ const MAX_COLORS_PER_MESH = 24;
 
 /** Leser en fil modellen refererer til (tekstur, .mtl) – null hvis den ikke finnes. */
 export type ResourceResolver = (fileName: string) => Promise<ArrayBuffer | null>;
+
+/** En tom node (Empty i Blender) fra modellfila – blir en Luna-node. */
+interface ImportedNode {
+  name: string;
+  position: THREE.Vector3;
+  quaternion: THREE.Quaternion;
+  props: NodeProps;
+}
 
 interface Part {
   name: string;
@@ -36,6 +45,8 @@ export interface ImportResult {
   objectIds: string[];
   folderId: string | null;
   parts: number;
+  /** Tomme noder (Empties) fra fila som ble markør-noder. */
+  nodes: number;
   /** Faktor modellen ble skalert med for å komme til meter (1 = uendret). */
   unitScale: number;
   size: Vec3;
@@ -279,6 +290,56 @@ function extractParts(root: THREE.Object3D, fallbackName: string): Part[] {
   return parts;
 }
 
+/** Flate egenskaper (tall eller tekst) fra glTF-extras; sannhetsverdier blir 1/0, resten hoppes over. */
+function flatProps(extras: Record<string, unknown>): NodeProps {
+  const props: NodeProps = {};
+  for (const [k, v] of Object.entries(extras ?? {})) {
+    if (typeof v === "number" || typeof v === "string") props[k] = v;
+    else if (typeof v === "boolean") props[k] = v ? 1 : 0;
+  }
+  return props;
+}
+
+/**
+ * Tomme noder i verdensrom. FBX: alle modeller som ikke er mesh/lys/kamera/bein (Empties i Blender),
+ * med Custom Properties lest rett fra fila. glTF: noder uten mesh som er blader eller har extras –
+ * en tom node med barn og uten extras er bare en gruppe (slik Luna eksporterer mapper).
+ */
+function extractNodes(root: THREE.Object3D, ext: string, data: ArrayBuffer): ImportedNode[] {
+  // FBX fra Blender: nodens «forover» (Blender +Y) ligger langs lokal −Z i fila. Snu noden om sin egen
+  // Y-akse så lokal +Z blir forover, som ellers i Luna (og i Unity etter import).
+  const flip = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+  if (ext !== "fbx" && ext !== "glb" && ext !== "gltf") return [];
+  const fbx = ext === "fbx" ? fbxUserProps(data) : null;
+  root.updateMatrixWorld(true);
+  const nodes: ImportedNode[] = [];
+  const s = new THREE.Vector3();
+  root.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh || (o as THREE.Light).isLight || (o as THREE.Camera).isCamera || (o as THREE.Bone).isBone) return;
+    if ((o as THREE.Object3D & { isLineSegments?: boolean }).isLineSegments || (o as THREE.Line).isLine || (o as THREE.Points).isPoints) return;
+    let name: string;
+    let props: NodeProps;
+    if (fbx) {
+      const id = (o as THREE.Object3D & { ID?: number }).ID;
+      if (id === undefined) return; // gruppa FBXLoader lager rundt alt
+      name = (o.userData.originalName as string | undefined) || o.name;
+      props = fbx.byId.get(id) ?? fbx.byName.get(name) ?? {};
+    } else {
+      if (o === root) return;
+      props = flatProps(o.userData);
+      if (o.children.length && !Object.keys(props).length) return;
+      name = o.name;
+    }
+    if (!name) return;
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    o.matrixWorld.decompose(position, quaternion, s);
+    if (fbx) quaternion.multiply(flip);
+    nodes.push({ name, position, quaternion, props });
+  });
+  return nodes;
+}
+
 /** Slår sammen deler med samme utseende (for modeller med veldig mange deler). */
 function mergeByAppearance(parts: Part[]): Part[] {
   const groups = new Map<string, Part[]>();
@@ -294,12 +355,15 @@ function mergeByAppearance(parts: Part[]): Part[] {
 }
 
 /**
- * Gjetter enhet, siden Luna bruker meter: glTF er alltid i meter, STL nesten alltid
- * i millimeter, og FBX/OBJ ofte i centimeter. Veldig store modeller skaleres ned.
+ * Enheten, siden Luna bruker meter: glTF er alltid i meter, og FBX sier selv hvor mange cm én
+ * enhet er (`UnitScaleFactor`; Blender skriver 100 for meter). Ellers gjettes det: STL er nesten
+ * alltid i millimeter, OBJ ofte i centimeter, og veldig store modeller skaleres ned.
  */
-function unitScaleFor(ext: string, size: THREE.Vector3): number {
+function unitScaleFor(ext: string, size: THREE.Vector3, root: THREE.Object3D): number {
   const largest = Math.max(size.x, size.y, size.z);
   if (ext === "glb" || ext === "gltf") return 1;
+  const fbxUnit = Number(root.userData.unitScaleFactor);
+  if (ext === "fbx" && fbxUnit > 0) return fbxUnit / 100;
   if (ext === "stl") return largest > 10 ? 0.001 : 1;
   if (largest > 5000) return 0.001;
   if (largest > 50) return 0.01;
@@ -314,9 +378,15 @@ export async function importModelData(
   resolve: ResourceResolver = noResources,
 ): Promise<ImportResult> {
   const name = baseName(fileName);
+  const ext = extensionOf(fileName);
   const { root, textures } = await loadModel(fileName, data, resolve);
-  let parts = extractParts(root, name);
-  if (!parts.length) throw new Error(`Fant ingen 3D-former i ${fileName}`);
+  // FBX snus 180° om Y. Unity leser FBX som Blender (x, y, z) → Unity (x, z, y), mens glTF-importøren
+  // (glTFast) speiler X. Snudd slik havner en GLB eksportert fra Luna på samme sted i Unity som FBX-en.
+  const scene = ext === "fbx" ? new THREE.Group().add(root) : root;
+  if (ext === "fbx") scene.rotation.y = Math.PI;
+  let parts = extractParts(scene, name);
+  const nodes = extractNodes(scene, ext, data);
+  if (!parts.length && !nodes.length) throw new Error(`Fant ingen 3D-former i ${fileName}`);
   if (parts.length > MAX_PARTS) parts = mergeByAppearance(parts);
 
   const total = new THREE.Box3();
@@ -324,9 +394,11 @@ export async function importModelData(
     p.geometry.computeBoundingBox();
     total.union(p.geometry.boundingBox!);
   }
-  const unitScale = unitScaleFor(extensionOf(fileName), total.getSize(new THREE.Vector3()));
+  for (const n of nodes) total.expandByPoint(n.position);
+  const unitScale = unitScaleFor(ext, total.getSize(new THREE.Vector3()), root);
   if (unitScale !== 1) {
     for (const p of parts) p.geometry.scale(unitScale, unitScale, unitScale);
+    for (const n of nodes) n.position.multiplyScalar(unitScale);
     total.min.multiplyScalar(unitScale);
     total.max.multiplyScalar(unitScale);
   }
@@ -338,7 +410,7 @@ export async function importModelData(
 
   const state = useEditor.getState();
   let folderId = opts.folderId !== undefined ? opts.folderId : state.activeFolderId;
-  if (parts.length > 1) folderId = state.addFolders([{ name, parentId: folderId }])[0].id;
+  if (parts.length + nodes.length > 1) folderId = state.addFolders([{ name, parentId: folderId }])[0].id;
 
   const items = parts.map((p) => {
     // Normaliser til enhetsboksen (som alle andre former), så scale = størrelse i meter.
@@ -373,18 +445,36 @@ export async function importModelData(
     };
   });
 
-  const created = state.addObjects(items);
+  // Nodene: lokal +Z er forover og +Y opp, som i FBX/glTF – rotasjonen kan tas rett over.
+  const nodeItems = nodes.map((n) => {
+    const e = new THREE.Euler().setFromQuaternion(n.quaternion, "XYZ");
+    return {
+      type: "node" as const,
+      name: n.name,
+      position: n.position.clone().add(offset).toArray().map((v) => round(v)) as Vec3,
+      rotation: [e.x, e.y, e.z].map((v) => round(THREE.MathUtils.radToDeg(v), 0.01)) as Vec3,
+      ...(Object.keys(n.props).length ? { props: n.props } : {}),
+      folderId,
+    };
+  });
+
+  const created = state.addObjects([...items, ...nodeItems]);
   state.selectMany(created.map((o) => o.id));
   const size = total.getSize(new THREE.Vector3());
   const result: ImportResult = {
     objectIds: created.map((o) => o.id),
-    folderId: parts.length > 1 ? folderId : null,
+    folderId: parts.length + nodes.length > 1 ? folderId : null,
     parts: parts.length,
+    nodes: nodes.length,
     unitScale,
     size: [size.x, size.y, size.z].map((v) => round(v)) as Vec3,
     textures,
   };
-  const notes = [unitScale === 1 ? "" : `skalert ×${unitScale} til meter`, textures.length ? `farger fra ${textures.join(", ")}` : ""];
+  const notes = [
+    nodes.length ? `${nodes.length} noder` : "",
+    unitScale === 1 ? "" : `skalert ×${unitScale} til meter`,
+    textures.length ? `farger fra ${textures.join(", ")}` : "",
+  ];
   const note = notes.filter(Boolean).join(", ");
   state.setActivity(`Importerte ${name}: ${parts.length} del${parts.length === 1 ? "" : "er"}${note ? ` (${note})` : ""}`);
   return result;

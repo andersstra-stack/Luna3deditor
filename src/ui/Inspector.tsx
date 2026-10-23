@@ -428,10 +428,12 @@ function Help() {
       <dl>
         <dt>Venstre mus</dt>
         <dd>Roter</dd>
-        <dt>Høyre mus</dt>
+        <dt>Midtknapp</dt>
         <dd>Panorer</dd>
         <dt>Hjul</dt>
         <dd>Zoom</dd>
+        <dt>Høyre mus + WASD</dt>
+        <dd>Fly fritt (Q/E ned/opp, Shift fortere, hjul endrer farten)</dd>
         <dt>F</dt>
         <dd>Vis alt</dd>
       </dl>

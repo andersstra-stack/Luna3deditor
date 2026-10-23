@@ -187,7 +187,9 @@ e.g. windows and doors in a wall: put the wall and box-shaped holes in one folde
 Imported models: import_model loads an FBX, GLB/glTF, OBJ or STL file from disk. Each mesh in the file becomes an object of
 type "mesh" (several parts are put in their own folder). Like every other shape they are normalized to a unit box, so 'scale'
 is their size in meters; centimeter/millimeter files are scaled to meters automatically. Meshes can be moved, scaled, recolored,
-mirrored, duplicated and cut with holes, but their geometry can't be edited.
+mirrored, duplicated and cut with holes, but their geometry can't be edited. Empty nodes in FBX/GLB files (Blender
+Empties) become marker nodes with their Custom Properties / extras as props. FBX is turned 180° about Y on import so a
+GLB exported from Luna lands where the FBX does in Unity (Luna x = −Blender x, Luna z = Blender y).
 
 Marker nodes: type "node" is a named, invisible point with a direction – dock points, weapon hardpoints, engines,
 spawn points, doors, loot spots – that the game (SpaceRUS, Unity) finds by NAME. Local +Z is "forward" and local +Y is
