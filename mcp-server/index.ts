@@ -12,9 +12,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { WebSocketServer, WebSocket } from "ws";
 import { z } from "zod";
+import { readFileSync } from "node:fs";
 import { BRIDGE_BUSY_CODE, BRIDGE_PORT, type BridgeMethod, type BridgeResponse } from "../src/bridge/protocol.ts";
 import { ADDABLE_SHAPES } from "../src/types.ts";
 
+const VERSION: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 const PORT = Number(process.env.LUNA_BRIDGE_PORT ?? BRIDGE_PORT);
 const log = (...args: unknown[]) => console.error("[luna3d-mcp]", ...args);
 
@@ -173,7 +175,7 @@ across x = 0), align_objects, drop_to_ground.
 Workflow tips: call get_scene first to see existing objects and their ids. Build composite things from several shapes
 with one add_objects call. Use screenshot to check your work visually — try different views. Every change is undoable by the user.`;
 
-const server = new McpServer({ name: "luna3d", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+const server = new McpServer({ name: "luna3d", version: VERSION }, { instructions: INSTRUCTIONS });
 
 const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
 

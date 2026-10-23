@@ -1,0 +1,356 @@
+/* Temaene er kopiert ordrett fra LunaChat (Lunadiscordclone/client/src/styles/theme.css),
+   så variabelnavn og paletter er identiske på tvers av Luna-appene. Luna 3D-spesifikke
+   regler som leser variablene ligger i App.css. */
+
+/* ============================================================
+   THEMES — bytt via data-theme på <html>. Blue = default.
+   Hver blokk definerer KUN variabler. Komponentregler bor
+   andre steder og leser disse variablene.
+   ============================================================ */
+
+[data-theme="blue"] {
+  --bg-grad: linear-gradient(135deg, #0a1f3c 0%, #123a6b 38%, #1e5a9c 68%, #2b86c4 100%);
+  --bg-page: #06112a;
+  --text-placeholder: rgba(220, 235, 255, 0.50);
+  --orb-1: radial-gradient(circle, #4aa8ff 0%, transparent 70%);
+  --orb-2: radial-gradient(circle, #6f5cff 0%, transparent 70%);
+  --glass-dark: rgba(14, 32, 60, 0.38);
+  --glass-mid: rgba(14, 32, 60, 0.32);
+  --glass-light: rgba(255, 255, 255, 0.05);
+  --glass-hover: rgba(255, 255, 255, 0.10);
+  --glass-active: rgba(120, 180, 255, 0.22);
+  --glass-pill-active: rgba(120, 180, 255, 0.28);
+  --glass-input: rgba(255, 255, 255, 0.10);
+  --border-glass: rgba(255, 255, 255, 0.10);
+  --border-input: rgba(255, 255, 255, 0.18);
+  --panel-rim: rgba(14, 32, 60, 0.55);
+  --text-strong: #ffffff;
+  --text-mid: rgba(220, 235, 255, 0.78);
+  --text-soft: rgba(220, 235, 255, 0.55);
+  --text-label: rgba(200, 220, 255, 0.55);
+  --accent: #5DE0C0;
+  --accent-hover: #4ac9aa;
+  --accent-soft: rgba(93, 224, 192, 0.18);
+  /* Lys mint → mørk blekk for lesbare ikoner/tekst på accent-flater. */
+  --accent-ink: #06112a;
+  --accent-mint: #5DE0C0;
+  --bg-darkest: rgba(14, 32, 60, 0.50);
+  --bg-dark: rgba(14, 32, 60, 0.40);
+  --bg-mid: rgba(14, 32, 60, 0.32);
+  --bubble-bg: rgba(255, 255, 255, 0.10);
+  --bubble-border: rgba(255, 255, 255, 0.13);
+  --bubble-edge: rgba(255, 255, 255, 0.22);
+  --bubble-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+
+[data-theme="dark"] {
+  --bg-grad: linear-gradient(135deg, #141418 0%, #1a1a22 50%, #1f1f26 100%);
+  --bg-page: #0d0d10;
+  --text-placeholder: rgba(230, 230, 235, 0.48);
+  --orb-1: radial-gradient(circle, #6a6a8a 0%, transparent 70%);
+  --orb-2: radial-gradient(circle, #4a4a6a 0%, transparent 70%);
+  --glass-dark: rgba(28, 28, 36, 0.55);
+  --glass-mid: rgba(28, 28, 36, 0.45);
+  --glass-light: rgba(255, 255, 255, 0.04);
+  --glass-hover: rgba(255, 255, 255, 0.08);
+  --glass-active: rgba(139, 139, 255, 0.22);
+  --glass-pill-active: rgba(139, 139, 255, 0.28);
+  --glass-input: rgba(255, 255, 255, 0.08);
+  --border-glass: rgba(255, 255, 255, 0.08);
+  --border-input: rgba(255, 255, 255, 0.15);
+  --panel-rim: rgba(28, 28, 36, 0.7);
+  --text-strong: #ffffff;
+  --text-mid: rgba(230, 230, 235, 0.72);
+  --text-soft: rgba(230, 230, 235, 0.5);
+  --text-label: rgba(230, 230, 235, 0.45);
+  --accent: #8b8bff;
+  --accent-hover: #7575f0;
+  --accent-soft: rgba(139, 139, 255, 0.18);
+  --accent-ink: #0d0d10;
+  --accent-mint: #6ee0c0;
+  --bg-darkest: rgba(20, 20, 24, 0.60);
+  --bg-dark: rgba(28, 28, 36, 0.55);
+  --bg-mid: rgba(34, 34, 42, 0.45);
+  --bubble-bg: rgba(255, 255, 255, 0.08);
+  --bubble-border: rgba(255, 255, 255, 0.10);
+  --bubble-edge: rgba(255, 255, 255, 0.18);
+  --bubble-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="purple"] {
+  --bg-grad: linear-gradient(135deg, #2a1a4a 0%, #4a2a7a 40%, #6a3a9a 70%, #8c4aaa 100%);
+  --bg-page: #1a0d2e;
+  --text-placeholder: rgba(240, 225, 255, 0.50);
+  --orb-1: radial-gradient(circle, #c9a0ff 0%, transparent 70%);
+  --orb-2: radial-gradient(circle, #ff8ad0 0%, transparent 70%);
+  --glass-dark: rgba(35, 18, 55, 0.42);
+  --glass-mid: rgba(35, 18, 55, 0.34);
+  --glass-light: rgba(255, 255, 255, 0.05);
+  --glass-hover: rgba(255, 255, 255, 0.10);
+  --glass-active: rgba(201, 160, 255, 0.22);
+  --glass-pill-active: rgba(201, 160, 255, 0.30);
+  --glass-input: rgba(255, 255, 255, 0.10);
+  --border-glass: rgba(255, 255, 255, 0.10);
+  --border-input: rgba(255, 255, 255, 0.18);
+  --panel-rim: rgba(35, 18, 55, 0.6);
+  --text-strong: #ffffff;
+  --text-mid: rgba(240, 225, 255, 0.78);
+  --text-soft: rgba(240, 225, 255, 0.55);
+  --text-label: rgba(225, 200, 255, 0.55);
+  --accent: #c9a0ff;
+  --accent-hover: #b385f5;
+  --accent-soft: rgba(201, 160, 255, 0.20);
+  --accent-ink: #1a0d2e;
+  --accent-mint: #c9a0ff;
+  --bg-darkest: rgba(35, 18, 55, 0.55);
+  --bg-dark: rgba(45, 25, 70, 0.45);
+  --bg-mid: rgba(55, 30, 80, 0.35);
+  --bubble-bg: rgba(255, 255, 255, 0.10);
+  --bubble-border: rgba(255, 255, 255, 0.13);
+  --bubble-edge: rgba(255, 255, 255, 0.22);
+  --bubble-shadow: 0 4px 14px rgba(0, 0, 0, 0.24);
+}
+
+[data-theme="light"] {
+  /* «Dagslys»: nøytral, svakt kjølig grå bakgrunn + nesten dekkende hvite
+     paneler med tydelig kant, så flatene skiller seg fra hverandre (den
+     gamle himmelblå varianten fløt sammen). Mint-aksent som i blue-temaet,
+     men mørk nok for hvit tekst på knapper. */
+  --bg-grad: linear-gradient(135deg, #f3f5f9 0%, #e9edf3 45%, #e1e7ef 100%);
+  --bg-page: #eef1f6;
+  --text-placeholder: rgba(18, 26, 43, 0.45);
+  --orb-1: radial-gradient(circle, rgba(13, 143, 112, 0.18) 0%, transparent 70%);
+  --orb-2: radial-gradient(circle, rgba(120, 110, 230, 0.14) 0%, transparent 70%);
+  --glass-dark: rgba(255, 255, 255, 0.82);
+  --glass-mid: rgba(255, 255, 255, 0.76);
+  --glass-light: rgba(18, 26, 43, 0.04);
+  --glass-hover: rgba(18, 26, 43, 0.06);
+  --glass-active: rgba(13, 143, 112, 0.13);
+  --glass-pill-active: rgba(13, 143, 112, 0.18);
+  --glass-input: #ffffff;
+  --border-glass: rgba(18, 26, 43, 0.10);
+  --border-input: rgba(18, 26, 43, 0.18);
+  --panel-rim: rgba(255, 255, 255, 0.9);
+  --text-strong: #121a2b;
+  --text-mid: rgba(18, 26, 43, 0.76);
+  --text-soft: rgba(18, 26, 43, 0.56);
+  --text-label: rgba(18, 26, 43, 0.52);
+  --accent: #0d8f70;
+  --accent-hover: #0a7a5f;
+  --accent-soft: rgba(13, 143, 112, 0.13);
+  /* Mørk nok mint → hvit blekk. */
+  --accent-ink: #ffffff;
+  --accent-mint: #0d8f70;
+  --bg-darkest: rgba(255, 255, 255, 0.92);
+  --bg-dark: rgba(255, 255, 255, 0.82);
+  --bg-mid: rgba(255, 255, 255, 0.74);
+  --bubble-bg: #ffffff;
+  --bubble-border: rgba(18, 26, 43, 0.10);
+  --bubble-edge: rgba(255, 255, 255, 0.9);
+  --bubble-shadow: 0 2px 8px rgba(18, 26, 43, 0.08);
+}
+
+/* --- 6 ekstra mørke temaer adoptert fra Luna Cloud (identiske variabelnavn) --- */
+[data-theme="nord"] {
+  --bg-grad: linear-gradient(135deg, #2e3440 0%, #3b4252 50%, #434c5e 100%);
+  --bg-page: #2e3440;
+  --text-placeholder: rgba(216, 222, 233, 0.48);
+  --orb-1: radial-gradient(circle, #88c0d0 0%, transparent 70%);
+  --orb-2: radial-gradient(circle, #b48ead 0%, transparent 70%);
+  --glass-dark: rgba(46, 52, 64, 0.55);
+  --glass-mid: rgba(59, 66, 82, 0.45);
+  --glass-light: rgba(255, 255, 255, 0.05);
+  --glass-hover: rgba(255, 255, 255, 0.09);
+  --glass-active: rgba(136, 192, 208, 0.22);
+  --glass-pill-active: rgba(136, 192, 208, 0.28);
+  --glass-input: rgba(255, 255, 255, 0.08);
+  --border-glass: rgba(255, 255, 255, 0.09);
+  --border-input: rgba(255, 255, 255, 0.16);
+  --panel-rim: rgba(46, 52, 64, 0.6);
+  --text-strong: #eceff4;
+  --text-mid: rgba(236, 239, 244, 0.76);
+  --text-soft: rgba(216, 222, 233, 0.55);
+  --text-label: rgba(216, 222, 233, 0.45);
+  --accent: #88c0d0;
+  --accent-hover: #8fbcbb;
+  --accent-soft: rgba(136, 192, 208, 0.18);
+  --accent-ink: #2e3440;
+  --accent-mint: #8fbcbb;
+  --bg-darkest: rgba(46, 52, 64, 0.6);
+  --bg-dark: rgba(59, 66, 82, 0.5);
+  --bg-mid: rgba(67, 76, 94, 0.4);
+  --bubble-bg: rgba(255, 255, 255, 0.08);
+  --bubble-border: rgba(255, 255, 255, 0.12);
+  --bubble-edge: rgba(255, 255, 255, 0.20);
+  --bubble-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dracula"] {
+  --bg-grad: linear-gradient(135deg, #282a36 0%, #343746 50%, #44475a 100%);
+  --bg-page: #282a36;
+  --text-placeholder: rgba(248, 248, 242, 0.48);
+  --orb-1: radial-gradient(circle, #bd93f9 0%, transparent 70%);
+  --orb-2: radial-gradient(circle, #ff79c6 0%, transparent 70%);
+  --glass-dark: rgba(40, 42, 54, 0.55);
+  --glass-mid: rgba(68, 71, 90, 0.45);
+  --glass-light: rgba(255, 255, 255, 0.05);
+  --glass-hover: rgba(255, 255, 255, 0.09);
+  --glass-active: rgba(189, 147, 249, 0.22);
+  --glass-pill-active: rgba(189, 147, 249, 0.28);
+  --glass-input: rgba(255, 255, 255, 0.08);
+  --border-glass: rgba(255, 255, 255, 0.09);
+  --border-input: rgba(255, 255, 255, 0.16);
+  --panel-rim: rgba(40, 42, 54, 0.6);
+  --text-strong: #f8f8f2;
+  --text-mid: rgba(248, 248, 242, 0.78);
+  --text-soft: rgba(248, 248, 242, 0.55);
+  --text-label: rgba(98, 114, 164, 0.95);
+  --accent: #bd93f9;
+  --accent-hover: #a87fe0;
+  --accent-soft: rgba(189, 147, 249, 0.18);
+  --accent-ink: #282a36;
+  --accent-mint: #8be9fd;
+  --bg-darkest: rgba(40, 42, 54, 0.6);
+  --bg-dark: rgba(54, 56, 70, 0.5);
+  --bg-mid: rgba(68, 71, 90, 0.4);
+  --bubble-bg: rgba(255, 255, 255, 0.08);
+  --bubble-border: rgba(255, 255, 255, 0.12);
+  --bubble-edge: rgba(255, 255, 255, 0.20);
+  --bubble-shadow: 0 4px 14px rgba(0, 0, 0, 0.30);
+}
+
+[data-theme="gruvbox"] {
+  --bg-grad: linear-gradient(135deg, #282828 0%, #32302f 50%, #3c3836 100%);
+  --bg-page: #282828;
+  --text-placeholder: rgba(235, 219, 178, 0.48);
+  --orb-1: radial-gradient(circle, #fabd2f 0%, transparent 70%);
+  --orb-2: radial-gradient(circle, #fe8019 0%, transparent 70%);
+  --glass-dark: rgba(40, 40, 40, 0.55);
+  --glass-mid: rgba(60, 56, 54, 0.45);
+  --glass-light: rgba(255, 255, 255, 0.05);
+  --glass-hover: rgba(255, 255, 255, 0.08);
+  --glass-active: rgba(250, 189, 47, 0.20);
+  --glass-pill-active: rgba(250, 189, 47, 0.26);
+  --glass-input: rgba(255, 255, 255, 0.07);
+  --border-glass: rgba(255, 255, 255, 0.09);
+  --border-input: rgba(255, 255, 255, 0.16);
+  --panel-rim: rgba(40, 40, 40, 0.6);
+  --text-strong: #ebdbb2;
+  --text-mid: rgba(235, 219, 178, 0.78);
+  --text-soft: rgba(235, 219, 178, 0.55);
+  --text-label: rgba(168, 153, 132, 0.9);
+  --accent: #fabd2f;
+  --accent-hover: #e6a52a;
+  --accent-soft: rgba(250, 189, 47, 0.18);
+  --accent-ink: #282828;
+  --accent-mint: #b8bb26;
+  --bg-darkest: rgba(40, 40, 40, 0.6);
+  --bg-dark: rgba(50, 48, 47, 0.5);
+  --bg-mid: rgba(60, 56, 54, 0.4);
+  --bubble-bg: rgba(255, 255, 255, 0.08);
+  --bubble-border: rgba(255, 255, 255, 0.11);
+  --bubble-edge: rgba(255, 255, 255, 0.18);
+  --bubble-shadow: 0 4px 14px rgba(0, 0, 0, 0.30);
+}
+
+[data-theme="tokyonight"] {
+  --bg-grad: linear-gradient(135deg, #1a1b26 0%, #1f2335 50%, #24283b 100%);
+  --bg-page: #1a1b26;
+  --text-placeholder: rgba(192, 202, 245, 0.48);
+  --orb-1: radial-gradient(circle, #7aa2f7 0%, transparent 70%);
+  --orb-2: radial-gradient(circle, #bb9af7 0%, transparent 70%);
+  --glass-dark: rgba(26, 27, 38, 0.58);
+  --glass-mid: rgba(36, 40, 59, 0.48);
+  --glass-light: rgba(255, 255, 255, 0.05);
+  --glass-hover: rgba(255, 255, 255, 0.08);
+  --glass-active: rgba(122, 162, 247, 0.22);
+  --glass-pill-active: rgba(122, 162, 247, 0.28);
+  --glass-input: rgba(255, 255, 255, 0.07);
+  --border-glass: rgba(255, 255, 255, 0.08);
+  --border-input: rgba(255, 255, 255, 0.15);
+  --panel-rim: rgba(26, 27, 38, 0.65);
+  --text-strong: #c0caf5;
+  --text-mid: rgba(192, 202, 245, 0.78);
+  --text-soft: rgba(169, 177, 214, 0.6);
+  --text-label: rgba(86, 95, 137, 0.95);
+  --accent: #7aa2f7;
+  --accent-hover: #6a92e7;
+  --accent-soft: rgba(122, 162, 247, 0.18);
+  --accent-ink: #1a1b26;
+  --accent-mint: #7dcfff;
+  --bg-darkest: rgba(22, 22, 30, 0.62);
+  --bg-dark: rgba(26, 27, 38, 0.55);
+  --bg-mid: rgba(36, 40, 59, 0.45);
+  --bubble-bg: rgba(255, 255, 255, 0.07);
+  --bubble-border: rgba(255, 255, 255, 0.11);
+  --bubble-edge: rgba(255, 255, 255, 0.18);
+  --bubble-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+
+[data-theme="solarized"] {
+  --bg-grad: linear-gradient(135deg, #002b36 0%, #053b46 50%, #073642 100%);
+  --bg-page: #002b36;
+  --text-placeholder: rgba(238, 232, 213, 0.48);
+  --orb-1: radial-gradient(circle, #2aa198 0%, transparent 70%);
+  --orb-2: radial-gradient(circle, #268bd2 0%, transparent 70%);
+  --glass-dark: rgba(0, 43, 54, 0.58);
+  --glass-mid: rgba(7, 54, 66, 0.48);
+  --glass-light: rgba(255, 255, 255, 0.05);
+  --glass-hover: rgba(255, 255, 255, 0.07);
+  --glass-active: rgba(42, 161, 152, 0.22);
+  --glass-pill-active: rgba(42, 161, 152, 0.28);
+  --glass-input: rgba(255, 255, 255, 0.07);
+  --border-glass: rgba(255, 255, 255, 0.08);
+  --border-input: rgba(255, 255, 255, 0.15);
+  --panel-rim: rgba(0, 43, 54, 0.65);
+  --text-strong: #eee8d5;
+  --text-mid: rgba(238, 232, 213, 0.72);
+  --text-soft: rgba(147, 161, 161, 0.85);
+  --text-label: rgba(131, 148, 150, 0.85);
+  --accent: #2aa198;
+  --accent-hover: #248f87;
+  --accent-soft: rgba(42, 161, 152, 0.18);
+  --accent-ink: #002b36;
+  --accent-mint: #859900;
+  --bg-darkest: rgba(0, 43, 54, 0.65);
+  --bg-dark: rgba(7, 54, 66, 0.55);
+  --bg-mid: rgba(20, 64, 76, 0.42);
+  --bubble-bg: rgba(255, 255, 255, 0.07);
+  --bubble-border: rgba(255, 255, 255, 0.11);
+  --bubble-edge: rgba(255, 255, 255, 0.18);
+  --bubble-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+
+[data-theme="forest"] {
+  --bg-grad: linear-gradient(135deg, #0c1f17 0%, #143026 50%, #1c3d2e 100%);
+  --bg-page: #0c1f17;
+  --text-placeholder: rgba(230, 245, 238, 0.48);
+  --orb-1: radial-gradient(circle, #34d399 0%, transparent 70%);
+  --orb-2: radial-gradient(circle, #6ee7b7 0%, transparent 70%);
+  --glass-dark: rgba(12, 31, 23, 0.55);
+  --glass-mid: rgba(28, 61, 46, 0.42);
+  --glass-light: rgba(255, 255, 255, 0.05);
+  --glass-hover: rgba(255, 255, 255, 0.08);
+  --glass-active: rgba(52, 211, 153, 0.20);
+  --glass-pill-active: rgba(52, 211, 153, 0.26);
+  --glass-input: rgba(255, 255, 255, 0.07);
+  --border-glass: rgba(255, 255, 255, 0.09);
+  --border-input: rgba(255, 255, 255, 0.16);
+  --panel-rim: rgba(12, 31, 23, 0.6);
+  --text-strong: #e6f5ee;
+  --text-mid: rgba(230, 245, 238, 0.76);
+  --text-soft: rgba(230, 245, 238, 0.55);
+  --text-label: rgba(167, 213, 192, 0.7);
+  --accent: #34d399;
+  --accent-hover: #28b985;
+  --accent-soft: rgba(52, 211, 153, 0.18);
+  --accent-ink: #06241a;
+  --accent-mint: #6ee7b7;
+  --bg-darkest: rgba(12, 31, 23, 0.62);
+  --bg-dark: rgba(20, 48, 38, 0.5);
+  --bg-mid: rgba(28, 61, 46, 0.4);
+  --bubble-bg: rgba(255, 255, 255, 0.08);
+  --bubble-border: rgba(255, 255, 255, 0.12);
+  --bubble-edge: rgba(255, 255, 255, 0.20);
+  --bubble-shadow: 0 4px 14px rgba(0, 0, 0, 0.30);
+}

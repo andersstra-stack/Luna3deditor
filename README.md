@@ -12,6 +12,9 @@ npm run tauri dev
 
 ## Bruk
 
+Tema velges under **Innstillinger** (tannhjulet øverst til høyre): de samme 10 temaene som LunaChat.
+
+
 | Handling | Hvordan |
 |---|---|
 | Legg til form | Knappene midt i verktøylinja (havner der kameraet ser). **Flere** har kile, prisme (tak), pyramide, trapp, halvkule, rør, avrundet kube og lys |
@@ -31,6 +34,18 @@ npm run tauri dev
 | Lagre / åpne | **Ctrl+S** / **Ctrl+O** (`.luna.json`) |
 | Importer | **Ctrl+I**, importknappen eller dra filer inn i vinduet: **FBX, GLB/glTF, OBJ, STL**. Flere deler havner i en egen mappe, cm/mm skaleres til meter. Farger hentes fra materialer, hjørnefarger og teksturer/fargepaletter (bildet leses fra samme mappe – ved dra-og-slipp: dra modell og bilde inn sammen), og modellen deles opp i én del per farge. Modellen kan flyttes, skaleres, fargelegges, speiles og få hull, men ikke formredigeres. `.gltf` med eksterne filer støttes ikke – bruk `.glb` |
 | Eksporter | Eksport-knappen → `.glb` (Blender, Roblox Studio, Unity, Godot …). Mappene blir navngitte grupper |
+
+## Versjoner
+
+Gjeldende versjon står i statuslinja og under Innstillinger. Endringer føres i [CHANGELOG.md](CHANGELOG.md)
+(Keep a Changelog + SemVer). Ny versjon:
+
+```bash
+npm run bump -- minor
+```
+
+`package.json` er eneste kilde – `tauri.conf.json` leser derfra, og skriptet oppdaterer `Cargo.toml` og endringsloggen.
+Deretter commit og `git tag vX.Y.Z`.
 
 ## Claude via MCP
 

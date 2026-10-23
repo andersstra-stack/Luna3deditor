@@ -1,14 +1,15 @@
 {
   "name": "luna3deditor",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "mcp": "node mcp-server/index.ts"
+    "mcp": "node mcp-server/index.ts",
+    "bump": "node scripts/bump-version.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",

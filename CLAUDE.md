@@ -29,6 +29,17 @@ MCP-verktøybeskrivelser er på engelsk.
   TS-syntaks, `.ts`-endelser i relative imports, logging kun til stderr.
 - `src-tauri/src/lib.rs` – filkommandoer (`write_text_file`, `read_text_file`, `write_binary_file`) + dialog-plugin.
 
+## Versjon og endringslogg
+- Versjonen har én kilde: `package.json` (`tauri.conf.json` peker dit, Vite gir `__APP_VERSION__`, MCP-serveren leser den).
+- Før inn meningsfulle endringer under `## [Unreleased]` i `CHANGELOG.md` (Keep a Changelog, norsk, samme stil som LunaChat).
+- Ny versjon: `npm run bump -- patch|minor|major` (oppdaterer package.json, Cargo.toml og changelog), så commit + `git tag vX.Y.Z`.
+
+## Tema
+- `src/styles/theme.css` er kopiert ordrett fra LunaChat (`Lunadiscordclone/client/src/styles/theme.css`) – ikke endre
+  temablokkene her; nye temaer legges inn der og kopieres. `App.css` mapper Luna-tokens (`--bg-1`, `--text` …) til
+  LunaChat-variablene. Tema-tilstand i `src/ui/uiStore.ts` (`luna3d.theme` i localStorage + inline-skript i `index.html`).
+- 3D-visningen har gjennomsiktig bakgrunn (temaets gradient synes); rutenett/utvalgsfarge avledes i `useThemeColors()`.
+
 ## Nytt MCP-verktøy
 1. Legg metoden til `BRIDGE_METHODS` i `src/bridge/protocol.ts`.
 2. Implementer handleren i `src/bridge/commands.ts`.

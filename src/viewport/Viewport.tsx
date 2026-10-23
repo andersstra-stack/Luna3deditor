@@ -11,6 +11,7 @@ import { geometryOf, getGeometry } from "./geometries";
 import { cutGeometry, overlappingHoles } from "./csg";
 import { snapOffset, type SnapContext } from "./snapping";
 import { setThreeGetter } from "./three-handle";
+import { themeColors, useUi } from "../ui/uiStore";
 
 const DEG = Math.PI / 180;
 
@@ -155,7 +156,7 @@ function useSelectHandler(id: string) {
   };
 }
 
-function SolidMesh({ obj, selected, holes }: { obj: SceneObject; selected: boolean; holes: SceneObject[] }) {
+function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selected: boolean; holes: SceneObject[]; accent: string }) {
   const onClick = useSelectHandler(obj.id);
   const transparent = obj.opacity < 1 || !!obj.hole;
 
@@ -200,13 +201,13 @@ function SolidMesh({ obj, selected, holes }: { obj: SceneObject; selected: boole
         side={obj.type === "plane" || obj.hole || isCut ? THREE.DoubleSide : THREE.FrontSide}
       />
       {/* drei 10 har byttet om grenene i shaderen: uten `screenspace` er tykkelsen i piksler. */}
-      {selected && <Outlines thickness={3} color="#ffb454" />}
+      {selected && <Outlines thickness={3} color={accent} />}
       {obj.hole && !selected && <Outlines thickness={1.5} color="#ff6b6b" />}
     </mesh>
   );
 }
 
-function LightObject({ obj, selected }: { obj: SceneObject; selected: boolean }) {
+function LightObject({ obj, selected, accent }: { obj: SceneObject; selected: boolean; accent: string }) {
   const onClick = useSelectHandler(obj.id);
   const [target] = useState(() => new THREE.Object3D());
   return (
@@ -214,7 +215,7 @@ function LightObject({ obj, selected }: { obj: SceneObject; selected: boolean })
       {/* Markøren som kan klikkes på – kaster ikke skygge selv. */}
       <mesh name={obj.name} userData={{ lunaId: obj.id }} geometry={getGeometry(obj.type)} scale={obj.scale} onClick={onClick}>
         <meshBasicMaterial color={obj.color} toneMapped={false} />
-        {selected && <Outlines thickness={3} color="#ffb454" />}
+        {selected && <Outlines thickness={3} color={accent} />}
       </mesh>
       {obj.type === "pointLight" ? (
         <pointLight color={obj.color} intensity={obj.intensity ?? 20} decay={2} castShadow shadow-mapSize={[512, 512]} shadow-bias={-0.002} />
@@ -244,7 +245,7 @@ function ThreeBridge() {
   return null;
 }
 
-function Scene() {
+function Scene({ accent }: { accent: string }) {
   const visible = useVisibleObjects();
   const selectedIds = useEditor((s) => s.selectedIds);
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -260,12 +261,13 @@ function Scene() {
     <>
       {visible.map((o) =>
         isLight(o.type) ? (
-          <LightObject key={o.id} obj={o} selected={selected.has(o.id)} />
+          <LightObject key={o.id} obj={o} selected={selected.has(o.id)} accent={accent} />
         ) : (
           <SolidMesh
             key={o.id}
             obj={o}
             selected={selected.has(o.id)}
+            accent={accent}
             holes={o.hole ? [] : overlappingHoles(o, holesByFolder.get(o.folderId) ?? [])}
           />
         ),
@@ -275,19 +277,31 @@ function Scene() {
   );
 }
 
+/** Rutenett og utvalgsfarge avledet fra temaet (bakgrunnen er gjennomsiktig, så temaets gradient synes). */
+function useThemeColors() {
+  const theme = useUi((s) => s.theme);
+  return useMemo(() => {
+    void theme;
+    const c = themeColors();
+    const bg = new THREE.Color(c.bgPage);
+    const mix = (to: string, t: number) => `#${bg.clone().lerp(new THREE.Color(to), t).getHexString()}`;
+    return { accent: c.accent, gridCell: mix(c.text, 0.14), gridSection: mix(c.accent, 0.45) };
+  }, [theme]);
+}
+
 export function Viewport() {
   const select = useEditor((s) => s.select);
+  const colors = useThemeColors();
   return (
     <Canvas
       shadows="percentage"
       camera={{ position: [6, 5, 8], fov: 50, near: 0.05, far: 1000 }}
-      gl={{ preserveDrawingBuffer: true, antialias: true }}
+      gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }}
       onPointerMissed={(e) => {
         if (e.button === 0 && !gizmoRecentlyUsed() && !e.ctrlKey && !e.shiftKey) select(null);
       }}
     >
       <ThreeBridge />
-      <color attach="background" args={["#1d2030"]} />
       <hemisphereLight args={["#dfe6ff", "#3a3326", 0.9]} />
       <directionalLight
         position={[6, 12, 8]}
@@ -310,12 +324,12 @@ export function Viewport() {
         infiniteGrid
         cellSize={0.5}
         sectionSize={2}
-        cellColor="#3b4060"
-        sectionColor="#5a6190"
+        cellColor={colors.gridCell}
+        sectionColor={colors.gridSection}
         fadeDistance={60}
         fadeStrength={1.5}
       />
-      <Scene />
+      <Scene accent={colors.accent} />
       <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
       <GizmoHelper alignment="bottom-right" margin={[72, 72]}>
         <GizmoViewport axisColors={["#f7768e", "#9ece6a", "#7aa2f7"]} labelColor="#1d2030" />

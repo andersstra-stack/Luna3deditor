@@ -93,7 +93,11 @@ export async function captureViewport(maxWidth = 1024): Promise<{ base64: string
     const out = document.createElement("canvas");
     out.width = Math.round(src.width * scale);
     out.height = Math.round(src.height * scale);
-    out.getContext("2d")!.drawImage(src, 0, 0, out.width, out.height);
+    const ctx = out.getContext("2d")!;
+    // Lerretet er gjennomsiktig (temaets gradient synes bak) – fyll med temaets bakgrunn.
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg-page").trim() || "#06112a";
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(src, 0, 0, out.width, out.height);
     const base64 = out.toDataURL("image/png").split(",")[1];
     return { base64, width: out.width, height: out.height };
   } finally {

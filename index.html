@@ -7,6 +7,19 @@
   </head>
 
   <body>
+    <script>
+      // Sett lagret tema før appen tegnes, så det ikke blinker (samme oppsett som LunaChat).
+      (function () {
+        try {
+          var saved = localStorage.getItem("luna3d.theme");
+          var ok = ["blue", "dark", "light", "purple", "nord", "dracula", "gruvbox", "tokyonight", "solarized", "forest"];
+          var theme = saved && ok.indexOf(saved) >= 0 ? saved : "blue";
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (_) {
+          document.documentElement.setAttribute("data-theme", "blue");
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

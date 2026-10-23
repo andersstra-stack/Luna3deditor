@@ -12,6 +12,7 @@ import {
 } from "../types";
 import { exportGlb, openScene, saveScene } from "../io";
 import { importModelFile } from "../importer";
+import { useUi } from "./uiStore";
 import { frameScene, viewTargetOnGround } from "../viewport/three-handle";
 import { Icon, ShapeIcon } from "./icons";
 import { reportError } from "./StatusBar";
@@ -152,6 +153,10 @@ export function Toolbar() {
       </div>
 
       <div className="spacer" />
+
+      <button className="icon-btn" title="Innstillinger – tema og versjon" onClick={() => useUi.getState().openSettings()}>
+        <Icon name="settings" />
+      </button>
 
       <div className={`claude-pill ${bridge}`} title={BRIDGE_TEXT[bridge].title}>
         <span className="dot" />

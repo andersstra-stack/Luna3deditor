@@ -23,7 +23,7 @@ export function useMcpBridge() {
 
       socket.onopen = () => {
         setBridgeStatus("connected");
-        const hello: BridgeHello = { type: "hello", app: "luna3d", version: "0.1.0" };
+        const hello: BridgeHello = { type: "hello", app: "luna3d", version: __APP_VERSION__ };
         socket?.send(JSON.stringify(hello));
       };
 

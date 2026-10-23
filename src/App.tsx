@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import "./styles/theme.css";
 import "./App.css";
 import { useEditor } from "./store";
 import { saveScene, openScene } from "./io";
@@ -13,6 +14,8 @@ import { Toolbar } from "./ui/Toolbar";
 import { Outliner } from "./ui/Outliner";
 import { Inspector } from "./ui/Inspector";
 import { StatusBar, reportError } from "./ui/StatusBar";
+import { SettingsDialog } from "./ui/SettingsDialog";
+import { useUi } from "./ui/uiStore";
 
 /** Ctrl+C / Ctrl+X / Ctrl+V for objekter. Tekstfelt beholder vanlig kopier/lim inn. */
 function useClipboard() {
@@ -76,6 +79,8 @@ function useShortcuts() {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.closest("input, textarea, select")) return;
+      // Innstillingsdialogen håndterer sine egne taster (Escape lukker den).
+      if (useUi.getState().settingsOpen) return;
       const s = useEditor.getState();
       const ctrl = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
@@ -114,6 +119,8 @@ export default function App() {
   useFileDrop();
   return (
     <div className="app">
+      <div className="app-orb app-orb-1" />
+      <div className="app-orb app-orb-2" />
       <Toolbar />
       <main className="workspace">
         <Outliner />
@@ -124,6 +131,7 @@ export default function App() {
         <Inspector />
       </main>
       <StatusBar />
+      <SettingsDialog />
     </div>
   );
 }
