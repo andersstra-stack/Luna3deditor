@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10-23
+
 ### Added
 - **Lavpoly-former** (Innstillinger → Former): færre segmenter på kuler, sylindre, kjegler, smultringer, kapsler, rør og
   avrundede kuber – for spill. Gjelder visning, hull, «Slå sammen» og GLB-eksport. Den detaljerte senga går fra ca.
