@@ -496,14 +496,24 @@ server.registerTool(
   {
     title: "Import 3D model",
     description:
-      "Import an FBX, GLB/glTF (embedded only), OBJ or STL file from disk into the scene. Returns the new object ids, the folder created for multi-part models, the applied unit scale and the overall size in meters. By default it is placed on the ground where the user's camera looks.",
+      "Import an FBX, GLB/glTF (embedded only), OBJ or STL file from disk into the scene. Returns the new object ids, the folder created for multi-part models, the applied unit scale and the overall size in meters. By default it is placed on the ground where the user's camera looks. Use keep_origin: true for parts that share an origin in the source file (e.g. a Blender interior and exterior) so they line up.",
     inputSchema: {
       path: z.string().describe("Absolute path to the model file"),
       folderId: z.string().nullable().optional().describe("Folder to import into (default: scene root)."),
-      position: vec3.optional().describe("Where to put the model: [x, y, z] = center of its footprint at height y (default: on the ground where the camera looks)."),
+      position: vec3
+        .optional()
+        .describe(
+          "Where to put the model: [x, y, z] = center of its footprint at height y (default: on the ground where the camera looks). With keep_origin: where the file's origin goes (default [0, 0, 0]).",
+        ),
+      keep_origin: z
+        .boolean()
+        .optional()
+        .describe(
+          "true = keep the file's own origin (it goes to the scene origin, or to 'position') instead of centering the model. Omit to use the user's setting.",
+        ),
     },
   },
-  ({ path, folderId, position }) => run("import_model", { path, folderId, position }),
+  ({ path, folderId, position, keep_origin }) => run("import_model", { path, folderId, position, keep_origin }),
 );
 
 server.registerTool(

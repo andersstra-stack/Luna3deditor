@@ -10,6 +10,11 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Behold filas origo ved import** (Innstillinger → Import, og `keep_origin` i MCP `import_model`): modellens origo havner
+  i scenens origo i stedet for at modellen sentreres der kameraet ser. Deler som hører sammen, som hangaren og interiøret
+  fra Nova Homestead, passer da sammen uten justering.
+
 ## [0.9.0] — 2026-10-23
 
 ### Added

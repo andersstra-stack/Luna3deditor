@@ -1,4 +1,4 @@
-// UI-tilstand som ikke hører til scenen: tema og innstillingsdialogen.
+// UI-tilstand som ikke hører til scenen: tema, innstillinger og innstillingsdialogen.
 // Tema-oppsettet følger LunaChat (store/ui.ts): data-theme på <html>, valget i localStorage,
 // og et inline-skript i index.html setter lagret tema før appen tegnes (ingen blink).
 
@@ -42,6 +42,16 @@ function readSavedTheme(): Theme {
   return DEFAULT_THEME;
 }
 
+const KEEP_ORIGIN_KEY = "luna3d.importKeepOrigin";
+
+function readKeepOrigin(): boolean {
+  try {
+    return window.localStorage.getItem(KEEP_ORIGIN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function applyThemeToDom(theme: Theme): void {
   document.documentElement.setAttribute("data-theme", theme);
 }
@@ -49,6 +59,9 @@ function applyThemeToDom(theme: Theme): void {
 interface UiState {
   theme: Theme;
   setTheme: (t: Theme) => void;
+  /** Import: legg filas origo i scenens origo i stedet for å sentrere modellen der kameraet ser. */
+  importKeepOrigin: boolean;
+  setImportKeepOrigin: (on: boolean) => void;
   settingsOpen: boolean;
   openSettings: () => void;
   closeSettings: () => void;
@@ -64,6 +77,15 @@ export const useUi = create<UiState>((set) => ({
       /* ignore */
     }
     set({ theme: t });
+  },
+  importKeepOrigin: readKeepOrigin(),
+  setImportKeepOrigin: (on) => {
+    try {
+      window.localStorage.setItem(KEEP_ORIGIN_KEY, on ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+    set({ importKeepOrigin: on });
   },
   settingsOpen: false,
   openSettings: () => set({ settingsOpen: true }),

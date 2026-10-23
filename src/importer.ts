@@ -13,6 +13,7 @@ import { round } from "./bounds";
 import { fbxUserProps } from "./fbxProps";
 import { DEFAULT_COLORS, type NodeProps, type Vec3 } from "./types";
 import { viewTargetOnGround } from "./viewport/three-handle";
+import { useUi } from "./ui/uiStore";
 
 export const IMPORT_EXTENSIONS = ["fbx", "glb", "gltf", "obj", "stl"];
 
@@ -41,12 +42,22 @@ interface Part {
   roughness: number;
 }
 
+export interface ImportOptions {
+  folderId?: string | null;
+  /** Med keepOrigin: der filas origo havner. Ellers: midten av fotavtrykket, med bunnen i høyde y. */
+  position?: Vec3;
+  /** Behold filas origo (standard: innstillingen i appen). Deler med samme origo passer da sammen. */
+  keepOrigin?: boolean;
+}
+
 export interface ImportResult {
   objectIds: string[];
   folderId: string | null;
   parts: number;
   /** Tomme noder (Empties) fra fila som ble markør-noder. */
   nodes: number;
+  /** Om filas origo ble beholdt (i stedet for å sentrere modellen). */
+  keptOrigin: boolean;
   /** Faktor modellen ble skalert med for å komme til meter (1 = uendret). */
   unitScale: number;
   size: Vec3;
@@ -374,7 +385,7 @@ function unitScaleFor(ext: string, size: THREE.Vector3, root: THREE.Object3D): n
 export async function importModelData(
   fileName: string,
   data: ArrayBuffer,
-  opts: { folderId?: string | null; position?: Vec3 } = {},
+  opts: ImportOptions = {},
   resolve: ResourceResolver = noResources,
 ): Promise<ImportResult> {
   const name = baseName(fileName);
@@ -403,10 +414,14 @@ export async function importModelData(
     total.max.multiplyScalar(unitScale);
   }
 
-  // Plassering: bunnen på bakken, midten der kameraet ser (eller på oppgitt posisjon).
+  // Plassering: filas origo i scenens origo (eller på oppgitt posisjon) – eller, uten det valget,
+  // bunnen på bakken og midten der kameraet ser.
+  const keepOrigin = opts.keepOrigin ?? useUi.getState().importKeepOrigin;
   const center = total.getCenter(new THREE.Vector3());
   const [tx, tz] = opts.position ? [opts.position[0], opts.position[2]] : viewTargetOnGround();
-  const offset = new THREE.Vector3(tx - center.x, (opts.position?.[1] ?? 0) - total.min.y, tz - center.z);
+  const offset = keepOrigin
+    ? new THREE.Vector3(...(opts.position ?? [0, 0, 0]))
+    : new THREE.Vector3(tx - center.x, (opts.position?.[1] ?? 0) - total.min.y, tz - center.z);
 
   const state = useEditor.getState();
   let folderId = opts.folderId !== undefined ? opts.folderId : state.activeFolderId;
@@ -466,12 +481,14 @@ export async function importModelData(
     folderId: parts.length + nodes.length > 1 ? folderId : null,
     parts: parts.length,
     nodes: nodes.length,
+    keptOrigin: keepOrigin,
     unitScale,
     size: [size.x, size.y, size.z].map((v) => round(v)) as Vec3,
     textures,
   };
   const notes = [
     nodes.length ? `${nodes.length} noder` : "",
+    keepOrigin ? "filas origo beholdt" : "",
     unitScale === 1 ? "" : `skalert ×${unitScale} til meter`,
     textures.length ? `farger fra ${textures.join(", ")}` : "",
   ];
@@ -481,7 +498,7 @@ export async function importModelData(
 }
 
 /** Importerer en fil fra disk. Uten sti åpnes en fildialog. Teksturer/.mtl leses fra samme mappe. */
-export async function importModelFile(path?: string, opts?: { folderId?: string | null; position?: Vec3 }) {
+export async function importModelFile(path?: string, opts?: ImportOptions) {
   let target = path ?? null;
   if (!target) {
     const picked = await open({ filters: [{ name: "3D-modell", extensions: IMPORT_EXTENSIONS }], multiple: false });

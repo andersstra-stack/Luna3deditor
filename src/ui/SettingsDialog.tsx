@@ -1,4 +1,4 @@
-// Innstillinger: utseende (temavelger som i LunaChat) og «Om Luna 3D».
+// Innstillinger: utseende (temavelger som i LunaChat), import og «Om Luna 3D».
 
 import { useEffect } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -10,7 +10,8 @@ const CHANGELOG_URL = "https://github.com/andersstra-stack/Luna3deditor/blob/mai
 export function SettingsDialog() {
   const open = useUi((s) => s.settingsOpen);
   const theme = useUi((s) => s.theme);
-  const { setTheme, closeSettings } = useUi.getState();
+  const keepOrigin = useUi((s) => s.importKeepOrigin);
+  const { setTheme, setImportKeepOrigin, closeSettings } = useUi.getState();
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +56,21 @@ export function SettingsDialog() {
               );
             })}
           </div>
+        </section>
+
+        <section>
+          <h3 className="settings-h3">Import</h3>
+          <label className={`toggle-row ${keepOrigin ? "on" : ""}`}>
+            <input type="checkbox" checked={keepOrigin} onChange={() => setImportKeepOrigin(!keepOrigin)} />
+            <Icon name="import" size={16} />
+            <span>
+              Behold filas origo
+              <small>
+                Modellens origo havner i scenens origo, så deler som hører sammen (f.eks. interiør og eksteriør fra Blender)
+                passer uten justering. Av: modellen settes på bakken der kameraet ser.
+              </small>
+            </span>
+          </label>
         </section>
 
         <section className="about">

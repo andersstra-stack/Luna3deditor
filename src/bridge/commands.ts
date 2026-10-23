@@ -231,6 +231,8 @@ export const handlers: Record<BridgeMethod, Handler> = {
     const result = await importModelFile(requireString(p, "path"), {
       folderId: (p.folderId as string | null | undefined) ?? null,
       position: p.position as Vec3 | undefined,
+      // Uten parameter gjelder brukerens innstilling.
+      keepOrigin: p.keep_origin as boolean | undefined,
     });
     say(`importerte ${p.path}`);
     return result;
