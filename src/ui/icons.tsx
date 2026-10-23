@@ -37,11 +37,35 @@ export function ShapeIcon({ type, size = 18 }: { type: ShapeType; size?: number 
       )}
       {type === "plane" && <path d="M7 7h14l-4 10H3z" />}
       {type === "capsule" && <rect x="7.5" y="2.5" width="9" height="19" rx="4.5" />}
+      {type === "wedge" && <path d="M4 5v14h16zM4 5l4-2v14l12 2M8 17 4 19" />}
+      {type === "prism" && <path d="M3 18 9 6l12 2-6 12zM9 6l6 14M3 18l12 2" />}
+      {type === "pyramid" && <path d="M12 3 3 17l9 4 9-4zM12 3v18" />}
+      {type === "stairs" && <path d="M3 20h18V4h-4v4h-4v4H9v4H5v4" />}
+      {type === "hemisphere" && (
+        <>
+          <path d="M3.5 15a8.5 8.5 0 0 1 17 0" />
+          <ellipse cx="12" cy="15" rx="8.5" ry="3" />
+        </>
+      )}
+      {type === "tube" && (
+        <>
+          <ellipse cx="12" cy="5.5" rx="7" ry="2.5" />
+          <ellipse cx="12" cy="5.5" rx="3.5" ry="1.2" />
+          <path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13" />
+        </>
+      )}
+      {type === "roundedBox" && <rect x="4" y="4" width="16" height="16" rx="4.5" />}
+      {type === "pointLight" && (
+        <>
+          <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" />
+        </>
+      )}
+      {type === "spotLight" && <path d="M9 3h6l-1 6h-4zM10 9 5 20h14L14 9M8 14h8" />}
     </svg>
   );
 }
 
-type IconName = "move" | "rotate" | "scale" | "undo" | "redo" | "magnet" | "eye" | "eyeOff" | "trash" | "copy" | "file" | "folder" | "save" | "export" | "frame" | "folderOpen" | "folderPlus" | "chevron";
+type IconName = "move" | "rotate" | "scale" | "undo" | "redo" | "magnet" | "eye" | "eyeOff" | "trash" | "copy" | "file" | "folder" | "save" | "export" | "frame" | "folderOpen" | "folderPlus" | "chevron" | "snapObject" | "shapes" | "ground" | "mirror" | "hole";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   return (
@@ -83,6 +107,28 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
       {name === "folderOpen" && <path d="M3 19V6h6l2 2h8v3M3 19l3-8h16l-3 8z" />}
       {name === "folderPlus" && <path d="M3 6h6l2 2h10v11H3zM12 11v5M9.5 13.5h5" />}
       {name === "chevron" && <path d="m9 6 6 6-6 6" />}
+      {name === "snapObject" && (
+        <>
+          <rect x="2.5" y="8" width="9" height="9" />
+          <rect x="12.5" y="8" width="9" height="9" />
+          <path d="M12 4v2M12 19v2" />
+        </>
+      )}
+      {name === "shapes" && (
+        <>
+          <circle cx="7" cy="7" r="3.5" />
+          <rect x="13.5" y="3.5" width="7" height="7" rx="1" />
+          <path d="M7 13.5 3.5 20.5h7zM17 13.5v7M13.5 17h7" />
+        </>
+      )}
+      {name === "ground" && <path d="M12 3v11M8 10l4 4 4-4M4 18h16M6 21h12" />}
+      {name === "mirror" && <path d="M12 3v18M9 7 4 17h5zM15 7l5 10h-5z" />}
+      {name === "hole" && (
+        <>
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="12" cy="12" r="4.5" strokeDasharray="2.5 2" />
+        </>
+      )}
       {name === "frame" && <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />}
     </svg>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { useEditor } from "../store";
+import { primaryId, useEditor } from "../store";
 import { folderChain, folderPath, hiddenFolderIds, isInside } from "../folders";
 import { Icon, ShapeIcon } from "./icons";
 import { reportError } from "./StatusBar";
@@ -32,11 +32,24 @@ function RenameInput({ value, onDone }: { value: string; onDone: (name: string |
 export function Outliner() {
   const objects = useEditor((s) => s.objects);
   const folders = useEditor((s) => s.folders);
-  const selectedId = useEditor((s) => s.selectedId);
+  const selectedIds = useEditor((s) => s.selectedIds);
+  const selectedId = useEditor(primaryId);
+  const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
   const activeFolderId = useEditor((s) => s.activeFolderId);
   const collapsed = useEditor((s) => s.collapsed);
-  const { select, updateObject, deleteObjects, addFolders, updateFolders, deleteFolders, moveToFolder, setCollapsed, setActiveFolder } =
-    useEditor.getState();
+  const {
+    select,
+    selectMany,
+    selectFolder,
+    updateObject,
+    deleteObjects,
+    addFolders,
+    updateFolders,
+    deleteFolders,
+    moveToFolder,
+    setCollapsed,
+    setActiveFolder,
+  } = useEditor.getState();
 
   const [editing, setEditing] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget>(undefined);
@@ -98,7 +111,8 @@ export function Outliner() {
       setDropTarget(undefined);
       if (!d) return;
       try {
-        moveToFolder(d.kind === "object" ? { objectIds: [d.id] } : { folderIds: [d.id] }, target);
+        const objectIds = selected.has(d.id) ? selectedIds : [d.id];
+        moveToFolder(d.kind === "object" ? { objectIds } : { folderIds: [d.id] }, target);
         if (target) setCollapsed(target, false);
       } catch (err) {
         reportError(err);
@@ -114,6 +128,23 @@ export function Outliner() {
     setEditing(f.id);
   };
 
+  // Rekkefølgen objektradene vises i – brukes til Shift-klikk (område).
+  const order: string[] = [];
+
+  const clickObject = (id: string, e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) return select(id, "toggle");
+    if (e.shiftKey && selectedId) {
+      const a = order.indexOf(selectedId);
+      const b = order.indexOf(id);
+      if (a >= 0 && b >= 0) {
+        const range = order.slice(Math.min(a, b), Math.max(a, b) + 1);
+        // Behold hovedvalget sist.
+        return selectMany([...range.filter((r) => r !== selectedId), selectedId]);
+      }
+    }
+    select(id);
+  };
+
   const renderLevel = (parentId: string | null, depth: number): ReactNode[] => {
     const rows: ReactNode[] = [];
     for (const f of folders.filter((f) => f.parentId === parentId)) {
@@ -123,14 +154,11 @@ export function Outliner() {
         <li
           key={f.id}
           data-row={f.id}
-          className={`folder-row ${activeFolderId === f.id && !selectedId ? "active" : ""} ${isHidden ? "hidden-obj" : ""} ${
+          className={`folder-row ${activeFolderId === f.id ? "active" : ""} ${isHidden ? "hidden-obj" : ""} ${
             dropTarget === f.id ? "drop" : ""
           }`}
           style={{ paddingLeft: 4 + depth * INDENT }}
-          onClick={() => {
-            select(null);
-            setActiveFolder(f.id);
-          }}
+          onClick={() => selectFolder(f.id)}
           onDoubleClick={() => setEditing(f.id)}
           {...dragProps({ kind: "folder", id: f.id })}
           {...dropProps(f.id)}
@@ -186,14 +214,15 @@ export function Outliner() {
     }
 
     for (const o of objects.filter((o) => o.folderId === parentId)) {
+      order.push(o.id);
       const isHidden = !o.visible || (o.folderId !== null && hidden.has(o.folderId));
       rows.push(
         <li
           key={o.id}
           data-row={o.id}
-          className={`${o.id === selectedId ? "selected" : ""} ${isHidden ? "hidden-obj" : ""}`}
+          className={`${selected.has(o.id) ? "selected" : ""} ${isHidden ? "hidden-obj" : ""}`}
           style={{ paddingLeft: 4 + depth * INDENT + 18 }}
-          onClick={() => select(o.id)}
+          onClick={(e) => clickObject(o.id, e)}
           onDoubleClick={() => setEditing(o.id)}
           {...dragProps({ kind: "object", id: o.id })}
           {...dropProps(o.folderId)}

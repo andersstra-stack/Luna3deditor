@@ -1,6 +1,8 @@
 import { useEditor, type FolderUpdate } from "../store";
 import { exportGlb, openScene, saveScene } from "../io";
-import { SHAPES, type SceneObject, type ShapeType } from "../types";
+import { SHAPES, type SceneObject, type ShapeType, type Vec3 } from "../types";
+import { objectBox, round, type Axis } from "../bounds";
+import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { captureViewport, frameScene, VIEWS, type ViewName } from "../viewport/three-handle";
 import type { BridgeMethod } from "./protocol";
 
@@ -28,8 +30,13 @@ const summary = (o: SceneObject) => ({ id: o.id, name: o.name, type: o.type });
 
 export const handlers: Record<BridgeMethod, Handler> = {
   get_scene: () => {
-    const { objects, folders, selectedId, filePath } = editor();
-    return { folders, objects, selectedId, filePath };
+    const { objects, folders, selectedIds, filePath } = editor();
+    // Nøyaktige omsluttende bokser (verdensrom) gjør det lett å plassere ting inntil hverandre.
+    const withBounds = objects.map((o) => {
+      const b = objectBox(o);
+      return { ...o, bounds: { min: b.min.toArray().map((v) => round(v)), max: b.max.toArray().map((v) => round(v)) } };
+    });
+    return { folders, objects: withBounds, selectedIds, filePath };
   },
 
   add_objects: (p) => {
@@ -84,10 +91,37 @@ export const handlers: Record<BridgeMethod, Handler> = {
   },
 
   select: (p) => {
-    const id = (p.id ?? null) as string | null;
-    if (id && !editor().objects.some((o) => o.id === id)) throw new Error(`Fant ikke objekt ${id}`);
-    editor().select(id);
-    return { selectedId: id };
+    const ids = (p.ids ?? []) as string[];
+    const missing = ids.filter((id) => !editor().objects.some((o) => o.id === id));
+    if (missing.length) throw new Error(`Fant ikke: ${missing.join(", ")}`);
+    editor().selectMany(ids);
+    return { selectedIds: ids };
+  },
+
+  duplicate_objects: (p) => {
+    const ids = p.ids as string[];
+    const copies = editor().duplicateObjects(ids, (p.offset as Vec3 | undefined) ?? [1, 0, 0]);
+    if (copies.length !== ids.length) throw new Error("Fant ikke alle objektene");
+    say(`dupliserte ${copies.length} objekt${copies.length === 1 ? "" : "er"}`);
+    return copies.map(summary);
+  },
+
+  drop_to_ground: (p) => {
+    const result = dropToGround(p.ids as string[]);
+    say("la objekter ned på underlaget");
+    return result;
+  },
+
+  align_objects: (p) => {
+    alignObjects(p.ids as string[], p.axis as Axis, p.mode as AlignMode, p.targetId as string | undefined);
+    say("innrettet objekter");
+    return { ok: true };
+  },
+
+  mirror_objects: (p) => {
+    const ids = mirrorObjects(p.ids as string[], p.axis as Axis, p.copy === true, p.plane as number | undefined);
+    say(p.copy ? "lagde speilkopier" : "speilet objekter");
+    return { ids };
   },
 
   clear_scene: () => {

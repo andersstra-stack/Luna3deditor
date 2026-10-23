@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useEditor, type Snapshot } from "./store";
 import { hiddenFolderIds } from "./folders";
-import { SHAPES, type Folder, type SceneFile } from "./types";
+import { SHAPES, isLight, type Folder, type SceneFile } from "./types";
 import { sceneMeshes } from "./viewport/three-handle";
 
 const SCENE_FILTER = { name: "Luna 3D-scene", extensions: ["luna.json", "json"] };
@@ -87,7 +87,8 @@ export async function exportGlb(path?: string): Promise<string | null> {
   let count = 0;
   for (const obj of objects) {
     const mesh = meshById.get(obj.id);
-    if (!mesh || !obj.visible || (obj.folderId && hidden.has(obj.folderId))) continue;
+    // Hull og lys er editor-hjelpere; hullene er allerede skåret ut av geometrien (CSG).
+    if (!mesh || !obj.visible || obj.hole || isLight(obj.type) || (obj.folderId && hidden.has(obj.folderId))) continue;
     const c = new THREE.Mesh(mesh.geometry, mesh.material);
     c.name = obj.name;
     c.position.copy(mesh.position);

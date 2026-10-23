@@ -1,5 +1,15 @@
 import { useEditor, type BridgeStatus } from "../store";
-import { SHAPES, SHAPE_LABELS, type ShapeType, type TransformMode } from "../types";
+import { useEffect, useRef, useState } from "react";
+import {
+  BASIC_SHAPES,
+  DEFAULT_SCALE,
+  EXTRA_SHAPES,
+  LIGHTS,
+  SHAPE_LABELS,
+  isLight,
+  type ShapeType,
+  type TransformMode,
+} from "../types";
 import { exportGlb, openScene, saveScene } from "../io";
 import { frameScene, viewTargetOnGround } from "../viewport/three-handle";
 import { Icon, ShapeIcon } from "./icons";
@@ -20,15 +30,37 @@ const BRIDGE_TEXT: Record<BridgeStatus, { label: string; title: string }> = {
 export function Toolbar() {
   const transformMode = useEditor((s) => s.transformMode);
   const snap = useEditor((s) => s.snap);
+  const objectSnap = useEditor((s) => s.objectSnap);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
   const bridge = useEditor((s) => s.bridgeStatus);
-  const { addObject, setTransformMode, toggleSnap, undo, redo, clearScene, setFilePath } = useEditor.getState();
+  const { addObject, setTransformMode, toggleSnap, toggleObjectSnap, undo, redo, clearScene, setFilePath } = useEditor.getState();
+
+  // Lukk "Flere former" ved klikk utenfor.
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = (e: PointerEvent) => {
+      if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false);
+    };
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [moreOpen]);
 
   const add = (type: ShapeType) => {
     const [x, z] = viewTargetOnGround();
-    addObject(type, { position: [x, type === "plane" ? 0 : 0.5, z], folderId: useEditor.getState().activeFolderId });
+    const y = isLight(type) ? 2.5 : type === "plane" ? 0 : (DEFAULT_SCALE[type]?.[1] ?? 1) / 2;
+    addObject(type, { position: [x, y, z], folderId: useEditor.getState().activeFolderId });
+    setMoreOpen(false);
   };
+
+  const shapeButton = (t: ShapeType) => (
+    <button key={t} className="shape-btn" title={`Legg til ${SHAPE_LABELS[t].toLowerCase()}`} onClick={() => add(t)}>
+      <ShapeIcon type={t} />
+      <span>{SHAPE_LABELS[t]}</span>
+    </button>
+  );
 
   const newScene = () => {
     if (useEditor.getState().objects.length && !confirm("Starte en ny, tom scene?")) return;
@@ -59,12 +91,21 @@ export function Toolbar() {
       </div>
 
       <div className="tool-group shapes">
-        {SHAPES.map((t) => (
-          <button key={t} className="shape-btn" title={`Legg til ${SHAPE_LABELS[t].toLowerCase()}`} onClick={() => add(t)}>
-            <ShapeIcon type={t} />
-            <span>{SHAPE_LABELS[t]}</span>
+        {BASIC_SHAPES.map(shapeButton)}
+        <div className="more" ref={moreRef}>
+          <button className={`shape-btn ${moreOpen ? "active" : ""}`} title="Flere former og lys" onClick={() => setMoreOpen(!moreOpen)}>
+            <Icon name="shapes" size={18} />
+            <span>Flere</span>
           </button>
-        ))}
+          {moreOpen && (
+            <div className="more-menu">
+              <div className="more-title">Former</div>
+              <div className="more-grid">{EXTRA_SHAPES.map(shapeButton)}</div>
+              <div className="more-title">Lys</div>
+              <div className="more-grid">{LIGHTS.map(shapeButton)}</div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="tool-group">
@@ -80,6 +121,13 @@ export function Toolbar() {
         ))}
         <button className={`icon-btn ${snap ? "active" : ""}`} title="Fest til rutenett (X)" onClick={toggleSnap}>
           <Icon name="magnet" />
+        </button>
+        <button
+          className={`icon-btn ${objectSnap ? "active" : ""}`}
+          title="Fest til andre objekter – flater legger seg inntil hverandre (C)"
+          onClick={toggleObjectSnap}
+        >
+          <Icon name="snapObject" />
         </button>
         <button className="icon-btn" title="Vis hele scenen (F)" onClick={() => frameScene("current")}>
           <Icon name="frame" />

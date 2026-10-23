@@ -1,5 +1,16 @@
 import { create } from "zustand";
-import { DEFAULT_COLORS, SHAPE_LABELS, type Folder, type SceneObject, type ShapeType, type TransformMode } from "./types";
+import {
+  DEFAULT_COLORS,
+  DEFAULT_INTENSITY,
+  DEFAULT_SCALE,
+  SHAPE_LABELS,
+  isLight,
+  type Folder,
+  type SceneObject,
+  type ShapeType,
+  type TransformMode,
+  type Vec3,
+} from "./types";
 import { folderChain, isInside } from "./folders";
 
 const HISTORY_LIMIT = 100;
@@ -13,16 +24,22 @@ export interface Snapshot {
 }
 
 export type NewObject = Partial<SceneObject> & { type: ShapeType };
+export type ObjectUpdate = Partial<SceneObject> & { id: string };
 export type FolderUpdate = Partial<Omit<Folder, "id">> & { id: string };
+export type SelectMode = "replace" | "toggle" | "add";
 
 export interface EditorState extends Snapshot {
-  selectedId: string | null;
+  /** Valgte objekter; det siste er "hovedvalget" (vises i egenskapspanelet). */
+  selectedIds: string[];
   /** Mappen nye objekter og mapper havner i fra verktøylinja. */
   activeFolderId: string | null;
   /** Sammenslåtte mapper i scenelista (ren visning, ikke i historikken). */
   collapsed: Record<string, boolean>;
   transformMode: TransformMode;
+  /** Fest til rutenett. */
   snap: boolean;
+  /** Fest til andre objekter (flater legger seg inntil hverandre). */
+  objectSnap: boolean;
   past: Snapshot[];
   future: Snapshot[];
   bridgeStatus: BridgeStatus;
@@ -33,11 +50,12 @@ export interface EditorState extends Snapshot {
   addObject: (type: ShapeType, props?: Partial<SceneObject>) => SceneObject;
   addObjects: (items: NewObject[]) => SceneObject[];
   updateObject: (id: string, props: Partial<SceneObject>) => void;
-  updateObjects: (updates: (Partial<SceneObject> & { id: string })[]) => void;
+  updateObjects: (updates: ObjectUpdate[]) => void;
   /** Oppdatering uten historikk – brukes mens gizmoen dras. */
   updateObjectLive: (id: string, props: Partial<SceneObject>) => void;
+  updateObjectsLive: (updates: ObjectUpdate[]) => void;
   deleteObjects: (ids: string[]) => void;
-  duplicateObject: (id: string) => SceneObject | null;
+  duplicateObjects: (ids: string[], offset?: Vec3) => SceneObject[];
 
   addFolders: (items: { name?: string; parentId?: string | null }[]) => Folder[];
   updateFolders: (updates: FolderUpdate[]) => void;
@@ -50,9 +68,13 @@ export interface EditorState extends Snapshot {
 
   setScene: (scene: Snapshot) => void;
   clearScene: () => void;
-  select: (id: string | null) => void;
+  select: (id: string | null, mode?: SelectMode) => void;
+  selectMany: (ids: string[]) => void;
+  /** Velger alt i mappa (også undermapper) og gjør den aktiv. */
+  selectFolder: (id: string) => void;
   setTransformMode: (mode: TransformMode) => void;
   toggleSnap: () => void;
+  toggleObjectSnap: () => void;
   pushHistory: () => void;
   undo: () => void;
   redo: () => void;
@@ -64,6 +86,9 @@ export interface EditorState extends Snapshot {
 let counter = 0;
 export const newId = (prefix = "obj") => `${prefix}_${Date.now().toString(36)}_${(counter++).toString(36)}`;
 
+/** Hovedvalget (sist valgte objekt). */
+export const primaryId = (s: { selectedIds: string[] }) => s.selectedIds[s.selectedIds.length - 1] ?? null;
+
 function uniqueName(base: string, taken: { name: string }[]): string {
   const names = new Set(taken.map((o) => o.name));
   if (!names.has(base)) return base;
@@ -73,20 +98,23 @@ function uniqueName(base: string, taken: { name: string }[]): string {
 }
 
 function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<SceneObject> = {}): SceneObject {
-  const { id: _ignored, type: _type, ...rest } = props;
+  const { id: _ignored, type: _type, name: _name, ...rest } = props;
+  const scale = DEFAULT_SCALE[type] ?? [1, 1, 1];
+  // Lys henger i lufta, plan ligger på bakken, alt annet står oppå den.
+  const y = isLight(type) ? 2.5 : type === "plane" ? 0 : scale[1] / 2;
   return {
     id: newId(),
     name: uniqueName(props.name ?? SHAPE_LABELS[type], existing),
-    // Plan ligger flatt på bakken, alt annet står oppå den.
-    position: type === "plane" ? [0, 0, 0] : [0, 0.5, 0],
+    position: [0, y, 0],
     rotation: [0, 0, 0],
-    scale: [1, 1, 1],
-    color: DEFAULT_COLORS[existing.length % DEFAULT_COLORS.length],
+    scale: [...scale],
+    color: isLight(type) ? "#fff2d6" : DEFAULT_COLORS[existing.length % DEFAULT_COLORS.length],
     metalness: 0,
     roughness: 0.5,
     opacity: 1,
     visible: true,
     folderId: null,
+    ...(isLight(type) ? { intensity: DEFAULT_INTENSITY[type] } : {}),
     ...rest,
     type,
   };
@@ -96,6 +124,11 @@ function assertFolder(folders: Folder[], id: string | null | undefined) {
   if (id && !folders.some((f) => f.id === id)) throw new Error(`Fant ikke mappe ${id}`);
 }
 
+const applyUpdates = (objects: SceneObject[], updates: ObjectUpdate[]) => {
+  const byId = new Map(updates.map((u) => [u.id, u]));
+  return objects.map((o) => (byId.has(o.id) ? { ...o, ...byId.get(o.id), id: o.id, type: o.type } : o));
+};
+
 export const useEditor = create<EditorState>((set, get) => {
   /** Lagrer nåværende tilstand i angre-historikken før en endring. */
   const commit = (next: Partial<Snapshot>, extra: Partial<EditorState> = {}) => {
@@ -103,12 +136,18 @@ export const useEditor = create<EditorState>((set, get) => {
     set({ past: [...past, { objects, folders }].slice(-HISTORY_LIMIT), future: [], ...next, ...extra });
   };
 
+  /** Fjerner valg som peker på objekter som ikke finnes lenger. */
+  const keepSelection = (objects: SceneObject[]) => {
+    const ids = new Set(objects.map((o) => o.id));
+    return get().selectedIds.filter((id) => ids.has(id));
+  };
+
   /** Etter angre/gjør om kan utvalg og aktiv mappe peke på noe som ikke finnes lenger. */
   const restore = (snap: Snapshot): Partial<EditorState> => {
-    const { selectedId, activeFolderId } = get();
+    const { activeFolderId } = get();
     return {
       ...snap,
-      selectedId: snap.objects.some((o) => o.id === selectedId) ? selectedId : null,
+      selectedIds: keepSelection(snap.objects),
       activeFolderId: snap.folders.some((f) => f.id === activeFolderId) ? activeFolderId : null,
     };
   };
@@ -116,11 +155,12 @@ export const useEditor = create<EditorState>((set, get) => {
   return {
     objects: [],
     folders: [],
-    selectedId: null,
+    selectedIds: [],
     activeFolderId: null,
     collapsed: {},
     transformMode: "translate",
     snap: false,
+    objectSnap: true,
     past: [],
     future: [],
     bridgeStatus: "disconnected",
@@ -139,7 +179,8 @@ export const useEditor = create<EditorState>((set, get) => {
         all.push(obj);
         created.push(obj);
       }
-      commit({ objects: all }, { selectedId: created[created.length - 1]?.id ?? get().selectedId });
+      const last = created[created.length - 1];
+      commit({ objects: all }, last ? { selectedIds: [last.id] } : {});
       return created;
     },
 
@@ -150,32 +191,36 @@ export const useEditor = create<EditorState>((set, get) => {
       const missing = updates.filter((u) => !objects.some((o) => o.id === u.id));
       if (missing.length) throw new Error(`Fant ikke objekt(er): ${missing.map((m) => m.id).join(", ")}`);
       for (const u of updates) assertFolder(folders, u.folderId);
-      const byId = new Map(updates.map((u) => [u.id, u]));
-      commit({ objects: objects.map((o) => (byId.has(o.id) ? { ...o, ...byId.get(o.id), id: o.id, type: o.type } : o)) });
+      commit({ objects: applyUpdates(objects, updates) });
     },
 
-    updateObjectLive: (id, props) =>
-      set({ objects: get().objects.map((o) => (o.id === id ? { ...o, ...props, id } : o)) }),
+    updateObjectLive: (id, props) => get().updateObjectsLive([{ ...props, id }]),
+    updateObjectsLive: (updates) => set({ objects: applyUpdates(get().objects, updates) }),
 
     deleteObjects: (ids) => {
       const remove = new Set(ids);
-      const { selectedId } = get();
       commit(
         { objects: get().objects.filter((o) => !remove.has(o.id)) },
-        { selectedId: selectedId && remove.has(selectedId) ? null : selectedId },
+        { selectedIds: get().selectedIds.filter((id) => !remove.has(id)) },
       );
     },
 
-    duplicateObject: (id) => {
-      const src = get().objects.find((o) => o.id === id);
-      if (!src) return null;
-      const copy = makeObject(src.type, get().objects, {
-        ...src,
-        name: src.name.replace(/ \d+$/, ""),
-        position: [src.position[0] + 1, src.position[1], src.position[2]],
-      });
-      commit({ objects: [...get().objects, copy] }, { selectedId: copy.id });
-      return copy;
+    duplicateObjects: (ids, offset = [1, 0, 0]) => {
+      const all = [...get().objects];
+      const copies: SceneObject[] = [];
+      for (const id of ids) {
+        const src = all.find((o) => o.id === id);
+        if (!src) continue;
+        const copy = makeObject(src.type, all, {
+          ...src,
+          name: src.name.replace(/ \d+$/, ""),
+          position: src.position.map((v, i) => v + offset[i]) as Vec3,
+        });
+        all.push(copy);
+        copies.push(copy);
+      }
+      if (copies.length) commit({ objects: all }, { selectedIds: copies.map((c) => c.id) });
+      return copies;
     },
 
     addFolders: (items) => {
@@ -213,7 +258,7 @@ export const useEditor = create<EditorState>((set, get) => {
     },
 
     deleteFolders: (ids, deleteContents = false) => {
-      const { folders, objects, selectedId, activeFolderId } = get();
+      const { folders, objects, activeFolderId } = get();
       ids.forEach((id) => assertFolder(folders, id));
       const remove = new Set(ids);
       let nextFolders: Folder[];
@@ -234,7 +279,7 @@ export const useEditor = create<EditorState>((set, get) => {
       commit(
         { folders: nextFolders, objects: nextObjects },
         {
-          selectedId: nextObjects.some((o) => o.id === selectedId) ? selectedId : null,
+          selectedIds: keepSelection(nextObjects),
           activeFolderId: activeFolderId && remove.has(activeFolderId) ? null : activeFolderId,
         },
       );
@@ -259,16 +304,38 @@ export const useEditor = create<EditorState>((set, get) => {
     setCollapsed: (id, value) => set({ collapsed: { ...get().collapsed, [id]: value } }),
     setActiveFolder: (activeFolderId) => set({ activeFolderId }),
 
-    setScene: ({ objects, folders }) => commit({ objects, folders }, { selectedId: null, activeFolderId: null }),
-    clearScene: () => commit({ objects: [], folders: [] }, { selectedId: null, activeFolderId: null }),
+    setScene: ({ objects, folders }) => commit({ objects, folders }, { selectedIds: [], activeFolderId: null }),
+    clearScene: () => commit({ objects: [], folders: [] }, { selectedIds: [], activeFolderId: null }),
 
-    select: (id) => {
-      const obj = id ? get().objects.find((o) => o.id === id) : undefined;
+    select: (id, mode = "replace") => {
+      if (!id) return set({ selectedIds: [] });
+      const obj = get().objects.find((o) => o.id === id);
+      if (!obj) return;
+      const current = get().selectedIds.filter((s) => s !== id);
+      if (mode === "toggle" && get().selectedIds.includes(id)) return set({ selectedIds: current });
       // Å velge et objekt gjør mappen dets til "aktiv", så nye former havner ved siden av.
-      set(obj ? { selectedId: id, activeFolderId: obj.folderId } : { selectedId: null });
+      set({
+        selectedIds: mode === "replace" ? [id] : [...current, id],
+        ...(mode === "replace" ? { activeFolderId: obj.folderId } : {}),
+      });
     },
+
+    selectMany: (ids) => {
+      const existing = new Set(get().objects.map((o) => o.id));
+      set({ selectedIds: ids.filter((id) => existing.has(id)) });
+    },
+
+    selectFolder: (id) => {
+      const { objects, folders } = get();
+      set({
+        selectedIds: objects.filter((o) => isInside(folders, o.folderId, id)).map((o) => o.id),
+        activeFolderId: id,
+      });
+    },
+
     setTransformMode: (transformMode) => set({ transformMode }),
     toggleSnap: () => set({ snap: !get().snap }),
+    toggleObjectSnap: () => set({ objectSnap: !get().objectSnap }),
 
     pushHistory: () => {
       const { past, objects, folders } = get();

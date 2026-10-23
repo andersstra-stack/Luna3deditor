@@ -83,8 +83,8 @@ const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()
 
 /** Tar et bilde av 3D-visningen (uten utvalgs-gizmo) og returnerer base64-PNG. */
 export async function captureViewport(maxWidth = 1024): Promise<{ base64: string; width: number; height: number }> {
-  const { selectedId, select } = useEditor.getState();
-  select(null);
+  const { selectedIds, selectMany } = useEditor.getState();
+  selectMany([]);
   await nextFrame();
   await nextFrame();
   try {
@@ -97,6 +97,6 @@ export async function captureViewport(maxWidth = 1024): Promise<{ base64: string
     const base64 = out.toDataURL("image/png").split(",")[1];
     return { base64, width: out.width, height: out.height };
   } finally {
-    select(selectedId);
+    selectMany(selectedIds);
   }
 }

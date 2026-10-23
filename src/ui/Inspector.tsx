@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useEditor } from "../store";
+import { primaryId, useEditor } from "../store";
 import { folderPath } from "../folders";
-import { SHAPE_LABELS, type SceneObject, type Vec3 } from "../types";
+import { SHAPE_LABELS, isLight, type SceneObject, type Vec3 } from "../types";
+import { AXES, type Axis } from "../bounds";
+import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
+import { reportError } from "./StatusBar";
 import { Icon } from "./icons";
 
-const AXES = ["X", "Y", "Z"] as const;
+const AXIS_LABELS = ["X", "Y", "Z"] as const;
 
 /**
  * Tallfelt som kan skrives i, eller "skrubbes" ved å dra i aksebokstaven.
@@ -87,7 +90,7 @@ function Vec3Row({ title, obj, field, step }: { title: string; obj: SceneObject;
     <div className="row">
       <div className="row-title">{title}</div>
       <div className="vec3">
-        {AXES.map((a, i) => (
+        {AXIS_LABELS.map((a, i) => (
           <NumberField
             key={a}
             label={a}
@@ -103,41 +106,63 @@ function Vec3Row({ title, obj, field, step }: { title: string; obj: SceneObject;
   );
 }
 
-function Slider({ title, obj, field }: { title: string; obj: SceneObject; field: "metalness" | "roughness" | "opacity" }) {
-  const { updateObjectLive, pushHistory } = useEditor.getState();
+type SliderField = "metalness" | "roughness" | "opacity" | "intensity";
+
+/** Glidebryter som gjelder alle valgte objekter (verdien vises fra hovedvalget). */
+function Slider({
+  title,
+  objs,
+  field,
+  max = 1,
+  percent = true,
+}: {
+  title: string;
+  objs: SceneObject[];
+  field: SliderField;
+  max?: number;
+  percent?: boolean;
+}) {
+  const { updateObjectsLive, pushHistory } = useEditor.getState();
+  const value = objs[objs.length - 1][field] ?? 0;
   return (
     <div className="row">
       <div className="row-title">
         {title}
-        <span className="value">{Math.round(obj[field] * 100)}%</span>
+        <span className="value">{percent ? `${Math.round(value * 100)}%` : Math.round(value)}</span>
       </div>
       <input
         type="range"
         min={0}
-        max={1}
-        step={0.01}
-        value={obj[field]}
+        max={max}
+        step={max / 100}
+        value={value}
         onPointerDown={pushHistory}
-        onChange={(e) => updateObjectLive(obj.id, { [field]: Number(e.target.value) })}
+        onChange={(e) => updateObjectsLive(objs.map((o) => ({ id: o.id, [field]: Number(e.target.value) })))}
       />
     </div>
   );
 }
 
-function FolderSelect({ obj }: { obj: SceneObject }) {
+function FolderSelect({ objs }: { objs: SceneObject[] }) {
   const folders = useEditor((s) => s.folders);
   const options = useMemo(
     () => folders.map((f) => ({ id: f.id, path: folderPath(folders, f.id) })).sort((a, b) => a.path.localeCompare(b.path, "nb")),
     [folders],
   );
+  const same = objs.every((o) => o.folderId === objs[0].folderId);
   return (
     <div className="row">
       <div className="row-title">Mappe</div>
       <select
         className="text"
-        value={obj.folderId ?? ""}
-        onChange={(e) => useEditor.getState().updateObject(obj.id, { folderId: e.target.value || null })}
+        value={same ? (objs[0].folderId ?? "") : "__mixed"}
+        onChange={(e) => useEditor.getState().moveToFolder({ objectIds: objs.map((o) => o.id) }, e.target.value || null)}
       >
+        {!same && (
+          <option value="__mixed" disabled>
+            (flere mapper)
+          </option>
+        )}
         <option value="">— Ingen (scene-roten) —</option>
         {options.map((o) => (
           <option key={o.id} value={o.id}>
@@ -149,56 +174,233 @@ function FolderSelect({ obj }: { obj: SceneObject }) {
   );
 }
 
+function ColorRow({ objs }: { objs: SceneObject[] }) {
+  const { updateObjects, updateObjectsLive, pushHistory } = useEditor.getState();
+  const color = objs[objs.length - 1].color;
+  return (
+    <div className="row">
+      <div className="row-title">Farge</div>
+      <div className="color-row">
+        <input
+          type="color"
+          value={color}
+          onPointerDown={pushHistory}
+          onChange={(e) => updateObjectsLive(objs.map((o) => ({ id: o.id, color: e.target.value })))}
+        />
+        <input
+          key={color}
+          className="text"
+          defaultValue={color}
+          onBlur={(e) => {
+            const c = e.target.value.trim();
+            if (/^#[0-9a-f]{6}$/i.test(c) && c !== color) updateObjects(objs.map((o) => ({ id: o.id, color: c })));
+          }}
+          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        />
+      </div>
+    </div>
+  );
+}
+
+function HoleToggle({ objs }: { objs: SceneObject[] }) {
+  const solids = objs.filter((o) => !isLight(o.type));
+  if (!solids.length) return null;
+  const on = solids.every((o) => o.hole);
+  return (
+    <label className={`toggle-row ${on ? "on" : ""}`} title="Hull skjærer seg inn i de andre objektene i samme mappe">
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={() => useEditor.getState().updateObjects(solids.map((o) => ({ id: o.id, hole: !on })))}
+      />
+      <Icon name="hole" size={16} />
+      <span>
+        Hull
+        <small>Skjærer bort fra andre objekter i samme mappe</small>
+      </span>
+    </label>
+  );
+}
+
+const run = (fn: () => unknown) => () => {
+  try {
+    fn();
+  } catch (e) {
+    reportError(e);
+  }
+};
+
+const ALIGN_MODES: [AlignMode, string][] = [
+  ["min", "Min"],
+  ["center", "Midt"],
+  ["max", "Maks"],
+];
+
+function Placement({ objs }: { objs: SceneObject[] }) {
+  const ids = objs.map((o) => o.id);
+  return (
+    <>
+      <div className="section-title">Plassering</div>
+      <div className="btn-row">
+        <button
+          className="small-btn"
+          title="Senk til det hviler på objektet under, eller bakken (End)"
+          onClick={run(() => dropToGround(ids))}
+        >
+          <Icon name="ground" size={14} /> Legg ned på underlaget
+        </button>
+      </div>
+
+      {objs.length > 1 && (
+        <>
+          <div className="row-title">Innrett etter «{objs[objs.length - 1].name}»</div>
+          {AXES.map((a: Axis) => (
+            <div className="btn-row" key={a}>
+              <span className={`label axis-${a}`}>{a.toUpperCase()}</span>
+              {ALIGN_MODES.map(([m, label]) => (
+                <button key={m} className="small-btn" onClick={run(() => alignObjects(ids, a, m))}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </>
+      )}
+
+      <div className="btn-row">
+        <span className="label">Speil</span>
+        {AXES.map((a) => (
+          <button
+            key={a}
+            className={`small-btn axis-${a}`}
+            title={`Snu utvalget om ${a.toUpperCase()}-aksen`}
+            onClick={run(() => mirrorObjects(ids, a, false))}
+          >
+            {a.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      <div className="btn-row">
+        <span className="label">Speilkopi</span>
+        {AXES.map((a) => (
+          <button
+            key={a}
+            className={`small-btn axis-${a}`}
+            title={`Lag en speilvendt kopi på andre siden av ${a.toUpperCase()} = 0`}
+            onClick={run(() => mirrorObjects(ids, a, true))}
+          >
+            {a.toUpperCase()}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function Actions({ objs }: { objs: SceneObject[] }) {
+  const { duplicateObjects, deleteObjects } = useEditor.getState();
+  const ids = objs.map((o) => o.id);
+  return (
+    <div className="actions">
+      <button onClick={() => duplicateObjects(ids)}>
+        <Icon name="copy" size={14} /> Dupliser
+      </button>
+      <button className="danger" onClick={() => deleteObjects(ids)}>
+        <Icon name="trash" size={14} /> Slett
+      </button>
+    </div>
+  );
+}
+
+function Help() {
+  return (
+    <div className="help">
+      <p>Klikk på et objekt for å velge det. Ctrl+klikk velger flere.</p>
+      <h3>Kamera</h3>
+      <dl>
+        <dt>Venstre mus</dt>
+        <dd>Roter</dd>
+        <dt>Høyre mus</dt>
+        <dd>Panorer</dd>
+        <dt>Hjul</dt>
+        <dd>Zoom</dd>
+        <dt>F</dt>
+        <dd>Vis alt</dd>
+      </dl>
+      <h3>Snarveier</h3>
+      <dl>
+        <dt>W / E / R</dt>
+        <dd>Flytt / roter / skaler</dd>
+        <dt>C</dt>
+        <dd>Fest til andre objekter</dd>
+        <dt>X</dt>
+        <dd>Fest til rutenett</dd>
+        <dt>End</dt>
+        <dd>Legg ned på underlaget</dd>
+        <dt>Ctrl+A</dt>
+        <dd>Velg alt</dd>
+        <dt>Ctrl+D</dt>
+        <dd>Dupliser</dd>
+        <dt>Delete</dt>
+        <dd>Slett</dd>
+        <dt>Ctrl+Z / Y</dt>
+        <dd>Angre / gjør om</dd>
+        <dt>Ctrl+S</dt>
+        <dd>Lagre</dd>
+      </dl>
+      <h3>Mapper</h3>
+      <p>
+        Lag mapper med mappe-knappen i scenelista, og dra objekter inn i dem. Klikk på en mappe for å velge alt i den – da flytter
+        gizmoen hele mappa, og nye former havner i den.
+      </p>
+      <h3>Hull</h3>
+      <p>
+        Gjør et objekt til «hull» i egenskapene, så skjærer det seg inn i de andre objektene i samme mappe – f.eks. vinduer i en
+        vegg.
+      </p>
+      <h3>Claude</h3>
+      <p>Når Claude Code er koblet til (grønn prikk øverst), kan du be Claude om å bygge, endre og se på scenen.</p>
+    </div>
+  );
+}
+
 export function Inspector() {
-  const obj = useEditor((s) => s.objects.find((o) => o.id === s.selectedId));
-  const { updateObject, updateObjectLive, pushHistory, duplicateObject, deleteObjects } = useEditor.getState();
+  const objects = useEditor((s) => s.objects);
+  const selectedIds = useEditor((s) => s.selectedIds);
+  const pid = useEditor(primaryId);
+  // Hovedvalget legges sist – det er det verdiene vises fra.
+  const objs = useMemo(() => {
+    const rest = objects.filter((o) => selectedIds.includes(o.id) && o.id !== pid);
+    const primary = objects.find((o) => o.id === pid);
+    return primary ? [...rest, primary] : rest;
+  }, [objects, selectedIds, pid]);
+  const obj = objs[objs.length - 1];
+  const { updateObject } = useEditor.getState();
 
   if (!obj) {
     return (
       <aside className="panel inspector">
         <h2>Egenskaper</h2>
-        <div className="help">
-          <p>Klikk på et objekt for å velge det.</p>
-          <h3>Kamera</h3>
-          <dl>
-            <dt>Venstre mus</dt>
-            <dd>Roter</dd>
-            <dt>Høyre mus</dt>
-            <dd>Panorer</dd>
-            <dt>Hjul</dt>
-            <dd>Zoom</dd>
-            <dt>F</dt>
-            <dd>Vis alt</dd>
-          </dl>
-          <h3>Snarveier</h3>
-          <dl>
-            <dt>W / E / R</dt>
-            <dd>Flytt / roter / skaler</dd>
-            <dt>X</dt>
-            <dd>Fest til rutenett</dd>
-            <dt>Ctrl+D</dt>
-            <dd>Dupliser</dd>
-            <dt>Delete</dt>
-            <dd>Slett</dd>
-            <dt>Ctrl+Z / Y</dt>
-            <dd>Angre / gjør om</dd>
-            <dt>Ctrl+S</dt>
-            <dd>Lagre</dd>
-          </dl>
-          <h3>Mapper</h3>
-          <p>
-            Lag mapper med mappe-knappen i scenelista, og dra objekter inn i dem. Klikk på en mappe for å gjøre den aktiv – nye
-            former havner da i den.
-          </p>
-          <h3>Claude</h3>
-          <p>
-            Når Claude Code er koblet til (grønn prikk øverst), kan du be Claude om å bygge, endre og se på scenen.
-          </p>
-        </div>
+        <Help />
       </aside>
     );
   }
 
+  if (objs.length > 1) {
+    return (
+      <aside className="panel inspector">
+        <h2>Egenskaper</h2>
+        <p className="multi-title">{objs.length} objekter valgt</p>
+        <FolderSelect objs={objs} />
+        <ColorRow objs={objs} />
+        <HoleToggle objs={objs} />
+        <Placement objs={objs} />
+        <Actions objs={objs} />
+      </aside>
+    );
+  }
+
+  const light = isLight(obj.type);
   return (
     <aside className="panel inspector">
       <h2>Egenskaper</h2>
@@ -218,46 +420,27 @@ export function Inspector() {
         />
       </div>
 
-      <FolderSelect obj={obj} />
+      <FolderSelect objs={objs} />
 
       <Vec3Row title="Posisjon (m)" obj={obj} field="position" step={0.01} />
       <Vec3Row title="Rotasjon (°)" obj={obj} field="rotation" step={0.5} />
-      <Vec3Row title="Størrelse (m)" obj={obj} field="scale" step={0.01} />
+      {!light && <Vec3Row title="Størrelse (m)" obj={obj} field="scale" step={0.01} />}
 
-      <div className="row">
-        <div className="row-title">Farge</div>
-        <div className="color-row">
-          <input
-            type="color"
-            value={obj.color}
-            onPointerDown={pushHistory}
-            onChange={(e) => updateObjectLive(obj.id, { color: e.target.value })}
-          />
-          <input
-            key={obj.color}
-            className="text"
-            defaultValue={obj.color}
-            onBlur={(e) => {
-              const c = e.target.value.trim();
-              if (/^#[0-9a-f]{6}$/i.test(c) && c !== obj.color) updateObject(obj.id, { color: c });
-            }}
-            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-          />
-        </div>
-      </div>
+      <ColorRow objs={objs} />
 
-      <Slider title="Metallisk" obj={obj} field="metalness" />
-      <Slider title="Ruhet" obj={obj} field="roughness" />
-      <Slider title="Synlighet" obj={obj} field="opacity" />
+      {light ? (
+        <Slider title="Lysstyrke" objs={objs} field="intensity" max={200} percent={false} />
+      ) : (
+        <>
+          <HoleToggle objs={objs} />
+          <Slider title="Metallisk" objs={objs} field="metalness" />
+          <Slider title="Ruhet" objs={objs} field="roughness" />
+          <Slider title="Synlighet" objs={objs} field="opacity" />
+        </>
+      )}
 
-      <div className="actions">
-        <button onClick={() => duplicateObject(obj.id)}>
-          <Icon name="copy" size={14} /> Dupliser
-        </button>
-        <button className="danger" onClick={() => deleteObjects([obj.id])}>
-          <Icon name="trash" size={14} /> Slett
-        </button>
-      </div>
+      <Placement objs={objs} />
+      <Actions objs={objs} />
     </aside>
   );
 }

@@ -13,6 +13,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { WebSocketServer, WebSocket } from "ws";
 import { z } from "zod";
 import { BRIDGE_BUSY_CODE, BRIDGE_PORT, type BridgeMethod, type BridgeResponse } from "../src/bridge/protocol.ts";
+import { SHAPES } from "../src/types.ts";
 
 const PORT = Number(process.env.LUNA_BRIDGE_PORT ?? BRIDGE_PORT);
 const log = (...args: unknown[]) => console.error("[luna3d-mcp]", ...args);
@@ -109,7 +110,6 @@ const bridge = new AppBridge(PORT);
 
 // ---------- Skjema ----------
 
-const SHAPES = ["box", "sphere", "cylinder", "cone", "torus", "plane", "capsule"] as const;
 const VIEWS = ["current", "front", "back", "left", "right", "top", "iso"] as const;
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
 
@@ -123,6 +123,11 @@ const objectProps = {
   roughness: z.number().min(0).max(1).optional(),
   opacity: z.number().min(0).max(1).optional().describe("1 = solid, lower = transparent."),
   visible: z.boolean().optional(),
+  hole: z
+    .boolean()
+    .optional()
+    .describe("true = this object is a HOLE: it is shown as a ghost and cut away (CSG) from the other objects in the SAME folder."),
+  intensity: z.number().min(0).optional().describe("Lights only: brightness in candela (pointLight ~20, spotLight ~60)."),
   folderId: z
     .string()
     .nullable()
@@ -132,21 +137,35 @@ const objectProps = {
 
 const INSTRUCTIONS = `Luna 3D is a simple 3D editor the user has open on their desktop. These tools edit its scene live.
 
-Coordinate system: meters, Y is up, the ground plane is y = 0. Rotation is in degrees.
-All primitives are unit-sized and centered on their origin, so 'scale' equals the object's size in meters:
-- box: 1×1×1 cube
-- sphere: diameter 1
-- cylinder / cone: diameter 1, height 1 (along Y)
+Coordinate system: meters, Y is up, the ground plane is y = 0. Rotation is in degrees (Euler XYZ).
+All shapes are unit-sized and centered on their origin, so 'scale' equals the object's size in meters:
+- box: 1×1×1 cube; roundedBox: same with rounded edges
+- sphere: diameter 1; hemisphere: dome, flat side down (default scale [1, 0.5, 1])
+- cylinder / cone: diameter 1, height 1 (along Y); tube: hollow cylinder (wall = 15% of the diameter)
+- pyramid: square 1×1 base, apex up
+- prism: triangular "gable roof" — ridge runs along Z, slopes face ±X
+- wedge: ramp — tall side at -X, low edge at +X (extruded along Z)
+- stairs: 4 steps rising toward +X (extruded along Z)
 - torus: lies flat, outer diameter 1, tube thickness 0.3
 - plane: flat 1×1 square in the XZ plane (zero thickness)
 - capsule: 0.5 wide, 1 tall (along Y)
-To rest an object on the ground, set position.y = scale.y / 2 (planes: y = 0).
+- pointLight / spotLight: light sources (spotLight shines along its local -Y; rotate it to aim). Use 'intensity' and 'color'.
+To rest an object on the ground, set position.y = scale.y / 2 (planes: y = 0) — or call drop_to_ground.
+
+get_scene returns each object's exact world-space bounding box ('bounds' min/max), which makes it easy to place
+things flush against each other (e.g. new.position.x = other.bounds.max.x + new.scale.x / 2).
+
+Holes (CSG): set hole: true on an object to cut it out of every other (non-hole) object in the SAME folder it overlaps —
+e.g. windows and doors in a wall: put the wall and box-shaped holes in one folder. Holes are live and stay editable.
 
 Folders: purely organizational (like a file tree) — they have no transform of their own and can be nested.
 For anything with more than a handful of parts, put parts in descriptive folders (e.g. "House" > "Roof", "Walls").
 Create folders first with create_folders, then pass folderId in add_objects. Hidden folders hide everything inside them.
 
-Workflow tips: call get_scene first to see existing objects and their ids. Build composite things from several primitives
+Helpers: duplicate_objects (repeat parts with an offset), mirror_objects (symmetric models: build one side, mirror-copy
+across x = 0), align_objects, drop_to_ground.
+
+Workflow tips: call get_scene first to see existing objects and their ids. Build composite things from several shapes
 with one add_objects call. Use screenshot to check your work visually — try different views. Every change is undoable by the user.`;
 
 const server = new McpServer({ name: "luna3d", version: "0.1.0" }, { instructions: INSTRUCTIONS });
@@ -167,7 +186,8 @@ server.registerTool(
   "get_scene",
   {
     title: "Get scene",
-    description: "List every folder and object in the Luna 3D scene (ids, folder tree, transforms, materials) plus the selected id.",
+    description:
+      "List every folder and object in the Luna 3D scene (ids, folder tree, transforms, materials, world-space bounds) plus the selected ids.",
     inputSchema: {},
   },
   () => run("get_scene"),
@@ -177,7 +197,7 @@ server.registerTool(
   "add_objects",
   {
     title: "Add objects",
-    description: "Add one or more primitive objects to the scene. Returns their new ids. Prefer adding all parts of a model in one call.",
+    description: "Add one or more shapes or lights to the scene. Returns their new ids. Prefer adding all parts of a model in one call.",
     inputSchema: {
       objects: z.array(z.object({ type: z.enum(SHAPES), ...objectProps })).min(1),
     },
@@ -263,13 +283,70 @@ server.registerTool(
 );
 
 server.registerTool(
-  "select_object",
+  "select_objects",
   {
-    title: "Select object",
-    description: "Select an object in the editor (shows its properties and move gizmo to the user). Pass null to deselect.",
-    inputSchema: { id: z.string().nullable() },
+    title: "Select objects",
+    description:
+      "Select objects in the editor (outlines them and shows the move gizmo to the user). Pass an empty list to deselect.",
+    inputSchema: { ids: z.array(z.string()) },
   },
-  ({ id }) => run("select", { id }),
+  ({ ids }) => run("select", { ids }),
+);
+
+server.registerTool(
+  "duplicate_objects",
+  {
+    title: "Duplicate objects",
+    description: "Copy objects (same folder and properties), moved by an offset. Returns the new ids in the same order.",
+    inputSchema: {
+      ids: z.array(z.string()).min(1),
+      offset: vec3.optional().describe("Offset in meters for the copies (default [1, 0, 0])."),
+    },
+  },
+  ({ ids, offset }) => run("duplicate_objects", { ids, offset }),
+);
+
+server.registerTool(
+  "drop_to_ground",
+  {
+    title: "Drop to ground",
+    description:
+      "Move the objects (as one group) straight down/up so they rest on the highest object beneath them, or on the ground (y = 0).",
+    inputSchema: { ids: z.array(z.string()).min(1) },
+  },
+  ({ ids }) => run("drop_to_ground", { ids }),
+);
+
+server.registerTool(
+  "align_objects",
+  {
+    title: "Align objects",
+    description:
+      "Align objects' bounding boxes on one axis to a target object (default: the last id in the list). Each object moves individually.",
+    inputSchema: {
+      ids: z.array(z.string()).min(2),
+      axis: z.enum(["x", "y", "z"]),
+      mode: z.enum(["min", "center", "max"]),
+      targetId: z.string().optional().describe("Object to align to; defaults to the last id in ids."),
+    },
+  },
+  ({ ids, axis, mode, targetId }) => run("align_objects", { ids, axis, mode, targetId }),
+);
+
+server.registerTool(
+  "mirror_objects",
+  {
+    title: "Mirror objects",
+    description:
+      "Mirror objects across a plane perpendicular to an axis. copy: true makes mirrored copies (default plane: axis = 0, ideal for symmetric models); otherwise the objects are flipped in place (default plane: the selection's center). Returns the resulting ids.",
+    inputSchema: {
+      ids: z.array(z.string()).min(1),
+      axis: z.enum(["x", "y", "z"]),
+      copy: z.boolean().optional(),
+      plane: z.number().optional().describe("Coordinate of the mirror plane on the axis."),
+    },
+  },
+  ({ ids, axis, copy, plane }) => run("mirror_objects", { ids, axis, copy, plane }),
 );
 
 server.registerTool(

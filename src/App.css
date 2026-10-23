@@ -577,3 +577,160 @@ input[type="range"] {
   text-overflow: ellipsis;
   direction: rtl;
 }
+
+/* ---------- Flere former ---------- */
+.more {
+  position: relative;
+}
+
+.shape-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.more-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: 290px;
+  padding: 10px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px #0008;
+}
+
+.more-title {
+  margin: 2px 4px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+}
+
+.more-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.more-grid .shape-btn {
+  min-width: 0;
+  padding: 6px 2px;
+}
+
+/* ---------- Mål i 3D-visningen ---------- */
+.selection-info {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #13151dcc;
+  backdrop-filter: blur(6px);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.selection-info .dims .axis-x {
+  color: var(--red);
+}
+.selection-info .dims .axis-y {
+  color: var(--green);
+}
+.selection-info .dims .axis-z {
+  color: var(--blue);
+}
+
+.selection-info .dim-note {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* ---------- Plassering i egenskapspanelet ---------- */
+.section-title {
+  margin: 18px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+}
+
+.btn-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.btn-row .label {
+  width: 62px;
+  flex: none;
+  align-self: center;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.small-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 4px;
+  border-radius: 5px;
+  background: var(--bg-2);
+  font-size: 11.5px;
+}
+
+.small-btn:hover {
+  background: var(--bg-3);
+}
+
+.small-btn.axis-x {
+  color: var(--red);
+}
+.small-btn.axis-y {
+  color: var(--green);
+}
+.small-btn.axis-z {
+  color: var(--blue);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 14px;
+  border-radius: 6px;
+  background: var(--bg-2);
+  cursor: pointer;
+}
+
+.toggle-row.on {
+  background: #ff6b6b22;
+  color: #ff9a9a;
+}
+
+.toggle-row small {
+  display: block;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.multi-title {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
