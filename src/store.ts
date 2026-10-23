@@ -119,6 +119,9 @@ export const newId = (prefix = "obj") => `${prefix}_${Date.now().toString(36)}_$
 /** Hovedvalget (sist valgte objekt). */
 export const primaryId = (s: { selectedIds: string[] }) => s.selectedIds[s.selectedIds.length - 1] ?? null;
 
+/** Mapper som ligger i `parentId` – mappenavn trenger bare være unike blant søsken, som i et filtre. */
+const siblings = (folders: Folder[], parentId: string | null | undefined) => folders.filter((f) => f.parentId === (parentId ?? null));
+
 function uniqueName(base: string, taken: { name: string }[]): string {
   const names = new Set(taken.map((o) => o.name));
   if (!names.has(base)) return base;
@@ -283,7 +286,7 @@ export const useEditor = create<EditorState>((set, get) => {
         assertFolder(all, item.parentId);
         const folder: Folder = {
           id: newId("fld"),
-          name: uniqueName(item.name?.trim() || "Ny mappe", all),
+          name: uniqueName(item.name?.trim() || "Ny mappe", siblings(all, item.parentId)),
           parentId: item.parentId ?? null,
           visible: true,
         };
@@ -397,7 +400,7 @@ export const useEditor = create<EditorState>((set, get) => {
             keys.set(op.key, old.id);
             continue;
           }
-          const folder: Folder = { id: newId("fld"), name: uniqueName(name, folders), parentId, visible: true, ...(script ? { script } : {}) };
+          const folder: Folder = { id: newId("fld"), name: uniqueName(name, siblings(folders, parentId)), parentId, visible: true, ...(script ? { script } : {}) };
           folders.push(folder);
           keys.set(op.key, folder.id);
           result.folders.push(folder.id);

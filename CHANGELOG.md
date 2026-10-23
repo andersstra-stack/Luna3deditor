@@ -21,6 +21,10 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
   i scenens origo i stedet for at modellen sentreres der kameraet ser. Deler som hører sammen, som hangaren og interiøret
   fra Nova Homestead, passer da sammen uten justering.
 
+### Fixed
+- Mappenavn trenger bare være unike blant søsken, som i et filtre. To nattbord kan nå begge ha undermappa «Skuffer», og
+  et Python-skript som kjøres på nytt gjenbruker slike mapper i stedet for å lage «Skuffer 2», «Skuffer 3» …
+
 ## [0.9.0] — 2026-10-23
 
 ### Added
