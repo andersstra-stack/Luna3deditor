@@ -374,6 +374,8 @@ function Help() {
         <dd>Lagre</dd>
         <dt>Ctrl+I</dt>
         <dd>Importer 3D-modell</dd>
+        <dt>N</dt>
+        <dd>Kommentar-pinne</dd>
       </dl>
       <h3>Mapper</h3>
       <p>

@@ -34,12 +34,13 @@ export function Toolbar() {
   const transformMode = useEditor((s) => s.transformMode);
   const snap = useEditor((s) => s.snap);
   const objectSnap = useEditor((s) => s.objectSnap);
+  const tool = useEditor((s) => s.tool);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
   const bridge = useEditor((s) => s.bridgeStatus);
-  const { addObject, setTransformMode, toggleSnap, toggleObjectSnap, undo, redo, clearScene, setFilePath } = useEditor.getState();
+  const { setTool, addObject, setTransformMode, toggleSnap, toggleObjectSnap, undo, redo, clearScene, setFilePath } = useEditor.getState();
 
   // Lukk "Flere former" ved klikk utenfor.
   useEffect(() => {
@@ -140,6 +141,13 @@ export function Toolbar() {
           onClick={toggleObjectSnap}
         >
           <Icon name="snapObject" />
+        </button>
+        <button
+          className={`icon-btn ${tool === "note" ? "active" : ""}`}
+          title="Kommentar-pinne: klikk på et objekt for å si «her må noe gjøres» (N)"
+          onClick={() => setTool(tool === "note" ? "select" : "note")}
+        >
+          <Icon name="pin" />
         </button>
         <button className="icon-btn" title="Vis hele scenen (F)" onClick={() => frameScene("current")}>
           <Icon name="frame" />

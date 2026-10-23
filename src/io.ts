@@ -11,8 +11,8 @@ import { deserializeMesh, hasMesh, registerMesh, serializeUsedMeshes } from "./m
 const SCENE_FILTER = { name: "Luna 3D-scene", extensions: ["luna.json", "json"] };
 
 export function serializeScene(): SceneFile {
-  const { objects, folders } = useEditor.getState();
-  return { format: "luna3d", version: 3, objects, folders, meshes: serializeUsedMeshes(objects) };
+  const { objects, folders, notes } = useEditor.getState();
+  return { format: "luna3d", version: 3, objects, folders, notes, meshes: serializeUsedMeshes(objects) };
 }
 
 function parseScene(text: string): Snapshot {
@@ -28,7 +28,8 @@ function parseScene(text: string): Snapshot {
   const objects = data.objects
     .filter((o) => o.type !== "mesh" || hasMesh(o.meshId))
     .map((o) => ({ ...o, folderId: o.folderId && folderIds.has(o.folderId) ? o.folderId : null }));
-  return { objects, folders };
+  const notes = Array.isArray(data.notes) ? data.notes : [];
+  return { objects, folders, notes };
 }
 
 /** Lagrer scenen. Uten sti spørres brukeren (eller forrige sti brukes). */

@@ -119,6 +119,36 @@ export interface Folder {
 
 export type TransformMode = "translate" | "rotate" | "scale";
 
+export type NoteAuthor = "user" | "claude";
+
+export interface NoteReply {
+  author: NoteAuthor;
+  text: string;
+  /** ISO-tidspunkt */
+  at: string;
+}
+
+/**
+ * En pinne med kommentar, festet til et punkt i scenen (helst på et objekt, så den
+ * følger med når objektet flyttes). Brukes til å si «her må noe gjøres» – både av
+ * brukeren og Claude.
+ */
+export interface Note {
+  id: string;
+  /** Løpenummer som vises på pinnen (og i skjermbilder). */
+  number: number;
+  text: string;
+  author: NoteAuthor;
+  status: "open" | "done";
+  /** Verdensposisjon da pinnen ble satt (brukes hvis objektet er borte). */
+  position: Vec3;
+  objectId: string | null;
+  /** Punktet i objektets lokale koordinater, så pinnen følger objektet. */
+  local?: Vec3;
+  createdAt: string;
+  replies: NoteReply[];
+}
+
 export interface SceneFile {
   format: "luna3d";
   version: 3;
@@ -126,6 +156,8 @@ export interface SceneFile {
   folders: Folder[];
   /** Geometri for importerte modeller (versjon 3+). */
   meshes?: SerializedMesh[];
+  /** Kommentar-pinner. */
+  notes?: Note[];
 }
 
 export interface SerializedMesh {

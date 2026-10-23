@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { RootState } from "@react-three/fiber";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { useEditor } from "../store";
+import { isVisibleNote, noteWorldPosition } from "../notes";
 
 /**
  * Gir kode utenfor <Canvas> (MCP-broen, eksport) tilgang til three.js-tilstanden.
@@ -79,6 +80,48 @@ export function viewTargetOnGround(): [number, number] {
   }
 }
 
+/** Flytter kameraet slik at `point` står midt i bildet, litt nærmere. */
+export function focusPoint(point: THREE.Vector3, distance = 5) {
+  const { camera, controls } = three();
+  const orbit = controls as unknown as OrbitControlsImpl | null;
+  const target = orbit?.target ?? new THREE.Vector3();
+  const dir = camera.position.clone().sub(target).normalize();
+  camera.position.copy(point).addScaledVector(dir, distance);
+  if (orbit) {
+    orbit.target.copy(point);
+    orbit.update();
+  } else camera.lookAt(point);
+}
+
+/** Tegner nummererte pinner inn i skjermbildet, så Claude ser dem (pinnene er DOM, ikke WebGL). */
+function drawNotePins(ctx: CanvasRenderingContext2D) {
+  const { notes, objects, showNotes, showResolvedNotes } = useEditor.getState();
+  if (!showNotes) return;
+  const { camera } = three();
+  for (const note of notes) {
+    if (!isVisibleNote(note, showResolvedNotes)) continue;
+    const p = noteWorldPosition(note, objects).project(camera);
+    if (p.z > 1) continue; // bak kameraet
+    const x = ((p.x + 1) / 2) * ctx.canvas.width;
+    const y = ((1 - p.y) / 2) * ctx.canvas.height;
+    const r = 11;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.arc(x, y - 2 * r, r, Math.PI * 0.75, Math.PI * 0.25);
+    ctx.closePath();
+    ctx.fillStyle = note.status === "done" ? "#3a9a5b" : note.author === "claude" ? "#8b5cf6" : "#f97316";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 12px Segoe UI, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(note.number), x, y - 2 * r);
+  }
+}
+
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
 /** Tar et bilde av 3D-visningen (uten utvalgs-gizmo) og returnerer base64-PNG. */
@@ -98,6 +141,7 @@ export async function captureViewport(maxWidth = 1024): Promise<{ base64: string
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg-page").trim() || "#06112a";
     ctx.fillRect(0, 0, out.width, out.height);
     ctx.drawImage(src, 0, 0, out.width, out.height);
+    drawNotePins(ctx);
     const base64 = out.toDataURL("image/png").split(",")[1];
     return { base64, width: out.width, height: out.height };
   } finally {

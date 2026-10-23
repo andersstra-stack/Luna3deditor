@@ -12,7 +12,7 @@ import { IMPORT_EXTENSIONS, importDroppedFiles, importModelFile } from "./import
 import { SelectionInfo } from "./ui/SelectionInfo";
 import { Toolbar } from "./ui/Toolbar";
 import { TitleBar } from "./ui/TitleBar";
-import { Outliner } from "./ui/Outliner";
+import { LeftPanel } from "./ui/LeftPanel";
 import { Inspector } from "./ui/Inspector";
 import { StatusBar, reportError } from "./ui/StatusBar";
 import { SettingsDialog } from "./ui/SettingsDialog";
@@ -104,7 +104,12 @@ function useShortcuts() {
       else if (key === "f") frameScene("current");
       else if (key === "end" && sel.length) dropToGround(sel);
       else if ((key === "delete" || key === "backspace") && sel.length) s.deleteObjects(sel);
-      else if (key === "escape") s.select(null);
+      else if (key === "n") s.setTool(s.tool === "note" ? "select" : "note");
+      else if (key === "escape") {
+        if (s.tool === "note") s.setTool("select");
+        else if (s.activeNoteId) s.openNote(null);
+        else s.select(null);
+      }
       else return;
       e.preventDefault();
     };
@@ -125,7 +130,7 @@ export default function App() {
       <TitleBar />
       <Toolbar />
       <main className="workspace">
-        <Outliner />
+        <LeftPanel />
         <div className="viewport">
           <Viewport />
           <SelectionInfo />

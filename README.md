@@ -34,6 +34,7 @@ Tema velges under **Innstillinger** (tannhjulet øverst til høyre): de samme 10
 | Lagre / åpne | **Ctrl+S** / **Ctrl+O** (`.luna.json`) |
 | Importer | **Ctrl+I**, importknappen eller dra filer inn i vinduet: **FBX, GLB/glTF, OBJ, STL**. Flere deler havner i en egen mappe, cm/mm skaleres til meter. Farger hentes fra materialer, hjørnefarger og teksturer/fargepaletter (bildet leses fra samme mappe – ved dra-og-slipp: dra modell og bilde inn sammen), og modellen deles opp i én del per farge. Modellen kan flyttes, skaleres, fargelegges, speiles og få hull, men ikke formredigeres. `.gltf` med eksterne filer støttes ikke – bruk `.glb` |
 | Python-skript | `</>`-knappen kjører en `.py`-fil som bygger/endrer scenen med `import luna3d as luna` (se `scripting/luna3d.py` og `scripting/eksempler/`). Ett angre-steg per kjøring. Kjøres samme fil igjen, erstattes forrige resultat («Løsne» i egenskapene beholder et objekt). Krever Python 3 |
+| Kommentar-pinner | Pinneknappen eller **N**, klikk på et objekt/bakken og skriv hva som må gjøres. Fanen «Kommentarer» i venstre panel lister dem. Claude kan lese, svare og markere dem som løst – og sette egne (lilla) |
 | Eksporter | Eksport-knappen → `.glb` (Blender, Roblox Studio, Unity, Godot …). Mappene blir navngitte grupper |
 
 ## Versjoner
@@ -61,6 +62,7 @@ Claude Code ──stdio──▶ mcp-server/index.ts ──WebSocket 127.0.0.1:4
 Verktøy Claude får: `get_scene`, `add_objects`, `update_objects`, `delete_objects`,
 `create_folders`, `update_folders`, `delete_folders`, `select_objects`, `duplicate_objects`,
 `drop_to_ground`, `align_objects`, `mirror_objects`, `run_python`, `import_model`,
+`get_notes`, `add_note`, `reply_to_note`, `delete_notes`,
 `clear_scene`, `undo`, `redo`, `set_view`, `screenshot`, `save_scene`, `load_scene`, `export_glb`.
 
 Alt Claude gjør kan angres med Ctrl+Z, og vises i statuslinja nederst.

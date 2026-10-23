@@ -7,6 +7,8 @@ import {
   SHAPE_LABELS,
   isLight,
   type Folder,
+  type Note,
+  type NoteReply,
   type SceneObject,
   type ScriptOp,
   type ScriptResult,
@@ -24,7 +26,10 @@ export type BridgeStatus = "disconnected" | "connected" | "busy";
 export interface Snapshot {
   objects: SceneObject[];
   folders: Folder[];
+  notes: Note[];
 }
+
+export type Tool = "select" | "note";
 
 export type NewObject = Partial<SceneObject> & { type: ShapeType };
 export type ObjectUpdate = Partial<SceneObject> & { id: string };
@@ -46,6 +51,13 @@ export interface EditorState extends Snapshot {
   past: Snapshot[];
   future: Snapshot[];
   bridgeStatus: BridgeStatus;
+  /** Aktivt verktøy i 3D-visningen: velge, eller sette kommentar-pinner. */
+  tool: Tool;
+  /** Pinnen som har kortet sitt åpent (og om teksten redigeres). */
+  activeNoteId: string | null;
+  editingNoteId: string | null;
+  showNotes: boolean;
+  showResolvedNotes: boolean;
   /** Kort melding nederst i vinduet, f.eks. "Claude la til Kube". */
   activity: string | null;
   filePath: string | null;
@@ -71,7 +83,15 @@ export interface EditorState extends Snapshot {
 
   /** Bruker endringene fra et Python-skript som ett angre-steg. */
   applyScript: (ops: ScriptOp[], script?: string) => ScriptResult;
-  setScene: (scene: Snapshot) => void;
+  addNote: (note: Pick<Note, "position" | "objectId" | "local" | "text" | "author">) => Note;
+  updateNote: (id: string, props: Partial<Pick<Note, "text" | "status">>) => void;
+  replyToNote: (id: string, reply: Omit<NoteReply, "at">) => void;
+  deleteNotes: (ids: string[]) => void;
+  setTool: (tool: Tool) => void;
+  openNote: (id: string | null, editing?: boolean) => void;
+  setShowNotes: (show: boolean) => void;
+  setShowResolvedNotes: (show: boolean) => void;
+  setScene: (scene: Partial<Snapshot> & Pick<Snapshot, "objects" | "folders">) => void;
   clearScene: () => void;
   select: (id: string | null, mode?: SelectMode) => void;
   selectMany: (ids: string[]) => void;
@@ -135,10 +155,11 @@ const applyUpdates = (objects: SceneObject[], updates: ObjectUpdate[]) => {
 };
 
 export const useEditor = create<EditorState>((set, get) => {
+  const snapshot = (): Snapshot => ({ objects: get().objects, folders: get().folders, notes: get().notes });
+
   /** Lagrer nåværende tilstand i angre-historikken før en endring. */
   const commit = (next: Partial<Snapshot>, extra: Partial<EditorState> = {}) => {
-    const { past, objects, folders } = get();
-    set({ past: [...past, { objects, folders }].slice(-HISTORY_LIMIT), future: [], ...next, ...extra });
+    set({ past: [...get().past, snapshot()].slice(-HISTORY_LIMIT), future: [], ...next, ...extra });
   };
 
   /** Fjerner valg som peker på objekter som ikke finnes lenger. */
@@ -152,6 +173,8 @@ export const useEditor = create<EditorState>((set, get) => {
     const { activeFolderId } = get();
     return {
       ...snap,
+      notes: snap.notes ?? [],
+      activeNoteId: (snap.notes ?? []).some((n) => n.id === get().activeNoteId) ? get().activeNoteId : null,
       selectedIds: keepSelection(snap.objects),
       activeFolderId: snap.folders.some((f) => f.id === activeFolderId) ? activeFolderId : null,
     };
@@ -160,6 +183,7 @@ export const useEditor = create<EditorState>((set, get) => {
   return {
     objects: [],
     folders: [],
+    notes: [],
     selectedIds: [],
     activeFolderId: null,
     collapsed: {},
@@ -169,6 +193,11 @@ export const useEditor = create<EditorState>((set, get) => {
     past: [],
     future: [],
     bridgeStatus: "disconnected",
+    tool: "select",
+    activeNoteId: null,
+    editingNoteId: null,
+    showNotes: true,
+    showResolvedNotes: false,
     activity: null,
     filePath: null,
 
@@ -392,8 +421,43 @@ export const useEditor = create<EditorState>((set, get) => {
       return result;
     },
 
-    setScene: ({ objects, folders }) => commit({ objects, folders }, { selectedIds: [], activeFolderId: null }),
-    clearScene: () => commit({ objects: [], folders: [] }, { selectedIds: [], activeFolderId: null }),
+    addNote: (props) => {
+      const notes = get().notes;
+      const note: Note = {
+        id: newId("note"),
+        number: notes.reduce((max, n) => Math.max(max, n.number), 0) + 1,
+        status: "open",
+        createdAt: new Date().toISOString(),
+        replies: [],
+        ...props,
+      };
+      commit({ notes: [...notes, note] });
+      return note;
+    },
+    updateNote: (id, props) => {
+      if (!get().notes.some((n) => n.id === id)) throw new Error(`Fant ikke kommentar ${id}`);
+      commit({ notes: get().notes.map((n) => (n.id === id ? { ...n, ...props } : n)) });
+    },
+    replyToNote: (id, reply) => {
+      if (!get().notes.some((n) => n.id === id)) throw new Error(`Fant ikke kommentar ${id}`);
+      const at = new Date().toISOString();
+      commit({ notes: get().notes.map((n) => (n.id === id ? { ...n, replies: [...n.replies, { ...reply, at }] } : n)) });
+    },
+    deleteNotes: (ids) => {
+      const remove = new Set(ids);
+      commit(
+        { notes: get().notes.filter((n) => !remove.has(n.id)) },
+        get().activeNoteId && remove.has(get().activeNoteId!) ? { activeNoteId: null, editingNoteId: null } : {},
+      );
+    },
+    setTool: (tool) => set({ tool }),
+    openNote: (id, editing = false) => set({ activeNoteId: id, editingNoteId: editing ? id : null }),
+    setShowNotes: (showNotes) => set({ showNotes }),
+    setShowResolvedNotes: (showResolvedNotes) => set({ showResolvedNotes }),
+
+    setScene: ({ objects, folders, notes = [] }) =>
+      commit({ objects, folders, notes }, { selectedIds: [], activeFolderId: null, activeNoteId: null }),
+    clearScene: () => commit({ objects: [], folders: [], notes: [] }, { selectedIds: [], activeFolderId: null, activeNoteId: null }),
 
     select: (id, mode = "replace") => {
       if (!id) return set({ selectedIds: [] });
@@ -425,21 +489,18 @@ export const useEditor = create<EditorState>((set, get) => {
     toggleSnap: () => set({ snap: !get().snap }),
     toggleObjectSnap: () => set({ objectSnap: !get().objectSnap }),
 
-    pushHistory: () => {
-      const { past, objects, folders } = get();
-      set({ past: [...past, { objects, folders }].slice(-HISTORY_LIMIT), future: [] });
-    },
+    pushHistory: () => set({ past: [...get().past, snapshot()].slice(-HISTORY_LIMIT), future: [] }),
 
     undo: () => {
-      const { past, future, objects, folders } = get();
+      const { past, future } = get();
       if (!past.length) return;
-      set({ past: past.slice(0, -1), future: [{ objects, folders }, ...future], ...restore(past[past.length - 1]) });
+      set({ past: past.slice(0, -1), future: [snapshot(), ...future], ...restore(past[past.length - 1]) });
     },
 
     redo: () => {
-      const { past, future, objects, folders } = get();
+      const { past, future } = get();
       if (!future.length) return;
-      set({ past: [...past, { objects, folders }], future: future.slice(1), ...restore(future[0]) });
+      set({ past: [...past, snapshot()], future: future.slice(1), ...restore(future[0]) });
     },
 
     setBridgeStatus: (bridgeStatus) => set({ bridgeStatus }),

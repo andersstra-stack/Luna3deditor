@@ -11,6 +11,7 @@ import { geometryOf, getGeometry } from "./geometries";
 import { cutGeometry, overlappingHoles } from "./csg";
 import { snapOffset, type SnapContext } from "./snapping";
 import { setThreeGetter } from "./three-handle";
+import { NoteGroundCatcher, NotePins, placeNote } from "./Notes";
 import { themeColors, useUi } from "../ui/uiStore";
 
 const DEG = Math.PI / 180;
@@ -151,6 +152,12 @@ function useSelectHandler(id: string) {
   return (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     if (gizmoRecentlyUsed()) return;
+    const state = useEditor.getState();
+    if (state.tool === "note") {
+      // Pinneverktøyet: fest en kommentar der det ble klikket på objektet.
+      placeNote(e.point.clone(), state.objects.find((o) => o.id === id));
+      return;
+    }
     const multi = e.nativeEvent.ctrlKey || e.nativeEvent.metaKey || e.nativeEvent.shiftKey;
     useEditor.getState().select(id, multi ? "toggle" : "replace");
   };
@@ -291,14 +298,19 @@ function useThemeColors() {
 
 export function Viewport() {
   const select = useEditor((s) => s.select);
+  const placingNote = useEditor((s) => s.tool === "note");
   const colors = useThemeColors();
   return (
     <Canvas
       shadows="percentage"
       camera={{ position: [6, 5, 8], fov: 50, near: 0.05, far: 1000 }}
       gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }}
+      style={placingNote ? { cursor: "crosshair" } : undefined}
       onPointerMissed={(e) => {
-        if (e.button === 0 && !gizmoRecentlyUsed() && !e.ctrlKey && !e.shiftKey) select(null);
+        if (e.button !== 0 || gizmoRecentlyUsed() || e.ctrlKey || e.shiftKey) return;
+        select(null);
+        const s = useEditor.getState();
+        if (s.activeNoteId && s.editingNoteId !== s.activeNoteId) s.openNote(null);
       }}
     >
       <ThreeBridge />
@@ -330,6 +342,8 @@ export function Viewport() {
         fadeStrength={1.5}
       />
       <Scene accent={colors.accent} />
+      <NotePins />
+      <NoteGroundCatcher />
       <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
       <GizmoHelper alignment="bottom-right" margin={[72, 72]}>
         <GizmoViewport axisColors={["#f7768e", "#9ece6a", "#7aa2f7"]} labelColor="#1d2030" />

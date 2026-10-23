@@ -2,7 +2,9 @@ import { useEditor, type FolderUpdate } from "../store";
 import { exportGlb, openScene, saveScene } from "../io";
 import { importModelFile } from "../importer";
 import { ADDABLE_SHAPES, type SceneObject, type ScriptOp, type ShapeType, type Vec3 } from "../types";
-import type { Axis } from "../bounds";
+import * as THREE from "three";
+import { round, type Axis } from "../bounds";
+import { anchorNote, noteWorldPosition, topOf } from "../notes";
 import { applyScriptOps, sceneForScripts } from "../scripting";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { captureViewport, frameScene, VIEWS, type ViewName } from "../viewport/three-handle";
@@ -30,9 +32,63 @@ function checkView(view: unknown): ViewName {
 
 const summary = (o: SceneObject) => ({ id: o.id, name: o.name, type: o.type });
 
+/** En pinne etter id eller nummer. */
+function findNote(ref: unknown) {
+  const note = editor().notes.find((n) => n.id === ref || n.number === Number(ref));
+  if (!note) throw new Error(`Fant ikke pinne ${ref}`);
+  return note;
+}
+
 export const handlers: Record<BridgeMethod, Handler> = {
   // Nøyaktige omsluttende bokser (verdensrom) gjør det lett å plassere ting inntil hverandre.
   get_scene: () => sceneForScripts(),
+
+  get_notes: (p) => {
+    const { notes, objects } = editor();
+    const all = p.include_resolved === true;
+    return notes
+      .filter((n) => all || n.status === "open")
+      .map((n) => {
+        const obj = n.objectId ? objects.find((o) => o.id === n.objectId) : undefined;
+        return {
+          id: n.id,
+          number: n.number,
+          text: n.text,
+          author: n.author,
+          status: n.status,
+          object: obj ? { id: obj.id, name: obj.name } : null,
+          position: noteWorldPosition(n, objects).toArray().map((v) => round(v)),
+          replies: n.replies,
+        };
+      });
+  },
+
+  add_note: (p) => {
+    const text = requireString(p, "text");
+    const state = editor();
+    const obj = p.objectId ? state.objects.find((o) => o.id === p.objectId) : undefined;
+    if (p.objectId && !obj) throw new Error(`Fant ikke objekt ${p.objectId}`);
+    const point = p.position ? new THREE.Vector3(...(p.position as Vec3)) : obj ? topOf(obj) : null;
+    if (!point) throw new Error("Oppgi objectId eller position");
+    const note = state.addNote({ ...anchorNote(point, obj), text, author: "claude" });
+    state.setShowNotes(true);
+    say(`satte pinne ${note.number}`);
+    return { id: note.id, number: note.number };
+  },
+
+  reply_to_note: (p) => {
+    const note = findNote(p.note);
+    if (typeof p.text === "string" && p.text.trim()) editor().replyToNote(note.id, { author: "claude", text: p.text.trim() });
+    if (p.status === "open" || p.status === "done") editor().updateNote(note.id, { status: p.status });
+    say(p.status === "done" ? `løste pinne ${note.number}` : `svarte på pinne ${note.number}`);
+    return { id: note.id, number: note.number, status: editor().notes.find((n) => n.id === note.id)?.status };
+  },
+
+  delete_notes: (p) => {
+    const ids = (p.notes as (string | number)[]).map((ref) => findNote(ref).id);
+    editor().deleteNotes(ids);
+    return { deleted: ids.length };
+  },
 
   apply_script: (p) => {
     const ops = p.ops as ScriptOp[];

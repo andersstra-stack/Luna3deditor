@@ -28,6 +28,10 @@ export const BRIDGE_METHODS = [
   "export_glb",
   "import_model",
   "apply_script",
+  "get_notes",
+  "add_note",
+  "reply_to_note",
+  "delete_notes",
 ] as const;
 export type BridgeMethod = (typeof BRIDGE_METHODS)[number];
 

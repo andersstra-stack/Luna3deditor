@@ -183,6 +183,12 @@ save_to (e.g. a "skript" folder next to the user's scene). Objects made from a s
 running the same file again REPLACES what it made last time (folders with the same name are reused), so iterate by
 re-running the same save_to path. Inline code without save_to only adds. Examples: scripting/eksempler in the Luna 3D repo.
 
+Comment pins (notes): the user can drop numbered pins with comments on objects or the ground ("this must change",
+"move the door here"). When the user mentions pins, comments or "nålene"/"kommentarene", call get_notes – each note has
+its text, the object it's on and a world position. Do the work, then reply_to_note with what you did and status "done".
+Pins also appear (numbered) in screenshots. You may add_note yourself to point at problems or give constructive feedback
+in place (e.g. a gap between walls) – keep it short and actionable.
+
 Folders: purely organizational (like a file tree) — they have no transform of their own and can be nested.
 For anything with more than a handful of parts, put parts in descriptive folders (e.g. "House" > "Roof", "Walls").
 Create folders first with create_folders, then pass folderId in add_objects. Hidden folders hide everything inside them.
@@ -510,6 +516,56 @@ server.registerTool(
       rmSync(tmp, { recursive: true, force: true });
     }
   },
+);
+
+server.registerTool(
+  "get_notes",
+  {
+    title: "Get comment pins",
+    description:
+      "List the comment pins in the scene (open ones by default): number, text, author (user/claude), the object it's pinned to, world position and replies.",
+    inputSchema: { include_resolved: z.boolean().optional().describe("Also include pins marked as done.") },
+  },
+  ({ include_resolved }) => run("get_notes", { include_resolved }),
+);
+
+server.registerTool(
+  "add_note",
+  {
+    title: "Add comment pin",
+    description:
+      "Pin a comment to an object (default: top center of it) or to a world position, e.g. to point out a problem or ask the user something about a specific spot.",
+    inputSchema: {
+      text: z.string().describe("The comment (Norwegian, short and actionable)."),
+      objectId: z.string().optional().describe("Object to pin to – the pin follows it when it moves."),
+      position: vec3.optional().describe("Exact world point for the pin (on the object's surface if objectId is given)."),
+    },
+  },
+  ({ text, objectId, position }) => run("add_note", { text, objectId, position }),
+);
+
+server.registerTool(
+  "reply_to_note",
+  {
+    title: "Reply to comment pin",
+    description: "Reply to a pin (by id or number) and/or mark it done or open again. Use status 'done' when you have handled it.",
+    inputSchema: {
+      note: z.union([z.string(), z.number()]).describe("Pin id or its number"),
+      text: z.string().optional().describe("Reply text, e.g. what you changed."),
+      status: z.enum(["open", "done"]).optional(),
+    },
+  },
+  ({ note, text, status }) => run("reply_to_note", { note, text, status }),
+);
+
+server.registerTool(
+  "delete_notes",
+  {
+    title: "Delete comment pins",
+    description: "Delete pins by id or number. Prefer reply_to_note with status 'done' so the user keeps the history.",
+    inputSchema: { notes: z.array(z.union([z.string(), z.number()])).min(1) },
+  },
+  ({ notes }) => run("delete_notes", { notes }),
 );
 
 server.registerTool(

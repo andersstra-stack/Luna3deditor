@@ -270,7 +270,7 @@ export function Outliner() {
   const empty = objects.length === 0 && folders.length === 0;
 
   return (
-    <aside className="panel outliner">
+    <div className="outliner">
       <div className="panel-header">
         <h2>Scene</h2>
         <button className="icon-btn small" title="Ny mappe" onClick={newFolder}>
@@ -305,6 +305,6 @@ export function Outliner() {
         {renderLevel(null, 0)}
         {dragging && <li className="root-drop">Slipp her for å flytte ut av mappene</li>}
       </ul>
-    </aside>
+    </div>
   );
 }

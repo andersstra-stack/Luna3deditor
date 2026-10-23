@@ -29,6 +29,10 @@ MCP-verktøybeskrivelser er på engelsk.
   Nye egenskaper/former må legges inn i både `luna3d.py` (PROPS/SHAPES) og appen. Objekter/mapper fra en skriptfil får
   `script` (normalisert sti, `scriptKey`); ny kjøring av samme fil erstatter dem (mapper med samme navn gjenbrukes).
   Kopier og innlimte objekter mister merket.
+- Kommentar-pinner: `notes` i `Snapshot` (angre-historikk) og scenefila. En pinne er festet til et objekt via
+  `local` (objektets koordinater), se `src/notes.ts`. Vises som DOM (`viewport/Notes.tsx`, drei `Html`) og tegnes inn i
+  skjermbilder i `captureViewport`. Når brukeren nevner pinner/kommentarer: `get_notes`, gjør jobben, `reply_to_note`
+  med status `done`.
 - `src/bridge/` – `protocol.ts` deles med MCP-serveren (ingen imports!), `commands.ts` er handlerne
   appen kjører, `useMcpBridge.ts` er WebSocket-klienten med auto-reconnect.
 - `mcp-server/index.ts` – kjøres direkte av Node 24 (type stripping, ingen build): kun slettbar
