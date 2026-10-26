@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { MeshAsset, SceneObject, SerializedMesh } from "./types";
+import type { MeshAsset, SceneObject, SerializedMesh, SerializedTexture, TextureAsset } from "./types";
 
 /**
  * Register over geometrien til importerte modeller. Geometrien endres aldri etter
@@ -27,6 +27,7 @@ export function meshGeometry(id: string): THREE.BufferGeometry {
     geo.setAttribute("normal", new THREE.BufferAttribute(asset.normals, 3));
     if (asset.index) geo.setIndex(new THREE.BufferAttribute(asset.index, 1));
     if (asset.colors) geo.setAttribute("color", new THREE.BufferAttribute(linearColors(asset.colors), 3));
+    if (asset.uvs) geo.setAttribute("uv", new THREE.BufferAttribute(asset.uvs, 2));
     geo.computeBoundingBox();
     geo.computeBoundingSphere();
     geometries.set(id, geo);
@@ -61,6 +62,66 @@ export function vertexHexes(geo: THREE.BufferGeometry): string[] | null {
 export const hasVertexColors = (o: Pick<SceneObject, "type" | "meshId">) =>
   o.type === "mesh" && !!o.meshId && !!assets.get(o.meshId)?.colors;
 
+// ---------- Teksturer ----------
+// Bildene ligger i et eget register (også utenfor angre-historikken), så alle delene av en modell deler ett bilde.
+
+const textureAssets = new Map<string, TextureAsset>();
+const textures = new Map<string, THREE.Texture>();
+
+/** FNV-1a over bytene + lengden – samme bilde gir samme id. */
+export function textureIdOf(data: Uint8Array): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < data.length; i++) {
+    h ^= data[i];
+    h = Math.imul(h, 0x01000193);
+  }
+  return `tex_${(h >>> 0).toString(36)}_${data.length.toString(36)}`;
+}
+
+export function registerTexture(asset: TextureAsset) {
+  if (!textureAssets.has(asset.id)) textureAssets.set(asset.id, asset);
+}
+
+export const hasTexture = (id: string | undefined) => !!id && textureAssets.has(id);
+
+/** three-teksturen til et bilde i registeret. Bildet lastes asynkront; teksturen oppdateres når det er klart. */
+export function textureById(id: string): THREE.Texture | null {
+  let tex = textures.get(id);
+  if (!tex) {
+    const asset = textureAssets.get(id);
+    if (!asset) return null;
+    const img = new Image();
+    tex = new THREE.Texture(img);
+    tex.name = id;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    // UV-ene er lagret med v = 0 øverst (som i glTF).
+    tex.flipY = false;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = 8;
+    // GLTFExporter bruker dette formatet når bildet skrives inn i GLB-en (ellers PNG, som blir mye større).
+    tex.userData.mimeType = asset.mime;
+    const url = URL.createObjectURL(new Blob([asset.data as BlobPart], { type: asset.mime }));
+    const t = tex;
+    img.onload = () => {
+      t.needsUpdate = true;
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+    textures.set(id, tex);
+  }
+  return tex;
+}
+
+/** Teksturen et objekt vises med, eller null (vanlige former og modeller uten tekstur). */
+export function textureFor(o: Pick<SceneObject, "type" | "meshId">): THREE.Texture | null {
+  const id = o.type === "mesh" && o.meshId ? assets.get(o.meshId)?.textureId : undefined;
+  return id ? textureById(id) : null;
+}
+
+/** Har objektet en importert tekstur? */
+export const hasTextureMap = (o: Pick<SceneObject, "type" | "meshId">) =>
+  o.type === "mesh" && !!o.meshId && !!assets.get(o.meshId)?.textureId;
+
 // ---------- Lagring (base64) ----------
 
 function toBase64(view: ArrayBufferView): string {
@@ -86,6 +147,8 @@ export function serializeMesh(a: MeshAsset): SerializedMesh {
     normals: toBase64(a.normals),
     ...(a.index ? { index: toBase64(a.index) } : {}),
     ...(a.colors ? { colors: toBase64(a.colors) } : {}),
+    ...(a.uvs ? { uvs: toBase64(a.uvs) } : {}),
+    ...(a.textureId ? { textureId: a.textureId } : {}),
   };
 }
 
@@ -97,11 +160,27 @@ export function deserializeMesh(m: SerializedMesh): MeshAsset {
     normals: new Float32Array(fromBase64(m.normals)),
     ...(m.index ? { index: new Uint32Array(fromBase64(m.index)) } : {}),
     ...(m.colors ? { colors: new Uint8Array(fromBase64(m.colors)) } : {}),
+    // En modell hvis tekstur mangler (f.eks. limt inn fra en eldre versjon) vises uten tekstur.
+    ...(m.uvs && hasTexture(m.textureId) ? { uvs: new Float32Array(fromBase64(m.uvs)), textureId: m.textureId } : {}),
   };
+}
+
+export function serializeTexture(t: TextureAsset): SerializedTexture {
+  return { id: t.id, mime: t.mime, data: toBase64(t.data) };
+}
+
+export function deserializeTexture(t: SerializedTexture): TextureAsset {
+  return { id: t.id, mime: t.mime, data: new Uint8Array(fromBase64(t.data)) };
 }
 
 /** Modellene som objektene faktisk bruker, klare for lagring. */
 export function serializeUsedMeshes(objects: SceneObject[]): SerializedMesh[] {
   const ids = new Set(objects.map((o) => o.meshId).filter((id): id is string => hasMesh(id)));
   return [...ids].map((id) => serializeMesh(assets.get(id)!));
+}
+
+/** Teksturene de modellene bruker. Registreres før modellene når de leses inn igjen. */
+export function serializeUsedTextures(objects: SceneObject[]): SerializedTexture[] {
+  const ids = new Set(objects.map((o) => (o.meshId ? assets.get(o.meshId)?.textureId : undefined)).filter((id): id is string => hasTexture(id)));
+  return [...ids].map((id) => serializeTexture(textureAssets.get(id)!));
 }

@@ -121,6 +121,10 @@ export function splitLooseParts(ids: string[]): SplitResult {
       result.skipped.push({ name: obj.name, reason: "ikke en importert modell" });
       continue;
     }
+    if (asset.textureId) {
+      result.skipped.push({ name: obj.name, reason: "har tekstur – deles ikke opp" });
+      continue;
+    }
     const parts = looseParts(asset);
     if (parts.length < 2) {
       result.skipped.push({ name: obj.name, reason: "henger sammen i én bit" });

@@ -37,7 +37,11 @@ MCP-verktøybeskrivelser er på engelsk.
   med `store.replaceObjects` som ett angre-steg). «Slå sammen»: `src/meshMerge.ts` (baker geometrien i verdensrom, snur
   trekantene for speilede objekter, normaliserer igjen). Hver del beholder fargen: `MeshAsset.colors` (sRGB-byte per hjørne,
   lineært `color`-attributt i geometrien, også gjennom CSG); «Del opp» gjør ensfargede biter til vanlige modeller igjen.
-  Modeller speiles med negativ størrelse (de er ikke symmetriske). Egne former: `type: "mesh"` med `vertices`/`triangles`
+  Modeller speiles med negativ størrelse (de er ikke symmetriske).
+  Fotografiske teksturer (mer enn 24 farger, ett bilde per mesh, med UV) beholdes i stedet: `MeshAsset.uvs` (v = 0 øverst,
+  teksturens forskyvning bakt inn) + `textureId` i teksturregisteret i `meshes.ts` (bildet som JPEG/PNG, id = hash av
+  bytene, `textures` i scenefila og utklippstavla). `textureFor(o)` gir three-teksturen til visning og eksport (eget
+  materiale per tekstur). UV følger med gjennom CSG; «Slå sammen»/«Del opp» hopper over teksturerte modeller. Egne former: `type: "mesh"` med `vertices`/`triangles`
   (formens eget rom; `position` = origo, `rotation` rundt det) i `src/customMesh.ts` – id-en er en hash av formen, så like
   former deles i registeret. Geometrien kan ikke oppdateres (lag nytt objekt). Skript med mer enn 25 nye objekter svarer
   Claude med antall (`compactScriptResult` i `commands.ts`), ikke id-er.

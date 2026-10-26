@@ -9,7 +9,17 @@ import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferG
 import { boxOf, objectMatrix, objectQuaternion, round } from "./bounds";
 import { sceneMeshes } from "./viewport/three-handle";
 import { buildPalette } from "./palette";
-import { deserializeMesh, hasMesh, registerMesh, serializeUsedMeshes, vertexHexes } from "./meshes";
+import {
+  deserializeMesh,
+  deserializeTexture,
+  hasMesh,
+  registerMesh,
+  registerTexture,
+  serializeUsedMeshes,
+  serializeUsedTextures,
+  textureFor,
+  vertexHexes,
+} from "./meshes";
 import { isPivotNode, makeAnimator } from "./animation";
 
 type Animator = ReturnType<typeof makeAnimator>;
@@ -20,7 +30,17 @@ const SCENE_FILTER = { name: "Luna 3D-scene", extensions: ["luna.json", "json"] 
 
 export function serializeScene(): SceneFile {
   const { objects, folders, notes, clips } = useEditor.getState();
-  return { format: "luna3d", version: 3, objects, folders, notes, ...(clips.length ? { clips } : {}), meshes: serializeUsedMeshes(objects) };
+  const textures = serializeUsedTextures(objects);
+  return {
+    format: "luna3d",
+    version: 3,
+    objects,
+    folders,
+    notes,
+    ...(clips.length ? { clips } : {}),
+    meshes: serializeUsedMeshes(objects),
+    ...(textures.length ? { textures } : {}),
+  };
 }
 
 function parseScene(text: string): Snapshot {
@@ -29,7 +49,8 @@ function parseScene(text: string): Snapshot {
   for (const o of data.objects) {
     if (!SHAPES.includes(o.type)) throw new Error(`Ukjent objekttype: ${o.type}`);
   }
-  // Versjon 1 hadde ikke mapper, versjon 2 ikke importerte modeller.
+  // Versjon 1 hadde ikke mapper, versjon 2 ikke importerte modeller. Teksturene før modellene som bruker dem.
+  for (const t of data.textures ?? []) registerTexture(deserializeTexture(t));
   for (const m of data.meshes ?? []) registerMesh(deserializeMesh(m));
   const folders: Folder[] = Array.isArray(data.folders) ? data.folders : [];
   const folderIds = new Set(folders.map((f) => f.id));
@@ -165,47 +186,70 @@ export async function buildGlb(base: string) {
 
   // Delene som eksporteres (hull og lys er editor-hjelpere; hullene er allerede skåret ut av geometrien).
   const solids = objects.filter((o) => !isNode(o.type) && !isLight(o.type) && !o.hole && shown(o) && meshById.has(o.id));
+  // Importerte modeller med fotografisk tekstur beholder bildet og UV-ene sine (eget materiale per tekstur).
+  const textureOf = new Map(
+    solids.flatMap((o) => {
+      const t = meshById.get(o.id)!.geometry.getAttribute("uv") ? textureFor(o) : null;
+      return t ? [[o.id, t] as const] : [];
+    }),
+  );
+  const paletted = solids.filter((o) => !textureOf.has(o.id));
   // Farge per hjørne for sammenslåtte modeller med flere farger, ellers delens egen farge.
-  const hexes = new Map(solids.map((o) => [o.id, vertexHexes(meshById.get(o.id)!.geometry)]));
+  const hexes = new Map(paletted.map((o) => [o.id, vertexHexes(meshById.get(o.id)!.geometry)]));
   const palette = buildPalette(
-    solids.flatMap((o) => [...new Set(hexes.get(o.id) ?? [o.color])].map((color) => ({ color, emissive: o.emissive }))),
+    paletted.flatMap((o) => [...new Set(hexes.get(o.id) ?? [o.color])].map((color) => ({ color, emissive: o.emissive }))),
   );
 
   // Ett materiale per materialnavn og utseende (metall, ruhet, gjennomsiktighet) – alle bruker samme palett.
+  // Teksturerte deler får ett materiale per tekstur og farge i tillegg.
   const materials = new Map<string, THREE.MeshStandardMaterial>();
   const paletteNames = new Set<string>();
-  const materialKey = (o: SceneObject) =>
-    `${o.material ?? ""}|${round(o.metalness, 0.01)}|${round(o.roughness, 0.01)}|${round(o.opacity, 0.01)}`;
+  const materialKey = (o: SceneObject) => {
+    const tex = textureOf.get(o.id);
+    return `${o.material ?? ""}|${round(o.metalness, 0.01)}|${round(o.roughness, 0.01)}|${round(o.opacity, 0.01)}${tex ? `|${tex.name}|${o.color}|${round(o.emissive ?? 0, 0.01)}` : ""}`;
+  };
   const materialFor = (o: SceneObject) => {
     const key = materialKey(o);
+    const tex = textureOf.get(o.id);
     let m = materials.get(key);
     if (!m) {
-      let name = o.material ?? `${base}_palette`;
+      let name = o.material ?? (tex ? `${base}_texture` : `${base}_palette`);
       if (!o.material) {
-        for (let i = 2; paletteNames.has(name); i++) name = `${base}_palette_${i}`;
+        const stem = name;
+        for (let i = 2; paletteNames.has(name); i++) name = `${stem}_${i}`;
         paletteNames.add(name);
       }
       m = new THREE.MeshStandardMaterial({
         name,
-        map: palette.map,
+        map: tex ?? palette.map,
+        ...(tex ? { color: o.color } : {}),
         metalness: o.metalness,
         roughness: o.roughness,
         transparent: o.opacity < 1,
         opacity: o.opacity,
       });
+      if (tex && (o.emissive ?? 0) > 0) {
+        m.emissive = new THREE.Color(o.color).multiplyScalar(o.emissive!);
+        m.emissiveMap = tex;
+      }
       materials.set(key, m);
     }
-    if ((o.emissive ?? 0) > 0 && palette.emissive && !m.emissiveMap) {
+    if (!tex && (o.emissive ?? 0) > 0 && palette.emissive && !m.emissiveMap) {
       m.emissive = new THREE.Color(1, 1, 1);
       m.emissiveMap = palette.emissive;
     }
     return m;
   };
 
-  /** Delens geometri med UV-er som peker på fargens rute i paletten (posisjon, normal og uv – ikke hjørnefarger). */
+  /**
+   * Delens geometri med UV-er som peker på fargens rute i paletten (posisjon, normal og uv – ikke hjørnefarger).
+   * Teksturerte deler beholder sine egne UV-er.
+   */
   const paletteGeometry = (o: SceneObject) => {
     const geometry = meshById.get(o.id)!.geometry.clone();
-    for (const name of Object.keys(geometry.attributes)) if (name !== "position" && name !== "normal") geometry.deleteAttribute(name);
+    const keep = textureOf.has(o.id) ? ["position", "normal", "uv"] : ["position", "normal"];
+    for (const name of Object.keys(geometry.attributes)) if (!keep.includes(name)) geometry.deleteAttribute(name);
+    if (textureOf.has(o.id)) return geometry;
     const perVertex = hexes.get(o.id);
     const uv = new Float32Array(geometry.getAttribute("position").count * 2);
     for (let i = 0; i < uv.length / 2; i++) uv.set(palette.uvOf(perVertex ? perVertex[i] : o.color, o.emissive), i * 2);

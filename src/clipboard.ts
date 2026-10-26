@@ -1,6 +1,14 @@
 import { useEditor } from "./store";
-import { SHAPES, type SceneObject, type SerializedMesh, type Vec3 } from "./types";
-import { deserializeMesh, hasMesh, registerMesh, serializeUsedMeshes } from "./meshes";
+import { SHAPES, type SceneObject, type SerializedMesh, type SerializedTexture, type Vec3 } from "./types";
+import {
+  deserializeMesh,
+  deserializeTexture,
+  hasMesh,
+  registerMesh,
+  registerTexture,
+  serializeUsedMeshes,
+  serializeUsedTextures,
+} from "./meshes";
 
 /**
  * Kopier / klipp ut / lim inn av objekter via systemets utklippstavle (som JSON).
@@ -14,6 +22,7 @@ interface ClipboardData {
   objects: SceneObject[];
   /** Geometri for importerte modeller, så de kan limes inn i et annet vindu. */
   meshes?: SerializedMesh[];
+  textures?: SerializedTexture[];
 }
 
 // Gjentatte innliminger av samme kopi forskyves 1 m hver gang, så de ikke havner oppå hverandre.
@@ -26,7 +35,12 @@ export function copySelection(cut = false): string | null {
   const { objects, selectedIds, deleteObjects, setActivity } = useEditor.getState();
   const selected = objects.filter((o) => selectedIds.includes(o.id));
   if (!selected.length) return null;
-  const text = JSON.stringify({ format: FORMAT, objects: selected, meshes: serializeUsedMeshes(selected) } satisfies ClipboardData);
+  const text = JSON.stringify({
+    format: FORMAT,
+    objects: selected,
+    meshes: serializeUsedMeshes(selected),
+    textures: serializeUsedTextures(selected),
+  } satisfies ClipboardData);
   lastText = text;
   lastWasCut = cut;
   pasteCount = 0;
@@ -40,6 +54,7 @@ function parse(text: string): SceneObject[] | null {
   try {
     const data = JSON.parse(text) as Partial<ClipboardData>;
     if (data.format !== FORMAT || !Array.isArray(data.objects)) return null;
+    for (const t of data.textures ?? []) registerTexture(deserializeTexture(t));
     for (const m of data.meshes ?? []) if (!hasMesh(m.id)) registerMesh(deserializeMesh(m));
     return data.objects.filter((o) => SHAPES.includes(o.type) && (o.type !== "mesh" || hasMesh(o.meshId)));
   } catch {

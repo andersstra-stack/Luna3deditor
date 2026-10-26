@@ -6,7 +6,7 @@
 
 import * as THREE from "three";
 import { newId, useEditor } from "./store";
-import { registerMesh, vertexHexes } from "./meshes";
+import { hasTextureMap, registerMesh, vertexHexes } from "./meshes";
 import { objectMatrix, round } from "./bounds";
 import { geometryOf } from "./viewport/geometries";
 import { isHelper, type SceneObject, type Vec3 } from "./types";
@@ -34,6 +34,7 @@ export function mergeObjects(ids: string[]): MergeResult {
   for (const o of objs) {
     if (isHelper(o.type)) skipped.push({ name: o.name, reason: "lys og noder slås ikke sammen" });
     else if (o.hole) skipped.push({ name: o.name, reason: "er et hull" });
+    else if (hasTextureMap(o)) skipped.push({ name: o.name, reason: "har tekstur – slås ikke sammen" });
     else parts.push(o);
   }
   if (parts.length < 2) throw new Error("Velg minst to former eller modeller å slå sammen");

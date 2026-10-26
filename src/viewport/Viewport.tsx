@@ -8,6 +8,7 @@ import { hiddenFolderIds } from "../folders";
 import { boxOf, objectBox, objectMatrix, round } from "../bounds";
 import { isHelper, isLight, isNode, type SceneObject, type Vec3 } from "../types";
 import { geometryKey, geometryOf, getGeometry } from "./geometries";
+import { textureFor } from "../meshes";
 import { cutGeometry, overlappingHoles } from "./csg";
 import { snapOffset, type SnapContext } from "./snapping";
 import { setThreeGetter } from "./three-handle";
@@ -303,6 +304,9 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
   useEffect(() => () => void (isCut && geometry.dispose()), [geometry, isCut]);
   // Sammenslåtte modeller med flere farger har farge per hjørne; da er materialet hvitt.
   const colored = !!geometry.getAttribute("color");
+  // Importerte modeller med fotografisk tekstur: bildet farges med objektets farge (hvit = som i fila).
+  const texture = geometry.getAttribute("uv") ? textureFor(obj) : null;
+  const look = `${colored ? "vertex-colors" : "color"}${texture ? "+map" : ""}`;
 
   return (
     <mesh
@@ -320,8 +324,9 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
       {toon && !obj.hole ? (
         // Tegneserie: flate lystrinn (metall/ruhet brukes ikke).
         <meshToonMaterial
-          key={colored ? "toon-vertex-colors" : "toon"}
+          key={`toon-${look}`}
           vertexColors={colored}
+          map={texture}
           color={colored ? "#ffffff" : obj.color}
           gradientMap={TOON_GRADIENT}
           emissive={obj.color}
@@ -334,8 +339,9 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
       ) : (
         <meshStandardMaterial
           // Ny nøkkel når hjørnefargene kommer/går – three må kompilere shaderen på nytt.
-          key={colored ? "vertex-colors" : "color"}
+          key={look}
           vertexColors={colored}
+          map={texture}
           color={colored ? "#ffffff" : obj.color}
           metalness={obj.metalness}
           roughness={obj.roughness}

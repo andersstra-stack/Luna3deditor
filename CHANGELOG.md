@@ -10,6 +10,14 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Tekstur på importerte modeller**: modeller med fotografisk tekstur (AI-genererte fra Tripo o.l., skannede modeller)
+  vises nå med bildet sitt i stedet for én farge per trekant – paneler, lys og merker som er malt inn i teksturen kommer
+  med. Teksturen lagres i scenefila, følger med ved kopier/lim inn og gjennom hull, og eksporteres i GLB-en som et eget
+  materiale ved siden av paletten (også inne i «Én modell»). Fargen på objektet farger teksturen (hvit = som i fila).
+  Lowpoly-modeller med fargepalett-bilder deles fortsatt opp i én del per farge. Teksturerte modeller kan ikke slås
+  sammen eller deles opp ennå.
+
 ## [0.14.2] — 2026-10-26
 
 ### Changed

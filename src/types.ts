@@ -162,6 +162,25 @@ export interface MeshAsset {
    * én farge (objektets `color`). Eksporten legger hver farge i paletten.
    */
   colors?: Uint8Array;
+  /**
+   * Importert tekstur (fotografiske teksturer fra AI-/skannemodeller): UV per hjørne (glTF-konvensjon, v = 0 øverst)
+   * og bildet i teksturregisteret. Objektets `color` farger teksturen (hvit = som i fila).
+   */
+  uvs?: Float32Array;
+  textureId?: string;
+}
+
+/** Et bilde i teksturregisteret (`src/meshes.ts`). Id-en er en hash av bildet, så like teksturer deles. */
+export interface TextureAsset {
+  id: string;
+  mime: string;
+  data: Uint8Array;
+}
+
+export interface SerializedTexture {
+  id: string;
+  mime: string;
+  data: string;
 }
 
 /** Mapper er kun for organisering – de har ingen egen posisjon. */
@@ -251,6 +270,8 @@ export interface SceneFile {
   folders: Folder[];
   /** Geometri for importerte modeller (versjon 3+). */
   meshes?: SerializedMesh[];
+  /** Teksturene modellene bruker (base64). */
+  textures?: SerializedTexture[];
   /** Kommentar-pinner. */
   notes?: Note[];
   /** Animasjonsklipp. */
@@ -264,6 +285,8 @@ export interface SerializedMesh {
   normals: string;
   index?: string;
   colors?: string;
+  uvs?: string;
+  textureId?: string;
 }
 
 /**

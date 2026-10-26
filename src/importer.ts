@@ -8,7 +8,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { newId, useEditor } from "./store";
-import { registerMesh } from "./meshes";
+import { registerMesh, registerTexture, textureIdOf } from "./meshes";
 import { round } from "./bounds";
 import { fbxUserProps } from "./fbxProps";
 import { DEFAULT_COLORS, type NodeProps, type Vec3 } from "./types";
@@ -39,6 +39,8 @@ interface Part {
   materialName?: string;
   geometry: THREE.BufferGeometry;
   color: string;
+  /** Fotografisk tekstur: geometrien har `uv` og bildet ligger i teksturregisteret. */
+  textureId?: string;
   opacity: number;
   metalness: number;
   roughness: number;
@@ -65,6 +67,8 @@ export interface ImportResult {
   size: Vec3;
   /** Teksturfiler som ble funnet og brukt til farger. */
   textures: string[];
+  /** Deler som vises med teksturen sin (fotografiske teksturer) i stedet for én farge per trekant. */
+  textured: number;
 }
 
 const extensionOf = (name: string) => name.split(".").pop()?.toLowerCase() ?? "";
@@ -310,17 +314,75 @@ function splitByColor(geometry: THREE.BufferGeometry, colors: string[]): { color
   });
 }
 
-/** Plukker ut alle mesher i verdensrom, delt opp etter farge. */
-function extractParts(root: THREE.Object3D, fallbackName: string): Part[] {
+// ---------- Fotografiske teksturer ----------
+
+/** Teksturer i lagringsformat, per bilde – flere mesher deler ofte samme bilde. */
+const encodedTextures = new WeakMap<object, Promise<string>>();
+
+/** Legger bildet i teksturregisteret (JPEG, eller PNG hvis materialet er gjennomsiktig) og gir id-en. */
+function storeTexture(map: THREE.Texture, alpha: boolean): Promise<string> {
+  const img = map.image as CanvasImageSource & { width: number; height: number };
+  let pending = encodedTextures.get(img);
+  if (!pending) {
+    pending = (async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0);
+      const mime = alpha ? "image/png" : "image/jpeg";
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, mime, 0.92));
+      if (!blob) throw new Error("Kunne ikke lese teksturen");
+      const data = new Uint8Array(await blob.arrayBuffer());
+      const id = textureIdOf(data);
+      registerTexture({ id, mime, data });
+      return id;
+    })();
+    encodedTextures.set(img, pending);
+  }
+  return pending;
+}
+
+/** UV-ene med teksturens forskyvning/gjentakelse bakt inn, og med v = 0 øverst (glTF), som teksturregisteret bruker. */
+function bakedUvs(uv: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, map: THREE.Texture): Float32Array {
+  map.updateMatrix();
+  const out = new Float32Array(uv.count * 2);
+  const v = new THREE.Vector2();
+  for (let i = 0; i < uv.count; i++) {
+    v.set(uv.getX(i), uv.getY(i)).applyMatrix3(map.matrix);
+    out[i * 2] = v.x;
+    out[i * 2 + 1] = map.flipY ? 1 - v.y : v.y;
+  }
+  return out;
+}
+
+/**
+ * Har meshen et fotografisk bilde (AI- og skannemodeller)? Da beholdes teksturen. Fargepalett-bilder i lowpoly-modeller
+ * (få farger) deles heller opp i én del per farge, så fargene kan endres og eksporteres i paletten.
+ */
+function photoTexture(mesh: THREE.Mesh, colors: string[] | null): THREE.Texture | null {
+  const materials = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as THREE.MeshStandardMaterial[];
+  const map = materials[0]?.map;
+  if (!(map?.image as { width?: number } | undefined)?.width || !mesh.geometry.getAttribute("uv")) return null;
+  if (materials.some((m) => m?.map !== map)) return null;
+  return colors && new Set(colors).size > MAX_COLORS_PER_MESH ? map : null;
+}
+
+/** Plukker ut alle mesher i verdensrom, delt opp etter farge (eller med teksturen sin). */
+async function extractParts(root: THREE.Object3D, fallbackName: string): Promise<Part[]> {
   root.updateMatrixWorld(true);
-  const parts: Part[] = [];
+  const meshes: THREE.Mesh[] = [];
   root.traverse((node) => {
     const mesh = node as THREE.Mesh;
-    if (!mesh.isMesh || !mesh.geometry?.getAttribute("position")) return;
+    if (mesh.isMesh && mesh.geometry?.getAttribute("position")) meshes.push(mesh);
+  });
+  const parts: Part[] = [];
+  for (const mesh of meshes) {
     const colors = triangleColors(mesh, mesh.geometry);
+    const photo = photoTexture(mesh, colors);
 
     const geometry = mesh.geometry.clone();
     for (const attr of Object.keys(geometry.attributes)) if (attr !== "position" && attr !== "normal") geometry.deleteAttribute(attr);
+    if (photo) geometry.setAttribute("uv", new THREE.BufferAttribute(bakedUvs(mesh.geometry.getAttribute("uv"), photo), 2));
     geometry.morphAttributes = {};
     geometry.clearGroups();
     if (!geometry.getAttribute("normal")) geometry.computeVertexNormals();
@@ -335,12 +397,17 @@ function extractParts(root: THREE.Object3D, fallbackName: string): Part[] {
     };
     const name = mesh.name || fallbackName;
 
+    if (photo) {
+      const textureId = await storeTexture(photo, !!material?.transparent || (material?.alphaTest ?? 0) > 0);
+      parts.push({ ...look, name, geometry, color: `#${material?.color?.getHexString() ?? "ffffff"}`, textureId });
+      continue;
+    }
     if (colors) {
       const pieces = splitByColor(geometry, colors);
       pieces.forEach((piece, i) =>
         parts.push({ ...look, name: pieces.length === 1 ? name : `${name} ${i + 1}`, geometry: piece.geometry, color: piece.color }),
       );
-      return;
+      continue;
     }
     // Filer uten materiale (STL, OBJ uten .mtl) får innlasterens hvite standard – bruk heller en palettfarge.
     const hasRealColor = material?.color && (material.name || material.color.getHex() !== 0xffffff);
@@ -350,7 +417,7 @@ function extractParts(root: THREE.Object3D, fallbackName: string): Part[] {
       geometry,
       color: hasRealColor ? `#${material!.color.getHexString()}` : DEFAULT_COLORS[parts.length % DEFAULT_COLORS.length],
     });
-  });
+  }
   return parts;
 }
 
@@ -408,7 +475,7 @@ function extractNodes(root: THREE.Object3D, ext: string, data: ArrayBuffer): Imp
 function mergeByAppearance(parts: Part[]): Part[] {
   const groups = new Map<string, Part[]>();
   for (const p of parts) {
-    const key = `${p.color}|${p.opacity}`;
+    const key = `${p.color}|${p.opacity}|${p.textureId ?? ""}`;
     groups.set(key, [...(groups.get(key) ?? []), p]);
   }
   return [...groups.values()].map((group, i) => ({
@@ -448,7 +515,7 @@ export async function importModelData(
   // (glTFast) speiler X. Snudd slik havner en GLB eksportert fra Luna på samme sted i Unity som FBX-en.
   const scene = ext === "fbx" ? new THREE.Group().add(root) : root;
   if (ext === "fbx") scene.rotation.y = Math.PI;
-  let parts = extractParts(scene, name);
+  let parts = await extractParts(scene, name);
   const nodes = extractNodes(scene, ext, data);
   if (!parts.length && !nodes.length) throw new Error(`Fant ingen 3D-former i ${fileName}`);
   if (parts.length > MAX_PARTS) parts = mergeByAppearance(parts);
@@ -498,6 +565,7 @@ export async function importModelData(
       positions: new Float32Array(g.getAttribute("position").array),
       normals: new Float32Array(g.getAttribute("normal").array),
       ...(g.index ? { index: new Uint32Array(g.index.array) } : {}),
+      ...(p.textureId ? { uvs: new Float32Array(g.getAttribute("uv").array), textureId: p.textureId } : {}),
     });
     return {
       type: "mesh" as const,
@@ -539,8 +607,10 @@ export async function importModelData(
     unitScale,
     size: [size.x, size.y, size.z].map((v) => round(v)) as Vec3,
     textures,
+    textured: parts.filter((p) => p.textureId).length,
   };
   const notes = [
+    result.textured ? "med tekstur" : "",
     nodes.length ? `${nodes.length} noder` : "",
     keepOrigin ? "filas origo beholdt" : "",
     unitScale === 1 ? "" : `skalert ×${unitScale} til meter`,
