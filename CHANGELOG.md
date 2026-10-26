@@ -18,6 +18,9 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
   ta bildet fra en valgt posisjon mot et punkt (`camera`). Brukerens kamera settes tilbake etterpå. `set_view` kan
   også fokusere på objekter.
 
+### Fixed
+- Tall i scenefila og i svarene til Claude får ikke lenger avrundingsstøy (`0.951`, ikke `0.9510000000000001`).
+
 ## [0.13.0] — 2026-10-26
 
 ### Added

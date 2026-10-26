@@ -41,4 +41,9 @@ export type Axis = (typeof AXES)[number];
 export const axisIndex = (a: Axis) => AXES.indexOf(a);
 
 /** Avrunder for å unngå støy som 0.30000000000000004 i dataene. */
-export const round = (value: number, step = 0.001) => Math.round(value / step) * step;
+export function round(value: number, step = 0.001): number {
+  // Del på et heltall (1000) i stedet for å gange med 0.001 – det går ikke opp i flyttall og gir 0.9510000000000001.
+  const inv = Math.round(1 / step);
+  if (Math.abs(inv * step - 1) < 1e-9) return Math.round(value * inv) / inv;
+  return Math.round(value / step) * step;
+}
