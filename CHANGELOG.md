@@ -14,6 +14,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 - **Egne former fra hjørner og trekanter** (MCP `add_objects` med `type: "mesh"`, Python `luna.mesh`): blader, steiner,
   kapper – alt som ikke er en grunnform. Hjørnene er i formens eget koordinatsystem, med valgfri farge per hjørne og
   myk eller flat skyggelegging. Like former lagres bare én gang, så hundrevis av like blader koster nesten ingenting.
+- **Trekantteller** øverst til høyre: antall trekanter i det som eksporteres (synlige faste former, ikke hull, lys
+  eller noder), og hvor mange av dem som er valgt. Følger detaljnivået (glatt/lavpoly).
 - `luna.orient(forward, up)` i Python: rotasjonen som peker en form langs en retning (samme akser som nodene).
 - Eksempeltreet (`tegneserietre.py`) har fått ekte blader: krona er bare blader (1 046 på 48 trekanter hver) i tre lag –
   lyst ytterst, mørkt innerst for dybde – med egen fargetone per løvklump, i stedet for glatte kuler.

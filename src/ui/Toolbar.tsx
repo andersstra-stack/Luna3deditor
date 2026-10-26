@@ -17,6 +17,7 @@ import { useUi } from "./uiStore";
 import { viewTargetOnGround } from "../viewport/three-handle";
 import { Icon, ShapeIcon } from "./icons";
 import { reportError } from "./StatusBar";
+import { PolyCounter } from "./PolyCounter";
 
 const BRIDGE_TEXT: Record<BridgeStatus, { label: string; title: string }> = {
   connected: { label: "Claude tilkoblet", title: "Claude Code er koblet til via MCP og kan endre scenen" },
@@ -138,6 +139,8 @@ export function Toolbar() {
       </div>
 
       <div className="spacer" />
+
+      <PolyCounter />
 
       <button className="icon-btn" title="Innstillinger – tema og versjon" onClick={() => useUi.getState().openSettings()}>
         <Icon name="settings" />
