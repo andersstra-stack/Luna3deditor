@@ -1059,6 +1059,17 @@ select.text option {
   color: var(--text-dim);
 }
 
+/* Ulagrede endringer. */
+.dirty-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 1px;
+}
+
 .titlebar-drag {
   flex: 1 1 auto;
   align-self: stretch;

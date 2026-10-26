@@ -10,6 +10,13 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Ulagrede endringer vises**: en prikk ved scenenavnet i tittellinja og `*` foran navnet i oppgavelinja. Angrer du
+  tilbake til lagret tilstand, forsvinner markøren.
+- **Advarsel før endringer går tapt**: lukke vinduet, «Ny scene» og «Åpne» spør «Lagre / Ikke lagre / Avbryt» når
+  scenen har ulagrede endringer.
+- **Lagre som…** (Ctrl+Shift+S og egen knapp i verktøylinja).
+
 ## [0.11.0] — 2026-10-26
 
 ### Added

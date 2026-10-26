@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import "./styles/theme.css";
 import "./App.css";
-import { useEditor } from "./store";
-import { saveScene, openScene } from "./io";
+import { hasUnsavedChanges, useEditor } from "./store";
+import { confirmDiscard, saveScene, saveSceneAs, openScene } from "./io";
 import { useMcpBridge } from "./bridge/useMcpBridge";
 import { Viewport } from "./viewport/Viewport";
 import { frameScene } from "./viewport/three-handle";
@@ -18,6 +18,7 @@ import { Inspector } from "./ui/Inspector";
 import { StatusBar, reportError } from "./ui/StatusBar";
 import { SettingsDialog } from "./ui/SettingsDialog";
 import { useUi } from "./ui/uiStore";
+import { hasNativeWindow } from "./ui/WindowControls";
 
 /** Ctrl+C / Ctrl+X / Ctrl+V for objekter. Tekstfelt beholder vanlig kopier/lim inn. */
 function useClipboard() {
@@ -76,6 +77,30 @@ function useFileDrop() {
   }, []);
 }
 
+/** Spør om ulagrede endringer når vinduet lukkes (lukkeknappen, Alt+F4, oppgavelinja). */
+function useCloseGuard() {
+  useEffect(() => {
+    if (!hasNativeWindow) return;
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    (async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const w = getCurrentWindow();
+      const off = await w.onCloseRequested(async (e) => {
+        if (!hasUnsavedChanges(useEditor.getState())) return;
+        e.preventDefault();
+        if (await confirmDiscard()) await w.destroy();
+      });
+      if (cancelled) off();
+      else unlisten = off;
+    })().catch(reportError);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+}
+
 function useShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -91,6 +116,7 @@ function useShortcuts() {
 
       if (ctrl && key === "z" && !e.shiftKey) s.undo();
       else if (ctrl && (key === "y" || (key === "z" && e.shiftKey))) s.redo();
+      else if (ctrl && key === "s" && e.shiftKey) saveSceneAs().catch(reportError);
       else if (ctrl && key === "s") saveScene().catch(reportError);
       else if (ctrl && key === "o") openScene().catch(reportError);
       else if (ctrl && key === "i") importModelFile().catch(reportError);
@@ -124,6 +150,7 @@ export default function App() {
   useShortcuts();
   useClipboard();
   useFileDrop();
+  useCloseGuard();
   return (
     <div className="app">
       <div className="app-orb app-orb-1" />

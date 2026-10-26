@@ -72,7 +72,7 @@ export function ShapeIcon({ type, size = 18 }: { type: ShapeType; size?: number 
   );
 }
 
-type IconName = "move" | "rotate" | "scale" | "undo" | "redo" | "magnet" | "eye" | "eyeOff" | "trash" | "copy" | "file" | "folder" | "save" | "export" | "frame" | "folderOpen" | "folderPlus" | "chevron" | "snapObject" | "shapes" | "ground" | "mirror" | "hole" | "import" | "settings" | "close" | "check" | "code" | "pin";
+type IconName = "move" | "rotate" | "scale" | "undo" | "redo" | "magnet" | "eye" | "eyeOff" | "trash" | "copy" | "file" | "folder" | "save" | "saveAs" | "export" | "frame" | "folderOpen" | "folderPlus" | "chevron" | "snapObject" | "shapes" | "ground" | "mirror" | "hole" | "import" | "settings" | "close" | "check" | "code" | "pin";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   return (
@@ -110,6 +110,7 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
       {name === "file" && <path d="M14 3H6v18h12V7zM14 3v4h4" />}
       {name === "folder" && <path d="M3 6h6l2 2h10v11H3z" />}
       {name === "save" && <path d="M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7" />}
+      {name === "saveAs" && <path d="M11 21H5V3h11l3 3v4M8 3v5h7V3M8 21v-7h3M14 21v-2.5l5.5-5.5 2.5 2.5-5.5 5.5z" />}
       {name === "export" && <path d="M12 15V3M7 8l5-5 5 5M4 15v6h16v-6" />}
       {name === "folderOpen" && <path d="M3 19V6h6l2 2h8v3M3 19l3-8h16l-3 8z" />}
       {name === "folderPlus" && <path d="M3 6h6l2 2h10v11H3zM12 11v5M9.5 13.5h5" />}

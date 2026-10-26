@@ -64,6 +64,8 @@ export interface EditorState extends Snapshot {
   /** Kort melding nederst i vinduet, f.eks. "Claude la til Kube". */
   activity: string | null;
   filePath: string | null;
+  /** Scenen slik den var sist den ble lagret eller åpnet – sammenlignes med referanser, se `hasUnsavedChanges`. */
+  saved: Snapshot;
 
   addObject: (type: ShapeType, props?: Partial<SceneObject>) => SceneObject;
   addObjects: (items: NewObject[]) => SceneObject[];
@@ -111,10 +113,21 @@ export interface EditorState extends Snapshot {
   setBridgeStatus: (status: BridgeStatus) => void;
   setActivity: (msg: string | null) => void;
   setFilePath: (path: string | null) => void;
+  /** Nåværende scene regnes som lagret (etter lagring, åpning eller ny scene). */
+  markSaved: () => void;
 }
 
 let counter = 0;
 export const newId = (prefix = "obj") => `${prefix}_${Date.now().toString(36)}_${(counter++).toString(36)}`;
+
+/**
+ * Er scenen endret siden den sist ble lagret eller åpnet? Tilstanden er uforanderlig, så nye referanser betyr endringer
+ * (og angre tilbake til lagret tilstand gir de samme referansene igjen). En tom scene uten fil har ingenting å miste.
+ */
+export function hasUnsavedChanges(s: Pick<EditorState, keyof Snapshot | "saved" | "filePath">): boolean {
+  const changed = s.objects !== s.saved.objects || s.folders !== s.saved.folders || s.notes !== s.saved.notes;
+  return changed && !(s.filePath === null && !s.objects.length && !s.folders.length && !s.notes.length);
+}
 
 /** Hovedvalget (sist valgte objekt). */
 export const primaryId = (s: { selectedIds: string[] }) => s.selectedIds[s.selectedIds.length - 1] ?? null;
@@ -162,6 +175,7 @@ const applyUpdates = (objects: SceneObject[], updates: ObjectUpdate[]) => {
 };
 
 export const useEditor = create<EditorState>((set, get) => {
+  const empty: Snapshot = { objects: [], folders: [], notes: [] };
   const snapshot = (): Snapshot => ({ objects: get().objects, folders: get().folders, notes: get().notes });
 
   /** Lagrer nåværende tilstand i angre-historikken før en endring. */
@@ -188,9 +202,8 @@ export const useEditor = create<EditorState>((set, get) => {
   };
 
   return {
-    objects: [],
-    folders: [],
-    notes: [],
+    ...empty,
+    saved: empty,
     selectedIds: [],
     activeFolderId: null,
     collapsed: {},
@@ -527,5 +540,6 @@ export const useEditor = create<EditorState>((set, get) => {
     setBridgeStatus: (bridgeStatus) => set({ bridgeStatus }),
     setActivity: (activity) => set({ activity }),
     setFilePath: (filePath) => set({ filePath }),
+    markSaved: () => set({ saved: snapshot() }),
   };
 });

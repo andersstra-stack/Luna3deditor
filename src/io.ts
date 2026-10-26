@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
-import { useEditor, type Snapshot } from "./store";
+import { message, open, save } from "@tauri-apps/plugin-dialog";
+import { hasUnsavedChanges, useEditor, type Snapshot } from "./store";
 import { hiddenFolderIds } from "./folders";
 import { SHAPES, isLight, isNode, type Folder, type SceneFile, type SceneObject } from "./types";
 import { objectQuaternion, round } from "./bounds";
@@ -41,6 +41,7 @@ export async function saveScene(path?: string, askIfMissing = true): Promise<str
   if (!target) return null;
   await invoke("write_text_file", { path: target, contents: JSON.stringify(serializeScene(), null, 2) });
   useEditor.getState().setFilePath(target);
+  useEditor.getState().markSaved();
   return target;
 }
 
@@ -49,9 +50,37 @@ export async function saveSceneAs(): Promise<string | null> {
   return target ? saveScene(target) : null;
 }
 
+/**
+ * Spør om ulagrede endringer før de kastes (ny scene, åpne, lukke). `true` = gå videre: ingenting å miste, scenen ble
+ * lagret, eller brukeren valgte å ikke lagre.
+ */
+export async function confirmDiscard(): Promise<boolean> {
+  const state = useEditor.getState();
+  if (!hasUnsavedChanges(state)) return true;
+  const name = state.filePath?.split(/[\\/]/).pop() ?? "den ulagrede scenen";
+  const choice = await message(`Vil du lagre endringene i ${name}?`, {
+    title: "Ulagrede endringer",
+    kind: "warning",
+    buttons: { yes: "Lagre", no: "Ikke lagre", cancel: "Avbryt" },
+  });
+  if (choice === "Lagre" || choice === "Yes") return (await saveScene()) !== null;
+  return choice === "Ikke lagre" || choice === "No";
+}
+
+/** Ny, tom scene (spør først om ulagrede endringer). */
+export async function newScene(): Promise<void> {
+  if (!(await confirmDiscard())) return;
+  const state = useEditor.getState();
+  state.clearScene();
+  state.setFilePath(null);
+  state.markSaved();
+}
+
+/** Åpner en scene. Uten sti (brukeren) spørres det først om ulagrede endringer; med sti (MCP) åpnes den direkte. */
 export async function openScene(path?: string): Promise<string | null> {
   let target = path ?? null;
   if (!target) {
+    if (!(await confirmDiscard())) return null;
     const picked = await open({ filters: [SCENE_FILTER], multiple: false });
     target = typeof picked === "string" ? picked : null;
   }
@@ -60,6 +89,7 @@ export async function openScene(path?: string): Promise<string | null> {
   const state = useEditor.getState();
   state.setScene(scene);
   state.setFilePath(target);
+  state.markSaved();
   return target;
 }
 

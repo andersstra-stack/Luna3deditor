@@ -529,6 +529,8 @@ function Help() {
         <dd>Angre / gjør om</dd>
         <dt>Ctrl+S</dt>
         <dd>Lagre</dd>
+        <dt>Ctrl+Shift+S</dt>
+        <dd>Lagre som</dd>
         <dt>Ctrl+I</dt>
         <dd>Importer 3D-modell</dd>
         <dt>N</dt>

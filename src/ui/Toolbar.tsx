@@ -10,7 +10,7 @@ import {
   startHeight,
   type ShapeType,
 } from "../types";
-import { exportGlb, openScene, saveScene, type GlbExport } from "../io";
+import { exportGlb, newScene, openScene, saveScene, saveSceneAs, type GlbExport } from "../io";
 import { importModelFile } from "../importer";
 import { runPythonScriptFile } from "../scripting";
 import { useUi } from "./uiStore";
@@ -41,7 +41,7 @@ export function Toolbar() {
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
   const bridge = useEditor((s) => s.bridgeStatus);
-  const { addObject, undo, redo, clearScene, setFilePath } = useEditor.getState();
+  const { addObject, undo, redo } = useEditor.getState();
 
   // Lukk «Legg til»-menyen ved klikk utenfor.
   useEffect(() => {
@@ -67,16 +67,10 @@ export function Toolbar() {
     </button>
   );
 
-  const newScene = () => {
-    if (useEditor.getState().objects.length && !confirm("Starte en ny, tom scene?")) return;
-    clearScene();
-    setFilePath(null);
-  };
-
   return (
     <header className="toolbar">
       <div className="tool-group">
-        <button className="icon-btn" title="Ny scene" onClick={newScene}>
+        <button className="icon-btn" title="Ny scene" onClick={() => newScene().catch(reportError)}>
           <Icon name="file" />
         </button>
         <button className="icon-btn" title="Åpne… (Ctrl+O)" onClick={() => openScene().catch(reportError)}>
@@ -84,6 +78,9 @@ export function Toolbar() {
         </button>
         <button className="icon-btn" title="Lagre (Ctrl+S)" onClick={() => saveScene().catch(reportError)}>
           <Icon name="save" />
+        </button>
+        <button className="icon-btn" title="Lagre som… (Ctrl+Shift+S)" onClick={() => saveSceneAs().catch(reportError)}>
+          <Icon name="saveAs" />
         </button>
         <button
           className="icon-btn"

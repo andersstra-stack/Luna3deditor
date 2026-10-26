@@ -3,15 +3,16 @@
 // flytter vinduet, og dobbeltklikk maksimerer.
 
 import { useEffect } from "react";
-import { useEditor } from "../store";
+import { hasUnsavedChanges, useEditor } from "../store";
 import { WindowControls, setWindowTitle } from "./WindowControls";
 
 export function TitleBar() {
   const filePath = useEditor((s) => s.filePath);
+  const dirty = useEditor(hasUnsavedChanges);
   const sceneTitle = filePath ? filePath.split(/[\\/]/).pop()! : "Ulagret scene";
 
-  // Tittelen i oppgavelinja følger scenen.
-  useEffect(() => setWindowTitle(`${sceneTitle} – Luna 3D`), [sceneTitle]);
+  // Tittelen i oppgavelinja følger scenen; * betyr ulagrede endringer (som i Notisblokk).
+  useEffect(() => setWindowTitle(`${dirty ? "*" : ""}${sceneTitle} – Luna 3D`), [sceneTitle, dirty]);
 
   return (
     <div className="titlebar" data-tauri-drag-region>
@@ -20,7 +21,10 @@ export function TitleBar() {
         <span>Luna 3D</span>
       </div>
       {/* Midtstilt og klikk-gjennomsiktig, så dra-området under virker også her. */}
-      <span className="titlebar-scene">{sceneTitle}</span>
+      <span className="titlebar-scene">
+        {sceneTitle}
+        {dirty && <span className="dirty-dot" aria-label="Ulagrede endringer" />}
+      </span>
       <div className="titlebar-drag" data-tauri-drag-region />
       <WindowControls />
     </div>
