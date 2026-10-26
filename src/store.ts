@@ -21,6 +21,8 @@ import {
 import { folderChain, isInside } from "./folders";
 import { uniqueNodeName } from "./nodes";
 import { newCurveProps, placeCurve, reshapeCurve } from "./curves";
+import { meshFromVertices, singleVertexColor, type MeshInput } from "./customMesh";
+import { hasMesh } from "./meshes";
 
 const HISTORY_LIMIT = 100;
 
@@ -37,7 +39,7 @@ export type Tool = "select" | "note";
 
 /** Kun kurverør: punktene i verdensrommet og radius (ett tall eller ett per punkt) – se curves.ts. */
 export type CurveInput = { points?: Vec3[]; radius?: number | number[] };
-export type NewObject = Partial<SceneObject> & CurveInput & { type: ShapeType };
+export type NewObject = Partial<SceneObject> & CurveInput & MeshInput & { type: ShapeType };
 export type ObjectUpdate = Partial<SceneObject> & CurveInput & { id: string };
 export type FolderUpdate = Partial<Omit<Folder, "id">> & { id: string };
 export type SelectMode = "replace" | "toggle" | "add";
@@ -146,9 +148,17 @@ function uniqueName(base: string, taken: { name: string }[]): string {
   return `${base} ${i}`;
 }
 
-function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<SceneObject> & CurveInput = {}): SceneObject {
-  const { id: _ignored, type: _type, name: _name, points, radius, ...rest } = props;
+function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<SceneObject> & CurveInput & MeshInput = {}): SceneObject {
+  const { id: _ignored, type: _type, name: _name, points, radius, vertices, triangles, vertex_colors, smooth, ...rest } = props;
   if ((points !== undefined || radius !== undefined) && type !== "curve") throw new Error("points og radius gjelder bare kurverør (type curve)");
+  if (vertices !== undefined && type !== "mesh") throw new Error("vertices og triangles gjelder bare egne former (type mesh)");
+  // Egen form fra hjørner og trekanter: geometrien registreres, plassering og mål regnes ut fra hjørnene.
+  const custom = vertices !== undefined ? { vertices, triangles, vertex_colors, smooth } : undefined;
+  if (custom) {
+    Object.assign(rest, meshFromVertices(custom, rest.position, rest.rotation, props.name));
+    rest.color ??= singleVertexColor(custom);
+  }
+  if (type === "mesh" && !hasMesh(rest.meshId)) throw new Error("En modell trenger meshId (import) eller vertices + triangles");
   const scale = DEFAULT_SCALE[type] ?? [1, 1, 1];
   const y = startHeight(type, scale);
   return {
@@ -176,6 +186,7 @@ function assertFolder(folders: Folder[], id: string | null | undefined) {
 
 /** Ett objekt med endringene. Nye kurvepunkter (verdensrom) eller ny radius regner om posisjon og størrelse. */
 function withUpdate(o: SceneObject, update: Partial<SceneObject> & CurveInput): SceneObject {
+  if ("vertices" in update || "triangles" in update) throw new Error(`Formen til ${o.name} kan ikke endres – lag et nytt objekt med vertices`);
   const { points, radius, ...props } = update;
   const next = { ...o, ...props, id: o.id, type: o.type };
   if (points === undefined && radius === undefined) return next;
@@ -410,10 +421,10 @@ export const useEditor = create<EditorState>((set, get) => {
         if (!exists) throw new Error(`Fant ikke ${kind} ${ref}`);
         return ref;
       };
-      const toProps = (props: Record<string, unknown>): Partial<SceneObject> & CurveInput => {
+      const toProps = (props: Record<string, unknown>): Partial<SceneObject> & CurveInput & MeshInput => {
         const { folder, ...rest } = props;
         return {
-          ...(rest as Partial<SceneObject> & CurveInput),
+          ...(rest as Partial<SceneObject> & CurveInput & MeshInput),
           ...(folder !== undefined ? { folderId: folder === null ? null : resolve(String(folder), "mappe") } : {}),
         };
       };
@@ -441,7 +452,8 @@ export const useEditor = create<EditorState>((set, get) => {
           keys.set(op.key, folder.id);
           result.folders.push(folder.id);
         } else if (op.op === "add") {
-          if (!(ADDABLE_SHAPES as readonly string[]).includes(op.type)) throw new Error(`Ukjent type «${op.type}» i skriptet`);
+          const customMesh = op.type === "mesh" && op.props.vertices !== undefined;
+          if (!customMesh && !(ADDABLE_SHAPES as readonly string[]).includes(op.type)) throw new Error(`Ukjent type «${op.type}» i skriptet`);
           const obj = makeObject(op.type, objects, { ...toProps(op.props), ...(script ? { script } : {}) });
           objects.push(obj);
           keys.set(op.key, obj.id);

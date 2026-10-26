@@ -1,7 +1,7 @@
-import { useEditor, type FolderUpdate } from "../store";
+import { useEditor, type FolderUpdate, type NewObject } from "../store";
 import { exportGlb, openScene, saveScene } from "../io";
 import { importModelFile } from "../importer";
-import { ADDABLE_SHAPES, type SceneObject, type ScriptOp, type ShapeType, type Vec3 } from "../types";
+import { ADDABLE_SHAPES, type SceneObject, type ScriptOp, type ScriptResult, type ShapeType, type Vec3 } from "../types";
 import * as THREE from "three";
 import { round, type Axis } from "../bounds";
 import { anchorNote, noteWorldPosition, topOf } from "../notes";
@@ -33,6 +33,21 @@ function checkView(view: unknown): ViewName {
 }
 
 const summary = (o: SceneObject) => ({ id: o.id, name: o.name, type: o.type });
+
+/** Så mange nye objekter vises med id i svaret til Claude; flere gir bare antallet (hundrevis av id-er koster mye). */
+const SCRIPT_IDS_SHOWN = 25;
+
+function compactScriptResult(r: ScriptResult) {
+  if (r.created.length <= SCRIPT_IDS_SHOWN) return r;
+  const folderIds = new Set(r.folders);
+  const keys = Object.fromEntries(Object.entries(r.keys).filter(([, id]) => folderIds.has(id) || id.startsWith("fld")));
+  return {
+    ...r,
+    created: r.created.length,
+    keys,
+    note: `${r.created.length} objects created – their ids are left out. Use get_scene or luna.objects(name=..., folder=...) to find them.`,
+  };
+}
 
 /** En pinne etter id eller nummer. */
 function findNote(ref: unknown) {
@@ -95,15 +110,18 @@ export const handlers: Record<BridgeMethod, Handler> = {
   apply_script: (p) => {
     const ops = p.ops as ScriptOp[];
     if (!Array.isArray(ops)) throw new Error("ops må være en liste");
-    return applyScriptOps(ops, (p.name as string | undefined) ?? "Claude-skript", p.script as string | undefined);
+    return compactScriptResult(applyScriptOps(ops, (p.name as string | undefined) ?? "Claude-skript", p.script as string | undefined));
   },
 
   add_objects: (p) => {
     const items = p.objects as (Partial<SceneObject> & { type: ShapeType })[];
     if (!Array.isArray(items) || !items.length) throw new Error("objects må være en ikke-tom liste");
     for (const i of items) {
-      if (!ADDABLE_SHAPES.includes(i.type as (typeof ADDABLE_SHAPES)[number])) {
-        throw new Error(i.type === "mesh" ? "Modeller legges til med import_model (eller duplicate_objects)" : `Ukjent type "${i.type}"`);
+      const customMesh = i.type === "mesh" && (i as NewObject).vertices !== undefined;
+      if (!customMesh && !ADDABLE_SHAPES.includes(i.type as (typeof ADDABLE_SHAPES)[number])) {
+        throw new Error(
+          i.type === "mesh" ? "Modeller lages med vertices + triangles, import_model eller duplicate_objects" : `Ukjent type "${i.type}"`,
+        );
       }
     }
     // Claude må velge mappe eksplisitt – brukerens aktive mappe brukes ikke.

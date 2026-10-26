@@ -187,6 +187,21 @@ const objectProps = {
     .describe("Curve only: tube radius in meters – one number, or one per point for a tapering tube (e.g. [0.12, 0.07, 0.02]). Default 0.1."),
 };
 
+/** Kun add_objects: egne former fra hjørner og trekanter (type "mesh"). */
+const meshProps = {
+  vertices: z
+    .array(vec3)
+    .min(3)
+    .optional()
+    .describe("type 'mesh' only: corner points [x, y, z] in the shape's OWN coordinates (meters). 'position' is where its origin goes, 'rotation' turns it around that origin."),
+  triangles: z
+    .array(z.tuple([z.number().int(), z.number().int(), z.number().int()]))
+    .optional()
+    .describe("type 'mesh' only: triangles as vertex indices [a, b, c], counter-clockwise seen from outside."),
+  vertex_colors: z.array(z.string()).optional().describe("type 'mesh' only: one hex color per vertex (optional)."),
+  smooth: z.boolean().optional().describe("type 'mesh' only: true = smooth shading across shared vertices; default flat facets."),
+};
+
 const INSTRUCTIONS = `Luna 3D is a simple 3D editor the user has open on their desktop. These tools edit its scene live.
 
 Coordinate system: meters, Y is up, the ground plane is y = 0. Rotation is in degrees (Euler XYZ).
@@ -202,6 +217,12 @@ All shapes are unit-sized and centered on their origin, so 'scale' equals the ob
 - plane: flat 1×1 square in the XZ plane (zero thickness)
 - capsule: 0.5 wide, 1 tall (along Y)
 - cylinder with 'taper' (0–1): top diameter relative to the bottom – tree trunks, table legs, vases, horns
+- mesh (custom shape): give 'vertices' (in the shape's own coordinates, meters) and 'triangles' (index triples,
+  counter-clockwise seen from outside) – leaves, rocks, capes, blades, anything that is not a primitive. 'position' is
+  where the vertices' origin goes and 'rotation' turns it around that origin; 'scale' is then the shape's size like
+  everything else. Identical shapes are stored once, so reuse one leaf for hundreds of copies. Optional
+  'vertex_colors' (one hex per vertex) and 'smooth'. A thin shape seen from both sides needs both faces (top and a
+  reversed bottom). Its geometry can't be edited afterwards – make a new object.
 - curve: a round tube along a smooth curve through 'points' (WORLD coordinates) with 'radius' (one number, or one per
   point to taper it) – branches, roots, cables, handles, tentacles, horns. Give points + radius instead of
   position/scale; get_scene returns its current world 'points' and 'radius'. Sending new points to update_objects
@@ -246,6 +267,9 @@ where one loop replaces hundreds of add_objects entries. The whole run is ONE un
   point_light/spot_light/node(name=, position=(x,y,z), rotation=(deg,deg,deg), scale=(x,y,z), color="#rrggbb",
   metalness=, roughness=, opacity=, hole=, intensity=, emissive=, material=, props={...}, folder=) -> key; or luna.add("box", ...)
 - luna.cylinder(taper=0.6, ...); luna.curve(points=[(x,y,z), ...], radius=0.1 or [r per point], color=..., folder=...)
+- luna.mesh(vertices=[...], triangles=[...], position=, rotation=, color=, vertex_colors=, smooth=) – custom shapes;
+  luna.orient(forward, up) -> rotation that points the shape's +Z along forward and +Y toward up (like nodes)
+Large runs return only counts (not every id); use luna.objects(...) / get_scene to find objects afterwards.
 - luna.folder(name, parent=None) -> key (use as folder=/parent=)
 - luna.update(id_or_key, **props), luna.delete(*ids)
 - luna.scene / luna.objects(name=, type=, folder=) / luna.folders(name=) / luna.get(id): the scene at start,
@@ -315,7 +339,7 @@ server.registerTool(
     title: "Add objects",
     description: "Add one or more shapes, lights or marker nodes to the scene. Returns their new ids. Prefer adding all parts of a model in one call.",
     inputSchema: {
-      objects: z.array(z.object({ type: z.enum(ADDABLE_SHAPES), ...objectProps })).min(1),
+      objects: z.array(z.object({ type: z.enum([...ADDABLE_SHAPES, "mesh"]), ...objectProps, ...meshProps })).min(1),
     },
   },
   ({ objects }) => run("add_objects", { objects }),

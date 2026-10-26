@@ -34,7 +34,10 @@ MCP-verktøybeskrivelser er på engelsk.
   med `store.replaceObjects` som ett angre-steg). «Slå sammen»: `src/meshMerge.ts` (baker geometrien i verdensrom, snur
   trekantene for speilede objekter, normaliserer igjen). Hver del beholder fargen: `MeshAsset.colors` (sRGB-byte per hjørne,
   lineært `color`-attributt i geometrien, også gjennom CSG); «Del opp» gjør ensfargede biter til vanlige modeller igjen.
-  Modeller speiles med negativ størrelse (de er ikke symmetriske); `add_objects` kan ikke lage `mesh` direkte.
+  Modeller speiles med negativ størrelse (de er ikke symmetriske). Egne former: `type: "mesh"` med `vertices`/`triangles`
+  (formens eget rom; `position` = origo, `rotation` rundt det) i `src/customMesh.ts` – id-en er en hash av formen, så like
+  former deles i registeret. Geometrien kan ikke oppdateres (lag nytt objekt). Skript med mer enn 25 nye objekter svarer
+  Claude med antall (`compactScriptResult` i `commands.ts`), ikke id-er.
 - Python-skript: `scripting/luna3d.py` (API + `python -m luna3d skript.py`) samler endringer og skriver dem ut etter
   markøren `@@LUNA3D_OPS@@` når skriptet er ferdig. Kjøres av Rust (`run_python_script`, modulen pakkes som ressurs)
   eller MCP (`mcp-server/python.ts`); `src/scripting.ts` tolker utdata, `store.applyScript` gjør alt som ett angre-steg.

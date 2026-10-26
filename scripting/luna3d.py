@@ -25,6 +25,15 @@ greiner, røtter, kabler. radius er ett tall eller ett per punkt:
 
     luna.curve(points=[(0, 1.6, 0), (0.6, 2.1, 0.1), (1.1, 2.3, 0)], radius=[0.12, 0.07, 0.03], color="#8a5a3b")
 
+Egne former: mesh(vertices=[(x, y, z), ...], triangles=[(a, b, c), ...]) – hjørnene i formens eget
+koordinatsystem (meter); position er der origo havner og rotation dreier rundt det. Trekantene går mot
+klokka sett utenfra. Like former deles, så samme blad 400 ganger lagres én gang. smooth=True gir myke
+overganger, vertex_colors=[...] farge per hjørne. orient(forward, up) gir rotasjonen som peker formens
++Z langs forward og +Y mot up:
+
+    blad = dict(vertices=[(0, 0, 0), (0.06, 0, 0.15), (0, 0.01, 0.3), (-0.06, 0, 0.15)], triangles=[(0, 2, 1), (0, 3, 2)])
+    luna.mesh(**blad, position=(1, 2, 0), rotation=luna.orient(forward=(1, 0.3, 0), up=(0, 1, 0)), color="#5fb84a")
+
 Markør-noder (node) er usynlige punkter med navn og retning som spillmotoren leser: lokal +Z er
 forover og +Y opp. Egendefinerte egenskaper legges i props={...} (eksporteres som glTF extras):
 
@@ -39,17 +48,18 @@ import sys
 __all__ = [
     "scene", "objects", "get", "folders", "folder", "add", "update", "delete",
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
-    "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "curve", "point_light", "spot_light", "node",
+    "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "curve", "point_light", "spot_light", "node", "mesh",
+    "orient",
 ]
 
 SHAPES = {
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
-    "pyramid", "stairs", "hemisphere", "tube", "roundedBox", "curve", "pointLight", "spotLight", "node",
+    "pyramid", "stairs", "hemisphere", "tube", "roundedBox", "curve", "pointLight", "spotLight", "node", "mesh",
 }
 PROPS = {
     "name", "position", "rotation", "scale", "color", "metalness", "roughness",
     "opacity", "visible", "hole", "intensity", "emissive", "material", "props", "folder",
-    "taper", "points", "radius",
+    "taper", "points", "radius", "vertices", "triangles", "vertex_colors", "smooth",
 }
 MARKER = "@@LUNA3D_OPS@@"
 MAX_OPS = 20000
@@ -126,6 +136,24 @@ def _clean(props):
                     v = [float(r) for r in v]
                 except (TypeError, ValueError):
                     raise ValueError(f"radius må være et tall eller én radius per punkt – fikk {v!r}") from None
+        elif k == "vertices":
+            try:
+                v = [_vec3(f"vertices[{i}]", p) for i, p in enumerate(v)]
+            except TypeError:
+                raise ValueError(f"vertices må være en liste med hjørner (x, y, z) – fikk {v!r}") from None
+        elif k == "triangles":
+            try:
+                v = [[int(i) for i in t] for t in v]
+            except (TypeError, ValueError):
+                raise ValueError(f"triangles må være en liste med trekanter (a, b, c) – fikk {v!r}") from None
+            if not all(len(t) == 3 for t in v):
+                raise ValueError("hver trekant må ha tre hjørnenumre")
+        elif k == "vertex_colors":
+            v = list(v)
+            if not all(isinstance(c, str) and len(c) == 7 and c.startswith("#") for c in v):
+                raise ValueError("vertex_colors må være hex-farger som '#ff8800', én per hjørne")
+        elif k == "smooth":
+            v = bool(v)
         elif k == "taper":
             v = float(v)
             if not 0 <= v <= 1:
@@ -228,6 +256,39 @@ hemisphere = _shape("hemisphere")
 tube = _shape("tube")
 rounded_box = _shape("roundedBox")
 curve = _shape("curve")
+mesh = _shape("mesh")
+
+
+def orient(forward, up=(0, 1, 0)):
+    """Rotasjonen (Euler XYZ i grader) som peker formens +Z langs forward og +Y så nær up som mulig.
+
+    Samme akser som markør-noder: +Z forover, +Y opp. Nyttig for blader, piler, greiner og alt som skal
+    peke en bestemt vei: luna.mesh(..., rotation=luna.orient(forward=retning, up=normal)).
+    """
+    def norm(v):
+        l = math.sqrt(sum(c * c for c in v))
+        if l < 1e-12:
+            raise ValueError(f"Retningen {v!r} har lengde 0")
+        return [c / l for c in v]
+
+    def cross(a, b):
+        return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+
+    z = norm(_vec3("forward", forward))
+    x = cross(_vec3("up", up), z)
+    if math.sqrt(sum(c * c for c in x)) < 1e-9:
+        # up er parallell med forward: velg en annen hjelpeakse.
+        x = cross([1, 0, 0] if abs(z[0]) < 0.9 else [0, 0, 1], z)
+    x = norm(x)
+    y = cross(z, x)
+    # Matrisen med kolonnene x, y, z -> Euler XYZ (som three.js).
+    m13, m23, m33, m12, m11 = z[0], z[1], z[2], y[0], x[0]
+    ry = math.asin(max(-1.0, min(1.0, m13)))
+    if abs(m13) < 0.9999999:
+        rx, rz = math.atan2(-m23, m33), math.atan2(-m12, m11)
+    else:
+        rx, rz = math.atan2(y[2], y[1]), 0.0
+    return (math.degrees(rx), math.degrees(ry), math.degrees(rz))
 point_light = _shape("pointLight")
 spot_light = _shape("spotLight")
 node = _shape("node")
