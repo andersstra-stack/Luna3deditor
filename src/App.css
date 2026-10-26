@@ -87,7 +87,7 @@ input {
 
 .app {
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto auto 1fr auto;
   height: 100%;
   overflow: hidden;
 }
@@ -1049,18 +1049,90 @@ select.text option {
   color: var(--accent);
 }
 
-.update-btn {
-  color: var(--accent);
+/* ---------- Oppdateringslinje (under tittellinja, samme mønster som LunaChat) ---------- */
+.update-slot {
+  position: relative;
+  z-index: 1;
+}
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: linear-gradient(90deg, var(--accent-soft), transparent 85%), var(--bg-1);
+  backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--border-glass);
+  color: var(--text);
+  font-size: 12.5px;
+  user-select: none;
+}
+
+.update-banner-icon {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
   background: var(--accent-soft);
-  border-radius: 999px;
-  padding: 1px 9px;
-  font-size: 11.5px;
+  color: var(--accent);
+}
+
+.update-banner-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-banner-notes {
+  color: var(--text-dim);
+}
+
+.update-banner-action {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
   font-weight: 600;
 }
 
-.update-btn.busy {
+.update-banner-action:hover {
+  filter: brightness(1.12);
+}
+
+.update-banner-dismiss {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   color: var(--text-dim);
-  background: none;
+}
+
+.update-banner-dismiss:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.update-banner-progress {
+  flex: 0 0 160px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+
+.update-banner-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
 }
 
 .modal-backdrop {

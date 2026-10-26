@@ -15,6 +15,7 @@ import { ViewportTools } from "./ui/ViewportTools";
 import { Timeline } from "./ui/Timeline";
 import { usePlayer } from "./animationPlayer";
 import { TitleBar } from "./ui/TitleBar";
+import { UpdateBanner } from "./ui/UpdateBanner";
 import { LeftPanel } from "./ui/LeftPanel";
 import { Inspector } from "./ui/Inspector";
 import { StatusBar, reportError } from "./ui/StatusBar";
@@ -164,6 +165,7 @@ export default function App() {
       <div className="app-orb app-orb-1" />
       <div className="app-orb app-orb-2" />
       <TitleBar />
+      <UpdateBanner />
       <Toolbar />
       <main className="workspace">
         <LeftPanel />

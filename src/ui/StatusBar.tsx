@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useEditor } from "../store";
 import { useUi } from "./uiStore";
-import { UpdateButton } from "./UpdateButton";
 
 export function reportError(e: unknown) {
   useEditor.getState().setActivity(`Feil: ${e instanceof Error ? e.message : String(e)}`);
@@ -28,7 +27,6 @@ export function StatusBar() {
       <span className="path" title={filePath ?? undefined}>
         {filePath ?? "Ulagret scene"}
       </span>
-      <UpdateButton />
       <button className="version-btn" title="Om Luna 3D" onClick={() => useUi.getState().openSettings()}>
         v{__APP_VERSION__}
       </button>

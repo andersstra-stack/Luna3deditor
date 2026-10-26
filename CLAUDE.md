@@ -82,7 +82,7 @@ MCP-verktøybeskrivelser er på engelsk.
 - Publisering: `./scripts/publish-release.sh "notat"` (Git Bash) bygger signert NSIS-installer med
   `~/.tauri/luna3d-updater.key`, laster opp til `/opt/lunachat/releases/luna3d/` (serveres som
   `lunaeco.no/updates/luna3d/`) og skriver `latest.json`. Serveradresse i `scripts/.env` (gitignored).
-  Appen sjekker manifestet ved oppstart (`src/ui/UpdateButton.tsx`, tauri-plugin-updater). Mistes nøkkelen,
+  Appen sjekker manifestet ved oppstart (`src/ui/UpdateBanner.tsx`, linje under tittellinja, tauri-plugin-updater; også hver halvtime). Mistes nøkkelen,
   må alle installasjoner installeres på nytt manuelt.
 
 ## Tema
