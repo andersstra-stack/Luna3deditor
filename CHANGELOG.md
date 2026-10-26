@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10-26
+
 ### Added
 - **Palett-tekstur i GLB-eksporten**, som i Nova-biblioteket: hver farge blir én piksel i `<navn>_palette.png`
   (8×8, større ved behov), delene får UV-er som peker på sin piksel og deler felles materialer – ett per utseende
