@@ -79,6 +79,11 @@ MCP-verktøybeskrivelser er på engelsk.
 - Versjonen har én kilde: `package.json` (`tauri.conf.json` peker dit, Vite gir `__APP_VERSION__`, MCP-serveren leser den).
 - Før inn meningsfulle endringer under `## [Unreleased]` i `CHANGELOG.md` (Keep a Changelog, norsk, samme stil som LunaChat).
 - Ny versjon: `npm run bump -- patch|minor|major` (oppdaterer package.json, Cargo.toml og changelog), så commit + `git tag vX.Y.Z`.
+- Publisering: `./scripts/publish-release.sh "notat"` (Git Bash) bygger signert NSIS-installer med
+  `~/.tauri/luna3d-updater.key`, laster opp til `/opt/lunachat/releases/luna3d/` (serveres som
+  `lunaeco.no/updates/luna3d/`) og skriver `latest.json`. Serveradresse i `scripts/.env` (gitignored).
+  Appen sjekker manifestet ved oppstart (`src/ui/UpdateButton.tsx`, tauri-plugin-updater). Mistes nøkkelen,
+  må alle installasjoner installeres på nytt manuelt.
 
 ## Tema
 - `src/styles/theme.css` er kopiert ordrett fra LunaChat (`Lunadiscordclone/client/src/styles/theme.css`) – ikke endre

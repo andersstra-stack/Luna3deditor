@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Publisering (SSH-target o.l.)
+scripts/.env

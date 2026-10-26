@@ -11,6 +11,9 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 ## [Unreleased]
 
 ### Added
+- **Automatisk oppdatering**: ved oppstart sjekker appen lunaeco.no etter en nyere, signert versjon. Finnes en, vises
+  «Oppdater til vX.Y.Z» i statuslinja – klikk spør om ulagrede endringer, laster ned, installerer og starter på nytt.
+  Publiseres med `scripts/publish-release.sh`.
 - **Overflate-treff** (MCP `raycast`): stråler inn i scenen gir treffpunkt, glatt flatenormal og hvilket objekt de
   traff – slik det vises, med hull og animasjon. Mange stråler i ett kall. Gjør at Claude kan plassere ting *på*
   overflater (epler på løvet, lamper i taket, fugler på greiner) i stedet for å regne blindt.
