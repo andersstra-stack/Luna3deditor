@@ -73,7 +73,7 @@ export function ShapeIcon({ type, size = 18 }: { type: ShapeType; size?: number 
   );
 }
 
-type IconName = "move" | "rotate" | "scale" | "undo" | "redo" | "magnet" | "eye" | "eyeOff" | "trash" | "copy" | "file" | "folder" | "save" | "saveAs" | "export" | "frame" | "folderOpen" | "folderPlus" | "chevron" | "snapObject" | "shapes" | "ground" | "mirror" | "hole" | "import" | "settings" | "close" | "check" | "code" | "pin";
+type IconName = "move" | "rotate" | "scale" | "undo" | "redo" | "magnet" | "eye" | "eyeOff" | "trash" | "copy" | "file" | "folder" | "save" | "saveAs" | "export" | "frame" | "folderOpen" | "folderPlus" | "chevron" | "snapObject" | "shapes" | "ground" | "mirror" | "hole" | "import" | "settings" | "close" | "check" | "code" | "pin" | "package";
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   return (
@@ -146,6 +146,7 @@ export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
         </>
       )}
       {name === "code" && <path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16" />}
+      {name === "package" && <path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7zM3.5 7 12 11.5 20.5 7M12 11.5v10" />}
       {name === "pin" && (
         <>
           <path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z" />

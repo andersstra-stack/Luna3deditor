@@ -189,6 +189,20 @@ export function Outliner() {
           )}
           <span className="count">{counts[f.id] ?? 0}</span>
           <button
+            className={`row-btn model-toggle ${f.model ? "on" : ""}`}
+            title={
+              f.model
+                ? "Eksporteres som én modell (én mesh, ett palett-materiale). Klikk for å eksportere delene hver for seg."
+                : "Eksporter mappa som én modell – for spillmotoren. En markør-node som heter «pivot» blir origo."
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              updateFolders([{ id: f.id, model: !f.model }]);
+            }}
+          >
+            <Icon name="package" size={14} />
+          </button>
+          <button
             className="row-btn"
             title={f.visible ? "Skjul mappe" : "Vis mappe"}
             onClick={(e) => {

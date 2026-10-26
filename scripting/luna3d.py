@@ -169,10 +169,17 @@ def folders(name=None):
 
 # ---------- Endre scenen ----------
 
-def folder(name, parent=None):
-    """Lager en mappe og returnerer en nøkkel som kan brukes som folder=/parent=."""
+def folder(name, parent=None, model=None):
+    """Lager en mappe og returnerer en nøkkel som kan brukes som folder=/parent=.
+
+    model=True: mappa eksporteres som ÉN modell (én mesh med ett palett-materiale) – f.eks. et tre eller et hus.
+    Deler som skal bevege seg i spillet (dør, hjul) legges i egne undermapper med model=True og en node «pivot».
+    """
     key = _key("f")
-    _push({"op": "folder", "key": key, "name": str(name), "parent": parent})
+    op = {"op": "folder", "key": key, "name": str(name), "parent": parent}
+    if model is not None:
+        op["model"] = bool(model)
+    _push(op)
     return key
 
 

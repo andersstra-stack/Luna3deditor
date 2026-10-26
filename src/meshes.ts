@@ -26,12 +26,40 @@ export function meshGeometry(id: string): THREE.BufferGeometry {
     geo.setAttribute("position", new THREE.BufferAttribute(asset.positions, 3));
     geo.setAttribute("normal", new THREE.BufferAttribute(asset.normals, 3));
     if (asset.index) geo.setIndex(new THREE.BufferAttribute(asset.index, 1));
+    if (asset.colors) geo.setAttribute("color", new THREE.BufferAttribute(linearColors(asset.colors), 3));
     geo.computeBoundingBox();
     geo.computeBoundingSphere();
     geometries.set(id, geo);
   }
   return geo;
 }
+
+/** sRGB-byte → lineære farger (det three tegner med). */
+function linearColors(srgb: Uint8Array): Float32Array {
+  const out = new Float32Array(srgb.length);
+  const c = new THREE.Color();
+  for (let i = 0; i < srgb.length; i += 3) {
+    c.setRGB(srgb[i] / 255, srgb[i + 1] / 255, srgb[i + 2] / 255, THREE.SRGBColorSpace);
+    out[i] = c.r;
+    out[i + 1] = c.g;
+    out[i + 2] = c.b;
+  }
+  return out;
+}
+
+/** Hex-fargen (#rrggbb) til hvert hjørne i en geometri med lineære hjørnefarger (også etter CSG). */
+export function vertexHexes(geo: THREE.BufferGeometry): string[] | null {
+  const attr = geo.getAttribute("color");
+  if (!attr) return null;
+  const c = new THREE.Color();
+  const out: string[] = new Array(attr.count);
+  for (let i = 0; i < attr.count; i++) out[i] = `#${c.setRGB(attr.getX(i), attr.getY(i), attr.getZ(i)).getHexString()}`;
+  return out;
+}
+
+/** Har modellen flere farger (farge per hjørne)? */
+export const hasVertexColors = (o: Pick<SceneObject, "type" | "meshId">) =>
+  o.type === "mesh" && !!o.meshId && !!assets.get(o.meshId)?.colors;
 
 // ---------- Lagring (base64) ----------
 
@@ -57,6 +85,7 @@ export function serializeMesh(a: MeshAsset): SerializedMesh {
     positions: toBase64(a.positions),
     normals: toBase64(a.normals),
     ...(a.index ? { index: toBase64(a.index) } : {}),
+    ...(a.colors ? { colors: toBase64(a.colors) } : {}),
   };
 }
 
@@ -67,6 +96,7 @@ export function deserializeMesh(m: SerializedMesh): MeshAsset {
     positions: new Float32Array(fromBase64(m.positions)),
     normals: new Float32Array(fromBase64(m.normals)),
     ...(m.index ? { index: new Uint32Array(fromBase64(m.index)) } : {}),
+    ...(m.colors ? { colors: new Uint8Array(fromBase64(m.colors)) } : {}),
   };
 }
 

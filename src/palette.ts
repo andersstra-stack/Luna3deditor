@@ -4,14 +4,13 @@
 
 import * as THREE from "three";
 import { round } from "./bounds";
-import type { SceneObject } from "./types";
 
 export interface Palette {
   /** Antall ruter per side (8, 16, 32 …). */
   size: number;
   colors: number;
-  /** UV-en til objektets rute (glTF: v = 0 øverst). */
-  uvOf: (o: SceneObject) => [number, number];
+  /** UV-en til ruta for en farge med en glød (glTF: v = 0 øverst). */
+  uvOf: (color: string, emissive?: number) => [number, number];
   map: THREE.CanvasTexture;
   /** Bare når minst én farge gløder. */
   emissive: THREE.CanvasTexture | null;
@@ -19,8 +18,13 @@ export interface Palette {
   png: () => Promise<{ palette: Uint8Array; emission: Uint8Array | null }>;
 }
 
-const glowOf = (o: SceneObject) => round(o.emissive ?? 0, 0.01);
-const cellKey = (o: SceneObject) => `${o.color.toLowerCase()}|${glowOf(o)}`;
+/** Én rute i paletten: en farge og hvor mye den gløder. */
+export interface PaletteCell {
+  color: string;
+  emissive?: number;
+}
+
+const cellKey = (color: string, emissive = 0) => `${color.toLowerCase()}|${round(emissive, 0.01)}`;
 
 function texture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
   const t = new THREE.CanvasTexture(canvas);
@@ -39,8 +43,8 @@ async function pngBytes(canvas: HTMLCanvasElement): Promise<Uint8Array> {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-export function buildPalette(objects: SceneObject[]): Palette {
-  const keys = [...new Set(objects.map(cellKey))];
+export function buildPalette(cells: PaletteCell[]): Palette {
+  const keys = [...new Set(cells.map((c) => cellKey(c.color, c.emissive)))];
   let size = 8;
   while (size * size < keys.length) size *= 2;
 
@@ -75,8 +79,8 @@ export function buildPalette(objects: SceneObject[]): Palette {
   return {
     size,
     colors: keys.length,
-    uvOf: (o) => {
-      const [x, y] = cell.get(cellKey(o)) ?? [0, 0];
+    uvOf: (color, emissive) => {
+      const [x, y] = cell.get(cellKey(color, emissive)) ?? [0, 0];
       return [(x + 0.5) / size, (y + 0.5) / size];
     },
     map: texture(base.c),

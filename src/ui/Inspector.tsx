@@ -8,6 +8,7 @@ import { nodeAxes, nodeNameProblem } from "../nodes";
 import { splitLooseParts } from "../meshSplit";
 import { mergeObjects } from "../meshMerge";
 import { maxRadius, scaledRadius } from "../curves";
+import { hasVertexColors } from "../meshes";
 import { reportError } from "./StatusBar";
 import { Icon } from "./icons";
 
@@ -206,12 +207,29 @@ function FolderSelect({ objs }: { objs: SceneObject[] }) {
   );
 }
 
-function ColorRow({ objs }: { objs: SceneObject[] }) {
+function ColorRow({ objs: selected }: { objs: SceneObject[] }) {
   const { updateObjects, updateObjectsLive, pushHistory } = useEditor.getState();
+  // Sammenslåtte modeller med flere farger har farge per hjørne – de endres ikke herfra.
+  const objs = selected.filter((o) => !hasVertexColors(o));
+  const multiHint = selected.length > objs.length && (
+    <p className="hint">
+      {objs.length ? "Noen av modellene" : "Modellen"} har flere farger fra «Slå sammen». «Del opp i løse deler» gir hver del
+      fargen sin tilbake.
+    </p>
+  );
+  if (!objs.length) {
+    return (
+      <div className="row">
+        <div className="row-title">Farge</div>
+        {multiHint}
+      </div>
+    );
+  }
   const color = objs[objs.length - 1].color;
   return (
     <div className="row">
       <div className="row-title">Farge</div>
+      {multiHint}
       <div className="color-row">
         <input
           type="color"

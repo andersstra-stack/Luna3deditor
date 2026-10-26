@@ -32,7 +32,8 @@ MCP-verktøybeskrivelser er på engelsk.
   Unity. Empties blir noder; Custom Properties leses av `src/fbxProps.ts` (FBXLoader tar dem ikke med).
   «Del opp i løse deler»: `src/meshSplit.ts` (hjørner på samme sted regnes som felles; nye mesher i registeret, byttet inn
   med `store.replaceObjects` som ett angre-steg). «Slå sammen»: `src/meshMerge.ts` (baker geometrien i verdensrom, snur
-  trekantene for speilede objekter, normaliserer igjen; én farge – hovedvalgets).
+  trekantene for speilede objekter, normaliserer igjen). Hver del beholder fargen: `MeshAsset.colors` (sRGB-byte per hjørne,
+  lineært `color`-attributt i geometrien, også gjennom CSG); «Del opp» gjør ensfargede biter til vanlige modeller igjen.
   Modeller speiles med negativ størrelse (de er ikke symmetriske); `add_objects` kan ikke lage `mesh` direkte.
 - Python-skript: `scripting/luna3d.py` (API + `python -m luna3d skript.py`) samler endringer og skriver dem ut etter
   markøren `@@LUNA3D_OPS@@` når skriptet er ferdig. Kjøres av Rust (`run_python_script`, modulen pakkes som ressurs)
@@ -55,6 +56,9 @@ MCP-verktøybeskrivelser er på engelsk.
 - Eksport: `src/io.ts` `buildGlb` (i minnet, testbar) + `exportGlb` (skriver filer). `src/palette.ts` lager palett- og
   glød-bildet (én piksel per farge+glød, `flipY = false`, UV med v = 0 øverst). Materialer deles per
   materialnavn + metall/ruhet/gjennomsiktighet; `emissive` (0–1) og `material` ligger på `SceneObject`.
+  Mapper med `model: true` bakes til én mesh (én gruppe/primitive per materiale) i modellens rom: origo fra en node som
+  heter «pivot», ellers midt under delene. Et objekt hører til nærmeste modell-mappe oppover (`modelOf`); modell-mapper
+  inni modeller blir barn-mesher. Sjekk resultatet ved å lese GLB-ens JSON-del (nodene bruker `matrix`, ikke `translation`).
 - `src-tauri/src/lib.rs` – filkommandoer (`write_text_file`, `read_text_file`, `write_binary_file`) + dialog-plugin.
 
 ## Versjon og endringslogg

@@ -5,10 +5,11 @@ import { message, open, save } from "@tauri-apps/plugin-dialog";
 import { hasUnsavedChanges, useEditor, type Snapshot } from "./store";
 import { hiddenFolderIds } from "./folders";
 import { SHAPES, isLight, isNode, type Folder, type SceneFile, type SceneObject } from "./types";
-import { objectQuaternion, round } from "./bounds";
+import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { boxOf, objectMatrix, objectQuaternion, round } from "./bounds";
 import { sceneMeshes } from "./viewport/three-handle";
 import { buildPalette } from "./palette";
-import { deserializeMesh, hasMesh, registerMesh, serializeUsedMeshes } from "./meshes";
+import { deserializeMesh, hasMesh, registerMesh, serializeUsedMeshes, vertexHexes } from "./meshes";
 
 const SCENE_FILTER = { name: "Luna 3D-scene", extensions: ["luna.json", "json"] };
 
@@ -97,6 +98,8 @@ export interface GlbExport {
   path: string;
   /** Antall markør-noder i fila. */
   nodes: number;
+  /** Mapper som ble eksportert som én modell. */
+  models: number;
   /** Palett-PNG ved siden av GLB-en (bildet ligger også inne i GLB-en), og glød-bildet hvis noe gløder. */
   palette: string;
   emission?: string;
@@ -128,7 +131,7 @@ export async function exportGlb(path?: string): Promise<GlbExport | null> {
     emission = `${dir}${sep}${fileBase(target)}_emission.png`;
     await invoke("write_binary_file", { path: emission, contents: Array.from(built.emissionPng) });
   }
-  return { path: target, nodes: built.nodes, palette, emission, colors: built.colors, materials: built.materials };
+  return { path: target, nodes: built.nodes, models: built.models, palette, emission, colors: built.colors, materials: built.materials };
 }
 
 /** Bygger GLB-en i minnet (uten å skrive filer) – også brukt til testing. */
@@ -137,34 +140,24 @@ export async function buildGlb(base: string) {
   const { objects, folders } = useEditor.getState();
   const hidden = hiddenFolderIds(folders);
   const meshById = new Map(sceneMeshes().map((m) => [m.userData.lunaId as string, m]));
-  const groups = new Map<string, THREE.Group>();
-  const roots: THREE.Object3D[] = [];
-
-  const groupFor = (id: string | null): THREE.Object3D | null => {
-    const folder = id ? folders.find((f) => f.id === id) : undefined;
-    if (!folder) return null;
-    let group = groups.get(folder.id);
-    if (!group) {
-      group = new THREE.Group();
-      group.name = folder.name;
-      groups.set(folder.id, group);
-      const parent = groupFor(folder.parentId);
-      if (parent) parent.add(group);
-      else roots.push(group);
-    }
-    return group;
-  };
+  const folderById = new Map(folders.map((f) => [f.id, f]));
   const shown = (o: SceneObject) => o.visible && !(o.folderId && hidden.has(o.folderId));
 
   // Delene som eksporteres (hull og lys er editor-hjelpere; hullene er allerede skåret ut av geometrien).
   const solids = objects.filter((o) => !isNode(o.type) && !isLight(o.type) && !o.hole && shown(o) && meshById.has(o.id));
-  const palette = buildPalette(solids);
+  // Farge per hjørne for sammenslåtte modeller med flere farger, ellers delens egen farge.
+  const hexes = new Map(solids.map((o) => [o.id, vertexHexes(meshById.get(o.id)!.geometry)]));
+  const palette = buildPalette(
+    solids.flatMap((o) => [...new Set(hexes.get(o.id) ?? [o.color])].map((color) => ({ color, emissive: o.emissive }))),
+  );
 
   // Ett materiale per materialnavn og utseende (metall, ruhet, gjennomsiktighet) – alle bruker samme palett.
   const materials = new Map<string, THREE.MeshStandardMaterial>();
   const paletteNames = new Set<string>();
+  const materialKey = (o: SceneObject) =>
+    `${o.material ?? ""}|${round(o.metalness, 0.01)}|${round(o.roughness, 0.01)}|${round(o.opacity, 0.01)}`;
   const materialFor = (o: SceneObject) => {
-    const key = `${o.material ?? ""}|${round(o.metalness, 0.01)}|${round(o.roughness, 0.01)}|${round(o.opacity, 0.01)}`;
+    const key = materialKey(o);
     let m = materials.get(key);
     if (!m) {
       let name = o.material ?? `${base}_palette`;
@@ -189,45 +182,154 @@ export async function buildGlb(base: string) {
     return m;
   };
 
+  /** Delens geometri med UV-er som peker på fargens rute i paletten (posisjon, normal og uv – ikke hjørnefarger). */
+  const paletteGeometry = (o: SceneObject) => {
+    const geometry = meshById.get(o.id)!.geometry.clone();
+    for (const name of Object.keys(geometry.attributes)) if (name !== "position" && name !== "normal") geometry.deleteAttribute(name);
+    const perVertex = hexes.get(o.id);
+    const uv = new Float32Array(geometry.getAttribute("position").count * 2);
+    for (let i = 0; i < uv.length / 2; i++) uv.set(palette.uvOf(perVertex ? perVertex[i] : o.color, o.emissive), i * 2);
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    return geometry;
+  };
+
+  // ---------- Mapper merket «Én modell» ----------
+  // Et objekt hører til nærmeste mappe oppover som er en modell. Undermapper som ikke selv er modeller slås inn i den.
+  const modelOf = (folderId: string | null): Folder | null => {
+    for (let f = folderId ? folderById.get(folderId) : undefined; f; f = f.parentId ? folderById.get(f.parentId) : undefined) {
+      if (f.model) return f;
+    }
+    return null;
+  };
+  const isPivot = (o: SceneObject) => isNode(o.type) && o.name.toLowerCase() === "pivot" && !!modelOf(o.folderId);
+  const worldOf = (o: SceneObject) =>
+    new THREE.Matrix4().compose(new THREE.Vector3(...o.position), objectQuaternion(o), new THREE.Vector3(1, 1, 1));
+
+  /** Modellens origo: en node som heter «pivot» (hengsel, hjulaksel …), ellers midt under delene. */
+  const modelFrames = new Map<string, THREE.Matrix4>();
+  const modelFrame = (model: Folder) => {
+    let frame = modelFrames.get(model.id);
+    if (!frame) {
+      const pivot = objects.find((o) => isPivot(o) && modelOf(o.folderId) === model);
+      if (pivot) frame = worldOf(pivot);
+      else {
+        const box = boxOf(solids.filter((o) => modelOf(o.folderId) === model));
+        const c = box.isEmpty()
+          ? new THREE.Vector3()
+          : new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2);
+        frame = new THREE.Matrix4().makeTranslation(c.x, c.y, c.z);
+      }
+      modelFrames.set(model.id, frame);
+    }
+    return frame;
+  };
+
+  /** Delene i en modell bakt inn i modellens rom, én gruppe per materiale (blir delmesher/primitives i GLB-en). */
+  const modelMesh = (model: Folder): THREE.Object3D => {
+    const parts = solids.filter((o) => modelOf(o.folderId) === model);
+    const toModel = modelFrame(model).clone().invert();
+    const byMaterial = new Map<string, { material: THREE.Material; geos: THREE.BufferGeometry[] }>();
+    for (const o of parts) {
+      const indexed = paletteGeometry(o);
+      const geo = indexed.index ? indexed.toNonIndexed() : indexed;
+      const m = toModel.clone().multiply(objectMatrix(o));
+      geo.applyMatrix4(m);
+      // Speilet del (negativ størrelse): snu trekantene, ellers vender flatene innover.
+      if (m.determinant() < 0) {
+        for (const attr of Object.values(geo.attributes) as THREE.BufferAttribute[]) {
+          for (let t = 0; t < attr.count; t += 3) {
+            for (let k = 0; k < attr.itemSize; k++) {
+              const a = attr.getComponent(t + 1, k);
+              attr.setComponent(t + 1, k, attr.getComponent(t + 2, k));
+              attr.setComponent(t + 2, k, a);
+            }
+          }
+        }
+      }
+      const key = materialKey(o);
+      let group = byMaterial.get(key);
+      if (!group) byMaterial.set(key, (group = { material: materialFor(o), geos: [] }));
+      group.geos.push(geo);
+    }
+    const groups = [...byMaterial.values()];
+    const node = parts.length
+      ? new THREE.Mesh(
+          mergeGeometries(
+            groups.map((g) => mergeVertices(mergeGeometries(g.geos)!)),
+            true,
+          )!,
+          groups.map((g) => g.material),
+        )
+      : new THREE.Object3D();
+    node.name = model.name;
+    return node;
+  };
+
+  // ---------- Hierarkiet ----------
+  const nodesByFolder = new Map<string, THREE.Object3D>();
+  const roots: THREE.Object3D[] = [];
+  let models = 0;
+
+  /** Noden en mappe tilsvarer: en gruppe, eller modellen den hører til. */
+  const nodeFor = (folderId: string | null): THREE.Object3D | null => {
+    const folder = folderId ? folderById.get(folderId) : undefined;
+    if (!folder) return null;
+    const model = modelOf(folder.id);
+    if (model && model !== folder) return nodeFor(model.id);
+    let node = nodesByFolder.get(folder.id);
+    if (!node) {
+      const parent = nodeFor(folder.parentId);
+      if (model) {
+        node = modelMesh(model);
+        // Plassering i forhold til det modellen henger under: en ytre modell, eller verden (mappegrupper står i origo).
+        const outer = modelOf(folder.parentId);
+        const local = (outer ? modelFrame(outer).clone().invert() : new THREE.Matrix4()).multiply(modelFrame(model));
+        local.decompose(node.position, node.quaternion, node.scale);
+        models++;
+      } else {
+        node = new THREE.Group();
+        node.name = folder.name;
+      }
+      nodesByFolder.set(folder.id, node);
+      if (parent) parent.add(node);
+      else roots.push(node);
+    }
+    return node;
+  };
+
+  /** Plasserer et objekt (verdensmatrise) under mappa si – i modellens rom hvis mappa hører til en modell. */
+  const attach = (child: THREE.Object3D, world: THREE.Matrix4, folderId: string | null) => {
+    const model = modelOf(folderId);
+    const local = model ? modelFrame(model).clone().invert().multiply(world) : world;
+    local.decompose(child.position, child.quaternion, child.scale);
+    const parent = nodeFor(folderId);
+    if (parent) parent.add(child);
+    else roots.push(child);
+  };
+
   let count = 0;
   let nodes = 0;
   for (const obj of objects) {
-    if (isNode(obj.type)) {
-      if (!shown(obj)) continue;
-      // Tom node uten skala: markørstørrelsen er bare for editoren. GLTFExporter skriver userData som extras.
-      const n = new THREE.Object3D();
-      n.name = obj.name;
-      n.position.set(...obj.position);
-      n.quaternion.copy(objectQuaternion(obj));
-      n.userData = { ...obj.props };
-      const parent = groupFor(obj.folderId);
-      if (parent) parent.add(n);
-      else roots.push(n);
-      nodes++;
-      count++;
-    }
+    // Pivot-noden er modellens origo, ikke en egen node.
+    if (!isNode(obj.type) || !shown(obj) || isPivot(obj)) continue;
+    // Tom node uten skala: markørstørrelsen er bare for editoren. GLTFExporter skriver userData som extras.
+    const n = new THREE.Object3D();
+    n.name = obj.name;
+    n.userData = { ...obj.props };
+    attach(n, worldOf(obj), obj.folderId);
+    nodes++;
+    count++;
   }
   for (const obj of solids) {
-    const mesh = meshById.get(obj.id)!;
-    // Egen kopi med UV-er som alle peker på delens rute i paletten.
-    const geometry = mesh.geometry.clone();
-    for (const name of Object.keys(geometry.attributes)) if (name !== "position" && name !== "normal") geometry.deleteAttribute(name);
-    const [u, v] = palette.uvOf(obj);
-    const uv = new Float32Array(geometry.getAttribute("position").count * 2);
-    for (let i = 0; i < uv.length; i += 2) {
-      uv[i] = u;
-      uv[i + 1] = v;
-    }
-    geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-    const c = new THREE.Mesh(geometry, materialFor(obj));
-    c.name = obj.name;
-    c.position.copy(mesh.position);
-    c.quaternion.copy(mesh.quaternion);
-    c.scale.copy(mesh.scale);
-    const parent = groupFor(obj.folderId);
-    if (parent) parent.add(c);
-    else roots.push(c);
     count++;
+    // Deler i en modell slås inn i den (nodeFor bygger modellen første gang).
+    if (modelOf(obj.folderId)) {
+      nodeFor(obj.folderId);
+      continue;
+    }
+    const c = new THREE.Mesh(paletteGeometry(obj), materialFor(obj));
+    c.name = obj.name;
+    attach(c, objectMatrix(obj), obj.folderId);
   }
   if (!count) throw new Error("Scenen er tom – ingenting å eksportere");
 
@@ -238,6 +340,7 @@ export async function buildGlb(base: string) {
     palettePng: pngs.palette,
     emissionPng: pngs.emission,
     nodes,
+    models,
     colors: palette.colors,
     materials: [...materials.values()].map((m) => m.name),
   };

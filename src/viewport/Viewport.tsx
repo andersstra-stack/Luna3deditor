@@ -186,6 +186,8 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
   );
   const isCut = holes.length > 0;
   useEffect(() => () => void (isCut && geometry.dispose()), [geometry, isCut]);
+  // Sammenslåtte modeller med flere farger har farge per hjørne; da er materialet hvitt.
+  const colored = !!geometry.getAttribute("color");
 
   return (
     <mesh
@@ -200,7 +202,10 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
       onClick={onClick}
     >
       <meshStandardMaterial
-        color={obj.color}
+        // Ny nøkkel når hjørnefargene kommer/går – three må kompilere shaderen på nytt.
+        key={colored ? "vertex-colors" : "color"}
+        vertexColors={colored}
+        color={colored ? "#ffffff" : obj.color}
         metalness={obj.metalness}
         roughness={obj.roughness}
         emissive={obj.color}

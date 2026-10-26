@@ -157,6 +157,11 @@ export interface MeshAsset {
   positions: Float32Array;
   normals: Float32Array;
   index?: Uint32Array;
+  /**
+   * Farge per hjørne (sRGB, 3 byte) – modeller som er slått sammen av deler med ulike farger. Uten dette har modellen
+   * én farge (objektets `color`). Eksporten legger hver farge i paletten.
+   */
+  colors?: Uint8Array;
 }
 
 /** Mapper er kun for organisering – de har ingen egen posisjon. */
@@ -165,6 +170,11 @@ export interface Folder {
   name: string;
   parentId: string | null;
   visible: boolean;
+  /**
+   * Eksporteres som ÉN modell: alle deler i mappa (og undermapper som ikke selv er modeller) blir én mesh med ett
+   * palett-materiale per utseende. Markør-noder blir barn av modellen; en node som heter «pivot» blir origo.
+   */
+  model?: boolean;
   /** Skriptet som laget mappa – gjenbrukes når skriptet kjøres igjen. */
   script?: string;
 }
@@ -218,6 +228,7 @@ export interface SerializedMesh {
   positions: string;
   normals: string;
   index?: string;
+  colors?: string;
 }
 
 /**
@@ -225,7 +236,7 @@ export interface SerializedMesh {
  * mapper/objekter laget tidligere i samme skript; ellers er det id-er fra scenen.
  */
 export type ScriptOp =
-  | { op: "folder"; key: string; name: string; parent?: string | null }
+  | { op: "folder"; key: string; name: string; parent?: string | null; model?: boolean }
   | { op: "add"; key: string; type: ShapeType; props: Record<string, unknown> }
   | { op: "update"; id: string; props: Record<string, unknown> }
   | { op: "delete"; ids: string[] };

@@ -57,13 +57,18 @@ function pieceObject(obj: SceneObject, asset: MeshAsset, tris: number[], n: numb
   const corner = (t: number, k: number) => (asset.index ? asset.index[t * 3 + k] : t * 3 + k);
   const positions = new Float32Array(tris.length * 9);
   const normals = new Float32Array(tris.length * 9);
+  const colors = asset.colors ? new Uint8Array(tris.length * 9) : undefined;
   tris.forEach((t, i) => {
     for (let k = 0; k < 3; k++) {
       const v = corner(t, k);
       positions.set(asset.positions.subarray(v * 3, v * 3 + 3), i * 9 + k * 3);
       normals.set(asset.normals.subarray(v * 3, v * 3 + 3), i * 9 + k * 3);
+      colors?.set(asset.colors!.subarray(v * 3, v * 3 + 3), i * 9 + k * 3);
     }
   });
+  // En bit med bare én farge blir en vanlig modell med den fargen (typisk etter «Slå sammen» → «Del opp»).
+  const single = !colors || colors.every((v, i) => v === colors[i % 3]);
+  const color = colors && single ? `#${[...colors.subarray(0, 3)].map((v) => v.toString(16).padStart(2, "0")).join("")}` : obj.color;
 
   const box = new THREE.Box3().setFromArray(positions);
   const c = box.getCenter(new THREE.Vector3());
@@ -76,7 +81,7 @@ function pieceObject(obj: SceneObject, asset: MeshAsset, tris: number[], n: numb
 
   const meshId = newId("mesh");
   const name = `${obj.name}.${n}`;
-  registerMesh({ id: meshId, name, positions, normals });
+  registerMesh({ id: meshId, name, positions, normals, ...(single ? {} : { colors }) });
 
   // Bitens midtpunkt i verdensrommet: objektets posisjon + rotasjon·(størrelse ⊙ lokalt midtpunkt).
   const offset = new THREE.Vector3(c.x * obj.scale[0], c.y * obj.scale[1], c.z * obj.scale[2]).applyQuaternion(objectQuaternion(obj));
@@ -86,6 +91,7 @@ function pieceObject(obj: SceneObject, asset: MeshAsset, tris: number[], n: numb
     type: "mesh",
     meshId,
     name,
+    color,
     position: obj.position.map((p, i) => round(p + offset.getComponent(i))) as Vec3,
     scale: obj.scale.map((v, i) => round(v * s[i], 1e-4)) as Vec3,
   };

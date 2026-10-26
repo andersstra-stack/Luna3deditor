@@ -261,6 +261,16 @@ its text, the object it's on and a world position. Do the work, then reply_to_no
 Pins also appear (numbered) in screenshots. You may add_note yourself to point at problems or give constructive feedback
 in place (e.g. a gap between walls) – keep it short and actionable.
 
+Export as one model (for Unity/Unreal): set model: true on a folder (create_folders/update_folders, Python
+luna.folder(name, model=True), or the package button in the scene list). export_glb then bakes everything in it –
+including subfolders that are not models themselves – into ONE mesh with one palette material per look (submeshes when
+metalness/roughness differ); colors stay as palette UVs. Marker nodes in it become children of the model. The model's
+origin is a marker node named "pivot" in the folder (its position and rotation; the pivot itself is not exported), or
+else the bottom center of its parts. For ANIMATION keep moving parts separate: a door, wheel, turret or lid gets its
+own subfolder with model: true and a "pivot" node on its hinge/axle – it becomes a child mesh of the outer model that the
+game can rotate. Skeletal rigs (characters) are done in Blender/Mixamo on the exported mesh. Keep parts as separate
+shapes in Luna while working (easy to edit) – merging happens at export.
+
 Folders: purely organizational (like a file tree) — they have no transform of their own and can be nested.
 For anything with more than a handful of parts, put parts in descriptive folders (e.g. "House" > "Roof", "Walls").
 Create folders first with create_folders, then pass folderId in add_objects. Hidden folders hide everything inside them.
@@ -268,7 +278,8 @@ Create folders first with create_folders, then pass folderId in add_objects. Hid
 Helpers: duplicate_objects (repeat parts with an offset), mirror_objects (symmetric models: build one side, mirror-copy
 across x = 0), align_objects, drop_to_ground. split_loose_parts splits imported meshes into their unconnected pieces
 (like Blender's "Separate by Loose Parts") so single pieces can be moved, recolored or deleted; merge_objects joins
-several shapes/meshes into one mesh (like Ctrl+J; it gets the primary's color, so merge parts of one color).
+several shapes/meshes into one mesh inside Luna (like Ctrl+J; every part keeps its color, the rest of the look comes from
+the primary). Prefer model folders for export – merged meshes can't be edited part by part.
 
 Workflow tips: call get_scene first to see existing objects and their ids. Build composite things from several shapes
 with one add_objects call. Use screenshot to check your work visually — try different views. Every change is undoable by the user.`;
@@ -344,6 +355,7 @@ server.registerTool(
           z.object({
             name: z.string().describe("Folder name, e.g. 'Roof'"),
             parentId: z.string().nullable().optional().describe("Parent folder id; omit or null for the scene root."),
+            model: z.boolean().optional().describe("true = export this folder as ONE model (one mesh, one palette material per look); see 'Export as one model' in the instructions."),
           }),
         )
         .min(1),
@@ -365,6 +377,7 @@ server.registerTool(
             name: z.string().optional(),
             visible: z.boolean().optional().describe("false hides the folder and everything inside it"),
             parentId: z.string().nullable().optional().describe("New parent folder id; null = scene root."),
+            model: z.boolean().optional().describe("true = export this folder as ONE model (one mesh, one palette material per look); see 'Export as one model' in the instructions."),
           }),
         )
         .min(1),
@@ -668,7 +681,7 @@ server.registerTool(
   {
     title: "Merge objects",
     description:
-      "Join several shapes or imported models into ONE mesh object, like Blender's Ctrl+J. It stays where the parts were, takes the name, folder, color and material of the last id (the primary), and is axis-aligned (rotation 0). A mesh has one color, so merge parts that share a color. Lights, nodes and holes are skipped (holes in the folder still cut the result). One undo step; split_loose_parts can split it again.",
+      "Join several shapes or imported models into ONE mesh object, like Blender's Ctrl+J. It stays where the parts were, takes the name, folder and material (metalness, roughness, glow) of the last id (the primary), and is axis-aligned (rotation 0). Every part keeps its own color (per-vertex colors, exported as palette UVs). For game export prefer a folder with model: true instead – the parts stay editable. Lights, nodes and holes are skipped (holes in the folder still cut the result). One undo step; split_loose_parts can split it again.",
     inputSchema: { ids: z.array(z.string()).min(2).describe("Ids of the objects to merge; the last one is the primary") },
   },
   ({ ids }) => run("merge_objects", { ids }),

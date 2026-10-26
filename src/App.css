@@ -451,6 +451,12 @@ input {
   color: var(--red);
 }
 
+/* «Én modell ved eksport» synes alltid når den er på. */
+.outliner li .row-btn.model-toggle.on {
+  opacity: 1;
+  color: var(--accent);
+}
+
 /* Egenskaper */
 .row {
   margin-bottom: 14px;

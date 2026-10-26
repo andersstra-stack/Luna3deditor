@@ -18,11 +18,19 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 - **Avsmalnende sylinder** (`taper` 0–1, glidebryter i egenskapspanelet): toppen blir smalere enn bunnen – trestammer,
   bordben, vaser. 0 gir en spiss.
 - Eksempelskriptet `scripting/eksempler/tegneserietre.py` bruker begge.
+- **Mappe som én modell ved eksport** (pakke-knappen i scenelista, MCP/Python `model`): alt i mappa blir én mesh med
+  ett palett-materiale per utseende i GLB-en – klart for Unity/Unreal – mens delene fortsatt kan redigeres hver for seg
+  i Luna. Undermapper som også er modeller blir egne barn-mesher (dører, hjul, greiner som skal animeres), og en
+  markør-node som heter `pivot` bestemmer origo (hengsel, aksel). Uten pivot står origo midt under modellen.
 - **Ulagrede endringer vises**: en prikk ved scenenavnet i tittellinja og `*` foran navnet i oppgavelinja. Angrer du
   tilbake til lagret tilstand, forsvinner markøren.
 - **Advarsel før endringer går tapt**: lukke vinduet, «Ny scene» og «Åpne» spør «Lagre / Ikke lagre / Avbryt» når
   scenen har ulagrede endringer.
 - **Lagre som…** (Ctrl+Shift+S og egen knapp i verktøylinja).
+
+### Changed
+- **«Slå sammen» beholder fargene**: hver del får fargen sin per hjørne i stedet for at alt blir hovedvalgets farge.
+  Fargene følger med gjennom hull og GLB-eksport, og «Del opp i løse deler» gir bitene fargen sin tilbake.
 
 ## [0.11.0] — 2026-10-26
 

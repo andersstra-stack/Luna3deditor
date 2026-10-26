@@ -82,7 +82,7 @@ export interface EditorState extends Snapshot {
   /** Fjerner `ids` og legger til `items` som ett angre-steg (f.eks. en modell delt i biter). De nye velges. */
   replaceObjects: (ids: string[], items: NewObject[]) => SceneObject[];
 
-  addFolders: (items: { name?: string; parentId?: string | null }[]) => Folder[];
+  addFolders: (items: { name?: string; parentId?: string | null; model?: boolean }[]) => Folder[];
   updateFolders: (updates: FolderUpdate[]) => void;
   /** Uten `deleteContents` flyttes innholdet opp til overordnet mappe. */
   deleteFolders: (ids: string[], deleteContents?: boolean) => void;
@@ -316,6 +316,7 @@ export const useEditor = create<EditorState>((set, get) => {
           name: uniqueName(item.name?.trim() || "Ny mappe", siblings(all, item.parentId)),
           parentId: item.parentId ?? null,
           visible: true,
+          ...(item.model ? { model: true } : {}),
         };
         all.push(folder);
         created.push(folder);
@@ -425,9 +426,17 @@ export const useEditor = create<EditorState>((set, get) => {
           if (old) {
             reused.add(old.id);
             keys.set(op.key, old.id);
+            if (op.model !== undefined) folders = folders.map((f) => (f === old ? { ...f, model: op.model } : f));
             continue;
           }
-          const folder: Folder = { id: newId("fld"), name: uniqueName(name, siblings(folders, parentId)), parentId, visible: true, ...(script ? { script } : {}) };
+          const folder: Folder = {
+            id: newId("fld"),
+            name: uniqueName(name, siblings(folders, parentId)),
+            parentId,
+            visible: true,
+            ...(op.model ? { model: true } : {}),
+            ...(script ? { script } : {}),
+          };
           folders.push(folder);
           keys.set(op.key, folder.id);
           result.folders.push(folder.id);
