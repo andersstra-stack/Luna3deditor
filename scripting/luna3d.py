@@ -17,7 +17,13 @@ run_python). Endringene sendes til appen først når skriptet er ferdig uten fei
 hele kjøringen er ett angre-steg. `print()` vises som skriptets utdata.
 
 Former: box, sphere, cylinder, cone, torus, plane, capsule, wedge, prism, pyramid,
-stairs, hemisphere, tube, rounded_box, point_light, spot_light (eller add(type, ...)).
+stairs, hemisphere, tube, rounded_box, curve, point_light, spot_light (eller add(type, ...)).
+
+Organiske former: cylinder(taper=0.6) smalner av mot toppen (toppens diameter i forhold til bunnens).
+curve(points=[...], radius=...) er et rør langs en jevn kurve gjennom punktene (i verdensrommet) –
+greiner, røtter, kabler. radius er ett tall eller ett per punkt:
+
+    luna.curve(points=[(0, 1.6, 0), (0.6, 2.1, 0.1), (1.1, 2.3, 0)], radius=[0.12, 0.07, 0.03], color="#8a5a3b")
 
 Markør-noder (node) er usynlige punkter med navn og retning som spillmotoren leser: lokal +Z er
 forover og +Y opp. Egendefinerte egenskaper legges i props={...} (eksporteres som glTF extras):
@@ -33,16 +39,17 @@ import sys
 __all__ = [
     "scene", "objects", "get", "folders", "folder", "add", "update", "delete",
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
-    "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "point_light", "spot_light", "node",
+    "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "curve", "point_light", "spot_light", "node",
 ]
 
 SHAPES = {
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
-    "pyramid", "stairs", "hemisphere", "tube", "roundedBox", "pointLight", "spotLight", "node",
+    "pyramid", "stairs", "hemisphere", "tube", "roundedBox", "curve", "pointLight", "spotLight", "node",
 }
 PROPS = {
     "name", "position", "rotation", "scale", "color", "metalness", "roughness",
     "opacity", "visible", "hole", "intensity", "emissive", "material", "props", "folder",
+    "taper", "points", "radius",
 }
 MARKER = "@@LUNA3D_OPS@@"
 MAX_OPS = 20000
@@ -104,6 +111,25 @@ def _clean(props):
                 if not isinstance(pk, str) or isinstance(pv, bool) or not isinstance(pv, (str, int, float)):
                     raise ValueError(f"props må ha tekstnøkler og tall eller tekst som verdier (1/0 for ja/nei) – fikk {pk!r}: {pv!r}")
             v = dict(v)
+        elif k == "points":
+            try:
+                v = [_vec3(f"points[{i}]", p) for i, p in enumerate(v)]
+            except TypeError:
+                raise ValueError(f"points må være en liste med punkter (x, y, z) – fikk {v!r}") from None
+            if len(v) < 2:
+                raise ValueError("points må ha minst to punkter")
+        elif k == "radius":
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                v = float(v)
+            else:
+                try:
+                    v = [float(r) for r in v]
+                except (TypeError, ValueError):
+                    raise ValueError(f"radius må være et tall eller én radius per punkt – fikk {v!r}") from None
+        elif k == "taper":
+            v = float(v)
+            if not 0 <= v <= 1:
+                raise ValueError(f"taper må være mellom 0 (spiss) og 1 (rett sylinder) – fikk {v!r}")
         elif k == "color":
             if not (isinstance(v, str) and len(v) == 7 and v.startswith("#")):
                 raise ValueError(f"color må være en hex-farge som '#ff8800' – fikk {v!r}")
@@ -194,6 +220,7 @@ stairs = _shape("stairs")
 hemisphere = _shape("hemisphere")
 tube = _shape("tube")
 rounded_box = _shape("roundedBox")
+curve = _shape("curve")
 point_light = _shape("pointLight")
 spot_light = _shape("spotLight")
 node = _shape("node")

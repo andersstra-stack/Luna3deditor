@@ -55,6 +55,7 @@ export function ShapeIcon({ type, size = 18 }: { type: ShapeType; size?: number 
         </>
       )}
       {type === "roundedBox" && <rect x="4" y="4" width="16" height="16" rx="4.5" />}
+      {type === "curve" && <path d="M3 19.5c3.5 0 4-6 8-7.5s6.5 1 10-8M2.5 17.5l1.5 4M19.5 3.5l3 1.5" />}
       {type === "pointLight" && (
         <>
           <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" />

@@ -3,6 +3,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { SceneObject, ShapeType } from "../types";
 import { meshGeometry } from "../meshes";
+import { curveKey, normalizedCurveGeometry } from "../curves";
 import { useUi, type GeometryDetail } from "../ui/uiStore";
 
 // Én delt geometri per type og detaljnivå – alle er enhetsstore og sentrert i origo.
@@ -102,7 +103,8 @@ function build(type: ShapeType, detail: GeometryDetail): THREE.BufferGeometry {
       return mergeGeometries([ball, shaft, tip, up])!;
     }
     case "mesh":
-      // Importerte modeller har egen geometri – se geometryOf().
+    case "curve":
+      // Importerte modeller og kurverør har egen geometri – se geometryOf().
       return new THREE.BoxGeometry(1, 1, 1);
   }
 }
@@ -121,7 +123,46 @@ export function getGeometry(type: ShapeType): THREE.BufferGeometry {
   return geo;
 }
 
-/** Geometrien til et objekt – for importerte modeller fra modellregisteret. */
-export function geometryOf(o: Pick<SceneObject, "type" | "meshId">): THREE.BufferGeometry {
-  return o.type === "mesh" && o.meshId ? meshGeometry(o.meshId) : getGeometry(o.type);
+type GeometrySource = Pick<SceneObject, "type" | "meshId" | "taper" | "curve">;
+
+/** Avsmalningen avrundet, så glidebryteren ikke lager en ny geometri for hver piksel. 1 = rett sylinder. */
+const taperOf = (o: GeometrySource) => (o.type === "cylinder" && o.taper !== undefined ? Math.round(THREE.MathUtils.clamp(o.taper, 0, 1) * 100) / 100 : 1);
+
+/** Identiteten til geometrien et objekt tegnes med (cache-nøkkel her og i csg.ts). */
+export function geometryKey(o: GeometrySource): string {
+  if (o.type === "mesh") return `mesh:${o.meshId}`;
+  if (o.type === "curve" && o.curve) return `curve:${curveKey(o.curve)}:${geometryDetail()}`;
+  const taper = taperOf(o);
+  return taper !== 1 ? `cylinder@${taper}:${geometryDetail()}` : `${o.type}:${geometryDetail()}`;
+}
+
+// Kurverør og avsmalninger lager nye geometrier når de endres – de eldste kastes, så cachen ikke vokser uten grense.
+const PARAMETRIC_LIMIT = 400;
+const parametric = new Map<string, THREE.BufferGeometry>();
+
+/** Geometrien til et objekt – for importerte modeller fra modellregisteret, for kurverør og avsmalnede sylindre bygget fra egenskapene. */
+export function geometryOf(o: GeometrySource): THREE.BufferGeometry {
+  if (o.type === "mesh" && o.meshId) return meshGeometry(o.meshId);
+  const taper = taperOf(o);
+  if (!(o.type === "curve" && o.curve) && taper === 1) return getGeometry(o.type);
+  const key = geometryKey(o);
+  let geo = parametric.get(key);
+  if (geo) {
+    // Nylig brukt flyttes bakerst.
+    parametric.delete(key);
+  } else {
+    const { round } = SEGMENTS[geometryDetail()];
+    geo =
+      o.type === "curve" && o.curve
+        ? normalizedCurveGeometry(o.curve, { radial: round / 2, perSpan: geometryDetail() === "smooth" ? 12 : 3 })
+        : new THREE.CylinderGeometry(0.5 * taper, 0.5, 1, round);
+    if (parametric.size >= PARAMETRIC_LIMIT) {
+      const [oldKey, old] = parametric.entries().next().value!;
+      parametric.delete(oldKey);
+      // Trygt selv om noe fortsatt bruker den: three laster den opp på nytt ved neste tegning.
+      old.dispose();
+    }
+  }
+  parametric.set(key, geo);
+  return geo;
 }

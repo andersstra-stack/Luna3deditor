@@ -8,6 +8,7 @@ import { useEditor } from "./store";
 import { objectBox, round } from "./bounds";
 import { isNode, type ScriptOp, type ScriptResult } from "./types";
 import { nodeAxes } from "./nodes";
+import { curveWorldPoints } from "./curves";
 
 export const SCRIPT_MARKER = "@@LUNA3D_OPS@@";
 
@@ -18,7 +19,13 @@ export function sceneForScripts() {
     const b = objectBox(o);
     const bounds = { min: b.min.toArray().map((v) => round(v)), max: b.max.toArray().map((v) => round(v)) };
     // Noder: retningene i verdensrommet (lokal +Z forover, +Y opp), så Claude slipper å regne på Euler-vinkler.
-    return isNode(o.type) ? { ...o, bounds, ...nodeAxes(o) } : { ...o, bounds };
+    if (isNode(o.type)) return { ...o, bounds, ...nodeAxes(o) };
+    // Kurverør: punktene i verdensrommet (samme form som de oppgis i), ikke de lokale.
+    if (o.type === "curve" && o.curve) {
+      const { curve, ...rest } = o;
+      return { ...rest, points: curveWorldPoints(o), radius: curve.radius, bounds };
+    }
+    return { ...o, bounds };
   });
   return { folders, objects: withBounds, selectedIds, filePath };
 }

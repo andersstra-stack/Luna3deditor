@@ -16,6 +16,10 @@ MCP-verktøybeskrivelser er på engelsk.
   `csg.ts` (hull: three-bvh-csg, resultat i solidens lokale rom), `three-handle.ts` (three-tilstanden utenfor Canvas).
 - Detaljnivå: `geometryDetail` i `uiStore` («smooth»/«lowpoly», localStorage) styrer segmentene i `geometries.ts` (`SEGMENTS`);
   cachen og CSG-kopiene er per nivå, og `Scene` bruker nivået i nøkkelen så formene bygges på nytt ved bytte.
+- Parametriske former: `taper` (sylinder) og `type: "curve"` (`src/curves.ts`) har geometri per objekt – bruk alltid
+  `geometryOf(o)` og `geometryKey(o)` (cache-nøkkel, også i `csg.ts`). Kurverør lagrer punktene lokalt (sentrert, meter) og
+  normaliseres som modeller; utad (MCP/Python, `get_scene`) er punktene i verdensrommet. `points`/`radius` i
+  add/update regnes om i `store.ts` (`newCurveProps`, `withUpdate`). Boksen tas fra den glatte varianten.
 - `src/bounds.ts` – nøyaktige verdensbokser beregnet fra dataene (ikke fra 3D-visningen); brukes av snapping,
   plassering, målvisning og `get_scene`. `src/placement.ts` – til bakken, innrett, speil.
 - Utvalg: `selectedIds` (siste = hovedvalget, se `primaryId`). Nye former legges i `types.ts` (SHAPES, størrelse,

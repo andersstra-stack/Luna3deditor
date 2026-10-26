@@ -168,6 +168,23 @@ const objectProps = {
     .nullable()
     .optional()
     .describe("Folder to place the object in (id from create_folders / get_scene). null = scene root."),
+  taper: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe("Cylinder only: top diameter relative to the bottom (1 = straight, 0.6 = trunk-like, 0 = pointed). Flip it 180° to be wider at the top."),
+  points: z
+    .array(vec3)
+    .min(2)
+    .optional()
+    .describe(
+      "Curve only: WORLD-space points [x, y, z] the tube passes through (smooth curve). position/rotation/scale are then derived from them – omit those.",
+    ),
+  radius: z
+    .union([z.number().min(0), z.array(z.number().min(0))])
+    .optional()
+    .describe("Curve only: tube radius in meters – one number, or one per point for a tapering tube (e.g. [0.12, 0.07, 0.02]). Default 0.1."),
 };
 
 const INSTRUCTIONS = `Luna 3D is a simple 3D editor the user has open on their desktop. These tools edit its scene live.
@@ -184,6 +201,12 @@ All shapes are unit-sized and centered on their origin, so 'scale' equals the ob
 - torus: lies flat, outer diameter 1, tube thickness 0.3
 - plane: flat 1×1 square in the XZ plane (zero thickness)
 - capsule: 0.5 wide, 1 tall (along Y)
+- cylinder with 'taper' (0–1): top diameter relative to the bottom – tree trunks, table legs, vases, horns
+- curve: a round tube along a smooth curve through 'points' (WORLD coordinates) with 'radius' (one number, or one per
+  point to taper it) – branches, roots, cables, handles, tentacles, horns. Give points + radius instead of
+  position/scale; get_scene returns its current world 'points' and 'radius'. Sending new points to update_objects
+  reshapes it; sending only radius keeps it in place. Start a branch slightly INSIDE its parent (e.g. inside the trunk)
+  so the joint looks grown, not glued on.
 - pointLight / spotLight: light sources (spotLight shines along its local -Y; rotate it to aim). Use 'intensity' and 'color'.
 - node: an invisible marker point for game engines (see "Marker nodes" below). 'scale' is only its size in the editor.
 To rest an object on the ground, set position.y = scale.y / 2 (planes: y = 0) — or call drop_to_ground.
@@ -219,9 +242,10 @@ export_glb writes nodes as empty glTF nodes with props as extras; Unity (glTFast
 Python scripts: run_python runs Python code (or a .py file) that builds or edits the scene through the luna3d
 module – best for anything repetitive or mathematical (fences, stairs, grids, rings, terrain, arrays of parts),
 where one loop replaces hundreds of add_objects entries. The whole run is ONE undo step. API (import luna3d as luna):
-- luna.box/sphere/cylinder/cone/torus/plane/capsule/wedge/prism/pyramid/stairs/hemisphere/tube/rounded_box/
+- luna.box/sphere/cylinder/cone/torus/plane/capsule/wedge/prism/pyramid/stairs/hemisphere/tube/rounded_box/curve/
   point_light/spot_light/node(name=, position=(x,y,z), rotation=(deg,deg,deg), scale=(x,y,z), color="#rrggbb",
   metalness=, roughness=, opacity=, hole=, intensity=, emissive=, material=, props={...}, folder=) -> key; or luna.add("box", ...)
+- luna.cylinder(taper=0.6, ...); luna.curve(points=[(x,y,z), ...], radius=0.1 or [r per point], color=..., folder=...)
 - luna.folder(name, parent=None) -> key (use as folder=/parent=)
 - luna.update(id_or_key, **props), luna.delete(*ids)
 - luna.scene / luna.objects(name=, type=, folder=) / luna.folders(name=) / luna.get(id): the scene at start,

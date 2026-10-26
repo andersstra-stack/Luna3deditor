@@ -81,13 +81,14 @@ function mirrored(o: SceneObject, axis: Axis, plane: number): Pick<SceneObject, 
   const r = new THREE.Matrix4().makeRotationFromQuaternion(objectQuaternion(o));
   const result = m.clone().multiply(r).multiply(m);
   const scale = [...o.scale] as Vec3;
-  if (o.type === "mesh") {
-    // Importerte modeller kan ha hvilken som helst form: speil selve geometrien med negativ størrelse.
+  if (o.type === "mesh" || o.type === "curve") {
+    // Importerte modeller og kurverør kan ha hvilken som helst form: speil selve geometrien med negativ størrelse.
     scale[i] = -scale[i];
   } else if (isNode(o.type)) {
     // M·R·Lx: forover (+Z) og opp (+Y) speiles som punktene rundt, uten negativ skala i eksporten.
     result.copy(m.clone().multiply(r).multiply(new THREE.Matrix4().makeScale(-1, 1, 1)));
-  } else if (!SYMMETRIC_AXES[o.type].includes(axis)) {
+  } else if (!(o.type === "cylinder" && (o.taper ?? 1) !== 1 ? "xz" : SYMMETRIC_AXES[o.type]).includes(axis)) {
+    // (En avsmalnet sylinder er ikke lenger symmetrisk opp/ned.)
     result.multiply(axis === "x" ? new THREE.Matrix4().makeRotationY(Math.PI) : new THREE.Matrix4().makeRotationX(Math.PI));
   }
   const e = new THREE.Euler().setFromRotationMatrix(result, "XYZ");

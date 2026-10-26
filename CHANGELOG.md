@@ -11,6 +11,13 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 ## [Unreleased]
 
 ### Added
+- **Kurverør** (Legg til → Flere former, MCP/Python `curve`): et rør langs en jevn kurve gjennom punkter, med én radius
+  per punkt så det kan smalne av – greiner, røtter, kabler, håndtak. Punktene oppgis i verdensrommet (`points`), og
+  `get_scene` gir dem tilbake på samme måte. Egenskapspanelet endrer tykkelsen og beholder avsmalningen. Rørene kan
+  speiles, kopieres, få hull og eksporteres som alle andre former.
+- **Avsmalnende sylinder** (`taper` 0–1, glidebryter i egenskapspanelet): toppen blir smalere enn bunnen – trestammer,
+  bordben, vaser. 0 gir en spiss.
+- Eksempelskriptet `scripting/eksempler/tegneserietre.py` bruker begge.
 - **Ulagrede endringer vises**: en prikk ved scenenavnet i tittellinja og `*` foran navnet i oppgavelinja. Angrer du
   tilbake til lagret tilstand, forsvinner markøren.
 - **Advarsel før endringer går tapt**: lukke vinduet, «Ny scene» og «Åpne» spør «Lagre / Ikke lagre / Avbryt» når

@@ -1455,6 +1455,13 @@ select.text option {
   line-height: 1.6;
 }
 
+.row .hint {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 .node-axes b {
   color: var(--text);
   font-weight: 500;

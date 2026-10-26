@@ -20,6 +20,7 @@ import {
 } from "./types";
 import { folderChain, isInside } from "./folders";
 import { uniqueNodeName } from "./nodes";
+import { newCurveProps, placeCurve, reshapeCurve } from "./curves";
 
 const HISTORY_LIMIT = 100;
 
@@ -34,8 +35,10 @@ export interface Snapshot {
 
 export type Tool = "select" | "note";
 
-export type NewObject = Partial<SceneObject> & { type: ShapeType };
-export type ObjectUpdate = Partial<SceneObject> & { id: string };
+/** Kun kurverør: punktene i verdensrommet og radius (ett tall eller ett per punkt) – se curves.ts. */
+export type CurveInput = { points?: Vec3[]; radius?: number | number[] };
+export type NewObject = Partial<SceneObject> & CurveInput & { type: ShapeType };
+export type ObjectUpdate = Partial<SceneObject> & CurveInput & { id: string };
 export type FolderUpdate = Partial<Omit<Folder, "id">> & { id: string };
 export type SelectMode = "replace" | "toggle" | "add";
 
@@ -69,10 +72,10 @@ export interface EditorState extends Snapshot {
 
   addObject: (type: ShapeType, props?: Partial<SceneObject>) => SceneObject;
   addObjects: (items: NewObject[]) => SceneObject[];
-  updateObject: (id: string, props: Partial<SceneObject>) => void;
+  updateObject: (id: string, props: Partial<SceneObject> & CurveInput) => void;
   updateObjects: (updates: ObjectUpdate[]) => void;
   /** Oppdatering uten historikk – brukes mens gizmoen dras. */
-  updateObjectLive: (id: string, props: Partial<SceneObject>) => void;
+  updateObjectLive: (id: string, props: Partial<SceneObject> & CurveInput) => void;
   updateObjectsLive: (updates: ObjectUpdate[]) => void;
   deleteObjects: (ids: string[]) => void;
   duplicateObjects: (ids: string[], offset?: Vec3) => SceneObject[];
@@ -143,8 +146,9 @@ function uniqueName(base: string, taken: { name: string }[]): string {
   return `${base} ${i}`;
 }
 
-function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<SceneObject> = {}): SceneObject {
-  const { id: _ignored, type: _type, name: _name, ...rest } = props;
+function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<SceneObject> & CurveInput = {}): SceneObject {
+  const { id: _ignored, type: _type, name: _name, points, radius, ...rest } = props;
+  if ((points !== undefined || radius !== undefined) && type !== "curve") throw new Error("points og radius gjelder bare kurverør (type curve)");
   const scale = DEFAULT_SCALE[type] ?? [1, 1, 1];
   const y = startHeight(type, scale);
   return {
@@ -161,6 +165,7 @@ function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<Sce
     folderId: null,
     ...(isLight(type) ? { intensity: DEFAULT_INTENSITY[type] } : {}),
     ...rest,
+    ...(type === "curve" ? newCurveProps({ ...rest, points, radius }) : {}),
     type,
   };
 }
@@ -169,9 +174,18 @@ function assertFolder(folders: Folder[], id: string | null | undefined) {
   if (id && !folders.some((f) => f.id === id)) throw new Error(`Fant ikke mappe ${id}`);
 }
 
+/** Ett objekt med endringene. Nye kurvepunkter (verdensrom) eller ny radius regner om posisjon og størrelse. */
+function withUpdate(o: SceneObject, update: Partial<SceneObject> & CurveInput): SceneObject {
+  const { points, radius, ...props } = update;
+  const next = { ...o, ...props, id: o.id, type: o.type };
+  if (points === undefined && radius === undefined) return next;
+  if (o.type !== "curve") throw new Error(`points og radius gjelder bare kurverør – ${o.name} er ${o.type}`);
+  return { ...next, ...(points !== undefined ? placeCurve(points, radius ?? o.curve?.radius ?? 0.1) : reshapeCurve(next, radius)) };
+}
+
 const applyUpdates = (objects: SceneObject[], updates: ObjectUpdate[]) => {
   const byId = new Map(updates.map((u) => [u.id, u]));
-  return objects.map((o) => (byId.has(o.id) ? { ...o, ...byId.get(o.id), id: o.id, type: o.type } : o));
+  return objects.map((o) => (byId.has(o.id) ? withUpdate(o, byId.get(o.id)!) : o));
 };
 
 export const useEditor = create<EditorState>((set, get) => {
@@ -395,10 +409,10 @@ export const useEditor = create<EditorState>((set, get) => {
         if (!exists) throw new Error(`Fant ikke ${kind} ${ref}`);
         return ref;
       };
-      const toProps = (props: Record<string, unknown>): Partial<SceneObject> => {
+      const toProps = (props: Record<string, unknown>): Partial<SceneObject> & CurveInput => {
         const { folder, ...rest } = props;
         return {
-          ...(rest as Partial<SceneObject>),
+          ...(rest as Partial<SceneObject> & CurveInput),
           ...(folder !== undefined ? { folderId: folder === null ? null : resolve(String(folder), "mappe") } : {}),
         };
       };
@@ -426,7 +440,7 @@ export const useEditor = create<EditorState>((set, get) => {
         } else if (op.op === "update") {
           const id = resolve(op.id, "objekt");
           const props = toProps(op.props);
-          objects = objects.map((o) => (o.id === id ? { ...o, ...props, id: o.id, type: o.type } : o));
+          objects = objects.map((o) => (o.id === id ? withUpdate(o, props) : o));
           result.updated++;
         } else if (op.op === "delete") {
           const ids = new Set(op.ids.map((ref) => resolve(ref, "objekt")));

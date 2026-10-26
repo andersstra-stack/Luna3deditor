@@ -7,7 +7,7 @@ import { useEditor } from "../store";
 import { hiddenFolderIds } from "../folders";
 import { boxOf, objectBox, objectMatrix, round } from "../bounds";
 import { isHelper, isLight, isNode, type SceneObject, type Vec3 } from "../types";
-import { geometryOf, getGeometry } from "./geometries";
+import { geometryKey, geometryOf, getGeometry } from "./geometries";
 import { cutGeometry, overlappingHoles } from "./csg";
 import { snapOffset, type SnapContext } from "./snapping";
 import { setThreeGetter } from "./three-handle";
@@ -169,7 +169,7 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
   const transparent = obj.opacity < 1 || !!obj.hole;
 
   // Hull i samme mappe skjæres bort live (CSG). Uten hull brukes den delte geometrien.
-  const holesKey = holes.map((h) => `${h.id}:${h.type}:${h.position}:${h.rotation}:${h.scale}`).join("|");
+  const holesKey = holes.map((h) => `${h.id}:${geometryKey(h)}:${h.position}:${h.rotation}:${h.scale}`).join("|");
   const geometry = useMemo(
     () => {
       if (!holes.length) return geometryOf(obj);
@@ -182,7 +182,7 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [obj.type, obj.meshId, obj.position, obj.rotation, obj.scale, holesKey],
+    [obj.type, obj.meshId, obj.taper, obj.curve, obj.position, obj.rotation, obj.scale, holesKey],
   );
   const isCut = holes.length > 0;
   useEffect(() => () => void (isCut && geometry.dispose()), [geometry, isCut]);

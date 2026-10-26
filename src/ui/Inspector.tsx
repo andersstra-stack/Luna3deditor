@@ -7,6 +7,7 @@ import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../pl
 import { nodeAxes, nodeNameProblem } from "../nodes";
 import { splitLooseParts } from "../meshSplit";
 import { mergeObjects } from "../meshMerge";
+import { maxRadius, scaledRadius } from "../curves";
 import { reportError } from "./StatusBar";
 import { Icon } from "./icons";
 
@@ -109,7 +110,7 @@ function Vec3Row({ title, obj, field, step }: { title: string; obj: SceneObject;
   );
 }
 
-type SliderField = "metalness" | "roughness" | "opacity" | "intensity" | "emissive";
+type SliderField = "metalness" | "roughness" | "opacity" | "intensity" | "emissive" | "taper";
 
 /** Glidebryter som gjelder alle valgte objekter (verdien vises fra hovedvalget). */
 function Slider({
@@ -126,7 +127,8 @@ function Slider({
   percent?: boolean;
 }) {
   const { updateObjectsLive, pushHistory } = useEditor.getState();
-  const value = objs[objs.length - 1][field] ?? 0;
+  // Uten avsmalning er sylinderen rett (100 %).
+  const value = objs[objs.length - 1][field] ?? (field === "taper" ? 1 : 0);
   return (
     <div className="row">
       <div className="row-title">
@@ -142,6 +144,33 @@ function Slider({
         onPointerDown={pushHistory}
         onChange={(e) => updateObjectsLive(objs.map((o) => ({ id: o.id, [field]: Number(e.target.value) })))}
       />
+    </div>
+  );
+}
+
+/** Kurverør: antall punkter og tykkelsen. Radiusen endres for hele røret, så avsmalningen beholdes. */
+function CurveInfo({ obj }: { obj: SceneObject }) {
+  const { updateObject, updateObjectLive, pushHistory } = useEditor.getState();
+  if (!obj.curve) return null;
+  const curve = obj.curve;
+  const current = maxRadius(curve);
+  const withRadius = (v: number) => ({ radius: scaledRadius(curve, Math.max(0.001, v) / current) });
+  return (
+    <div className="row">
+      <div className="row-title">
+        Rørets radius (m) <span className="value">{curve.points.length} punkter</span>
+      </div>
+      <div className="vec3">
+        <NumberField
+          label="R"
+          value={current}
+          step={0.005}
+          onDragStart={pushHistory}
+          onLive={(v) => updateObjectLive(obj.id, withRadius(v))}
+          onCommit={(v) => updateObject(obj.id, withRadius(v))}
+        />
+      </div>
+      <p className="hint">Punktene endres via Claude eller Python (points i verdensrommet).</p>
     </div>
   );
 }
@@ -625,6 +654,9 @@ export function Inspector() {
       <Vec3Row title="Posisjon (m)" obj={obj} field="position" step={0.01} />
       <Vec3Row title="Rotasjon (°)" obj={obj} field="rotation" step={0.5} />
       {!light && !node && <Vec3Row title="Størrelse (m)" obj={obj} field="scale" step={0.01} />}
+
+      {obj.type === "cylinder" && <Slider title="Avsmalning (toppens bredde)" objs={objs} field="taper" />}
+      {obj.type === "curve" && <CurveInfo obj={obj} />}
 
       <ColorRow objs={objs} />
 

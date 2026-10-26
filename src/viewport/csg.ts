@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
 import type { SceneObject } from "../types";
 import { objectBox, objectMatrix } from "../bounds";
-import { geometryDetail, geometryOf } from "./geometries";
+import { geometryKey, geometryOf } from "./geometries";
 
 const evaluator = new Evaluator();
 evaluator.attributes = ["position", "normal"];
@@ -11,12 +11,18 @@ evaluator.useGroups = false;
 // Egne kopier med bare attributtene CSG trenger (alle brushes må ha like attributter).
 const brushGeometries = new Map<string, THREE.BufferGeometry>();
 function brushGeometry(o: SceneObject): THREE.BufferGeometry {
-  const key = o.type === "mesh" ? `mesh:${o.meshId}` : `${o.type}:${geometryDetail()}`;
+  const key = geometryKey(o);
   let geo = brushGeometries.get(key);
   if (!geo) {
     geo = geometryOf(o).clone();
     for (const name of Object.keys(geo.attributes)) if (name !== "position" && name !== "normal") geo.deleteAttribute(name);
     geo.clearGroups();
+    // Kurverør gir nye nøkler når de endres – kast de eldste.
+    if (brushGeometries.size >= 200) {
+      const [oldKey, old] = brushGeometries.entries().next().value!;
+      brushGeometries.delete(oldKey);
+      old.dispose();
+    }
     brushGeometries.set(key, geo);
   }
   return geo;

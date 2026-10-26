@@ -3,7 +3,7 @@
 export type Vec3 = [number, number, number];
 
 export const BASIC_SHAPES = ["box", "sphere", "cylinder", "cone", "torus", "plane", "capsule"] as const;
-export const EXTRA_SHAPES = ["wedge", "prism", "pyramid", "stairs", "hemisphere", "tube", "roundedBox"] as const;
+export const EXTRA_SHAPES = ["wedge", "prism", "pyramid", "stairs", "hemisphere", "tube", "roundedBox", "curve"] as const;
 export const LIGHTS = ["pointLight", "spotLight"] as const;
 /** Markør-noder: usynlige, navngitte punkter med retning (dokking, hardpoints, spawn …) for spillmotoren. */
 export const MARKERS = ["node"] as const;
@@ -46,6 +46,7 @@ export const SHAPE_LABELS: Record<ShapeType, string> = {
   hemisphere: "Halvkule",
   tube: "Rør",
   roundedBox: "Avrundet kube",
+  curve: "Kurverør",
   pointLight: "Punktlys",
   spotLight: "Spotlys",
   node: "Node",
@@ -81,6 +82,8 @@ export const SYMMETRIC_AXES: Record<ShapeType, string> = {
   hemisphere: "xz",
   tube: "xyz",
   roundedBox: "xyz",
+  // Kan ha hvilken som helst form: speiles med negativ størrelse, som modeller (se placement.ts).
+  curve: "",
   pointLight: "xyz",
   spotLight: "xz",
   // Pila peker langs +Z og har «opp» langs +Y; speiles om lokal X (se placement.ts).
@@ -123,10 +126,25 @@ export interface SceneObject {
    * Nodens lokale +Z er «forover» og +Y «opp» (samme som i Unity etter import). `scale` er bare markørstørrelsen.
    */
   props?: NodeProps;
+  /** Kun sylinder: toppens diameter i forhold til bunnens, 0–1 (0 = spiss, 1/tom = rett sylinder). */
+  taper?: number;
+  /** Kun kurverør: punktene røret går gjennom og tykkelsen (se curves.ts). */
+  curve?: Curve;
   /** Kun importerte modeller: id i modellregisteret (se meshes.ts). */
   meshId?: string;
   /** Skriptet (normalisert sti) som laget objektet – erstattes når skriptet kjøres igjen. */
   script?: string;
+}
+
+/**
+ * Et rør som følger en jevn kurve gjennom punktene (greiner, røtter, kabler, tentakler). Punktene er i objektets
+ * lokale koordinater i meter, sentrert i røret – geometrien normaliseres til enhetsboksen som alle andre former,
+ * så `scale` er fortsatt størrelsen. Utad (MCP/Python) oppgis punktene i verdensrommet, se `placeCurve`.
+ */
+export interface Curve {
+  points: Vec3[];
+  /** Radius i meter: ett tall for hele røret, eller ett per punkt (avsmalnende). */
+  radius: number | number[];
 }
 
 /**
