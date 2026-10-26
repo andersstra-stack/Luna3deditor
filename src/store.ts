@@ -113,6 +113,8 @@ export interface EditorState extends Snapshot {
   setKeyframes: (clip: string, target: string, keys: unknown, options?: { duration?: number; loop?: boolean }) => AnimClip;
   updateClip: (id: string, props: Partial<Pick<AnimClip, "name" | "duration" | "loop">>) => void;
   deleteClips: (ids: string[]) => void;
+  /** Klippene uten angre-steg – brukes mens gizmoen eller en nøkkelramme dras (med `pushHistory()` ved start). */
+  setClipsLive: (clips: AnimClip[]) => void;
   /** Fjerner all animasjon fra et mål (tomme klipp slettes). */
   removeAnimations: (target: string) => void;
   setScene: (scene: Partial<Snapshot> & Pick<Snapshot, "objects" | "folders">) => void;
@@ -550,6 +552,8 @@ export const useEditor = create<EditorState>((set, get) => {
       if (props.duration !== undefined && !(props.duration > 0)) throw new Error("duration må være over 0");
       commit({ clips: get().clips.map((c) => (c.id === id ? { ...c, ...props } : c)) });
     },
+
+    setClipsLive: (clips) => set({ clips }),
 
     deleteClips: (ids) => {
       const remove = new Set(ids);

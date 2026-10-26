@@ -21,6 +21,11 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
     en ytre modell gir en advarsel.
   - MCP: `animate`, `set_keyframes`, `get_animations`, `delete_animations` og `preview_animation`; Python:
     `luna.animate` og `luna.keyframes`. Klippene lagres i scenefila og kan angres.
+  - **Opptak med gizmoen**: med et klipp valgt står gizmoen på det som vises (mappas pivot, f.eks. hengselet), og å
+    flytte, rotere eller skalere setter en nøkkelramme på tidspunktet i stedet for å endre selve modellen
+    («Hvileposisjon» for det). Rotasjoner legges nærmest forrige verdi, så en dør over 90° ikke velter.
+  - Nøkkelrammene i tidslinja kan dras til et nytt tidspunkt (0,05 s-trinn, Shift = 0,01 s), og dobbeltklikk sletter.
+  - Markør-noder og lys følger med i avspillingen.
 - **Egne former fra hjørner og trekanter** (MCP `add_objects` med `type: "mesh"`, Python `luna.mesh`): blader, steiner,
   kapper – alt som ikke er en grunnform. Hjørnene er i formens eget koordinatsystem, med valgfri farge per hjørne og
   myk eller flat skyggelegging. Like former lagres bare én gang, så hundrevis av like blader koster nesten ingenting.

@@ -172,7 +172,7 @@ export function withTrack(clips: AnimClip[], part: ClipPart, target: string, new
 type Channel = "position" | "rotation" | "scale";
 
 /** Verdien av en kanal ved tid t (rammer uten kanalen hoppes over; før første og etter siste holdes verdien). */
-function channelAt(keys: AnimKey[], ch: Channel, t: number, rest: Vec3): Vec3 {
+export function channelAt(keys: AnimKey[], ch: Channel, t: number, rest: Vec3): Vec3 {
   const ks = keys.filter((k) => k[ch]);
   if (!ks.length) return rest;
   if (t <= ks[0].t) return ks[0][ch]!;
@@ -285,5 +285,101 @@ export function makeAnimator(clip: AnimClip, objects: SceneObject[], folders: Fo
   /** Verdensmatrisene til alt som beveger seg, ved tid t. */
   const poseAt = (t: number) => new Map(moving.map((o) => [o.id, objectWorld(o, t)]));
 
-  return { clip, animates, folderMoves, motion, folderMotion, objectWorld, poseAt, moving, objectById };
+  return { clip, animates, folderMoves, motion, folderMotion, objectWorld, poseAt, moving, objectById, frameOf, tracks };
+}
+
+// ---------- Redigering: opptak med gizmoen og nøkkelrammer i tidslinja ----------
+
+/**
+ * Hva gizmoen animerer: hele mappa når den er valgt som mappe (klikk i scenelista, alt innhold valgt), ellers hvert
+ * valgte objekt for seg.
+ */
+export function animationTargets(objects: SceneObject[], folders: Folder[], activeFolderId: string | null, selectedIds: string[]) {
+  if (activeFolderId && folders.some((f) => f.id === activeFolderId)) {
+    const inside = objects.filter((o) => o.folderId && isInside(folders, o.folderId, activeFolderId)).map((o) => o.id);
+    if (selectedIds.length > 1 && selectedIds.length === inside.length && selectedIds.every((id) => inside.includes(id))) {
+      return { folder: activeFolderId, objects: [] as string[] };
+    }
+  }
+  return { folder: null as string | null, objects: selectedIds };
+}
+
+const r3 = (v: number) => Math.round(v * 1000) / 1000;
+
+/**
+ * Nøkkelrammen som gir endringen `D` ved tid t. Kanaler tas bare med når de er i bruk (eller endret), og hver
+ * rotasjonsvinkel legges så nær dagens verdi som mulig (±360°), så en snurr ikke plutselig går baklengs.
+ */
+export function keyFromDelta(keys: AnimKey[], t: number, D: THREE.Matrix4, ease?: AnimKey["ease"]): AnimKey {
+  const p = new THREE.Vector3();
+  const q = new THREE.Quaternion();
+  const s = new THREE.Vector3();
+  D.decompose(p, q, s);
+  const e = new THREE.Euler().setFromQuaternion(q, "XYZ");
+  const current = channelAt(keys, "rotation", t, [0, 0, 0]);
+  // Samme rotasjon kan skrives på to måter i XYZ-rekkefølge: (x, y, z) og (x+180, 180−y, z+180). Velg den (og ±360
+  // per akse) som ligger nærmest dagens verdi – ellers velter f.eks. en dør som svinges over 90° rundt X og Z.
+  const unwrap = (angles: number[]) =>
+    angles.map((deg, i) => {
+      while (deg - current[i] > 180) deg -= 360;
+      while (deg - current[i] < -180) deg += 360;
+      return deg;
+    });
+  const [x, y, z] = [e.x, e.y, e.z].map((v) => v / DEG);
+  const options = [unwrap([x, y, z]), unwrap([x + 180, 180 - y, z + 180])];
+  const distance = (a: number[]) => a.reduce((sum, v, i) => sum + Math.abs(v - current[i]), 0);
+  const best = distance(options[0]) <= distance(options[1]) ? options[0] : options[1];
+  const rotation = best.map((v) => Math.round(v * 100) / 100) as Vec3;
+  const used = (ch: Channel) => keys.some((k) => k[ch]);
+  const key: AnimKey = { t: r3(t) };
+  const position = p.toArray().map(r3) as Vec3;
+  const scale = s.toArray().map(r3) as Vec3;
+  if (used("position") || position.some((v) => Math.abs(v) > 1e-4)) key.position = position;
+  if (used("rotation") || rotation.some((v) => Math.abs(v) > 1e-3)) key.rotation = rotation;
+  if (used("scale") || scale.some((v) => Math.abs(v - 1) > 1e-4)) key.scale = scale;
+  if (ease) key.ease = ease;
+  return key;
+}
+
+/** Klippene med nøkkelrammen satt inn for målet (en ramme på samme tidspunkt byttes ut). Klippet forlenges om nødvendig. */
+export function upsertKey(clips: AnimClip[], clipId: string, target: string, key: AnimKey): AnimClip[] {
+  return clips.map((c) => {
+    if (c.id !== clipId) return c;
+    const track = c.tracks.find((tr) => tr.target === target);
+    const keys = (track?.keys ?? []).filter((k) => Math.abs(k.t - key.t) > 1e-3);
+    // Behold overgangen som rammen hadde (myk/lineær).
+    const old = track?.keys.find((k) => Math.abs(k.t - key.t) <= 1e-3);
+    const merged = { ...key, ...(old?.ease && !key.ease ? { ease: old.ease } : {}) };
+    const nextKeys = [...keys, merged].sort((a, b) => a.t - b.t);
+    const tracks = track ? c.tracks.map((tr) => (tr === track ? { ...tr, keys: nextKeys } : tr)) : [...c.tracks, { target, keys: nextKeys }];
+    return { ...c, duration: Math.max(c.duration, key.t), tracks };
+  });
+}
+
+/** Flytter nøkkelrammene på tidspunktet `from` til `to` for målene (alle mål når `targets` er tom). */
+export function moveKeys(clip: AnimClip, targets: string[], from: number, to: number): AnimClip {
+  const all = !targets.length;
+  const t = r3(Math.min(Math.max(0, to), clip.duration));
+  return {
+    ...clip,
+    tracks: clip.tracks.map((tr) => {
+      if (!all && !targets.includes(tr.target)) return tr;
+      const moving = tr.keys.filter((k) => Math.abs(k.t - from) <= 1e-3);
+      if (!moving.length) return tr;
+      // En ramme som allerede står der vi slipper, byttes ut.
+      const rest = tr.keys.filter((k) => Math.abs(k.t - from) > 1e-3 && Math.abs(k.t - t) > 1e-3);
+      return { ...tr, keys: [...rest, ...moving.map((k) => ({ ...k, t }))].sort((a, b) => a.t - b.t) };
+    }),
+  };
+}
+
+/** Sletter nøkkelrammene på tidspunktet (spor uten rammer fjernes). */
+export function deleteKeysAt(clip: AnimClip, targets: string[], at: number): AnimClip {
+  const all = !targets.length;
+  return {
+    ...clip,
+    tracks: clip.tracks
+      .map((tr) => (all || targets.includes(tr.target) ? { ...tr, keys: tr.keys.filter((k) => Math.abs(k.t - at) > 1e-3) } : tr))
+      .filter((tr) => tr.keys.length),
+  };
 }

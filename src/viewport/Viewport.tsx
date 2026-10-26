@@ -14,7 +14,9 @@ import { setThreeGetter } from "./three-handle";
 import { NoteGroundCatcher, NotePins, placeNote } from "./Notes";
 import { FlyControls } from "./FlyControls";
 import { themeColors, useUi } from "../ui/uiStore";
-import { advancePlayer, currentPose } from "../animationPlayer";
+import { advancePlayer, currentPose, usePlayer } from "../animationPlayer";
+import { animationTargets, deltaMatrix, keyFromDelta, makeAnimator, upsertKey } from "../animation";
+import type { AnimClip } from "../types";
 
 const DEG = Math.PI / 180;
 
@@ -60,12 +62,30 @@ function decompose(m: THREE.Matrix4): Pick<SceneObject, "position" | "rotation" 
   };
 }
 
+/** Ett mål gizmoen setter nøkkelrammer på: pivot-ramme F, bevegelsen fra mappene over (P) og egen endring (D) ved start. */
+interface RecordTarget {
+  id: string;
+  F: THREE.Matrix4;
+  P: THREE.Matrix4;
+  D: THREE.Matrix4;
+  keys: AnimClip["tracks"][number]["keys"];
+}
+
 /**
  * Gizmoen sitter på et usynlig "proxy"-objekt midt i utvalget. Når proxyen
  * flyttes, får alle valgte objekter samme endring – slik flyttes hele mapper.
+ * Med et animasjonsklipp valgt står gizmoen på det som vises (posituren ved tidspunktet), og en flytting blir
+ * en nøkkelramme på tidspunktet i stedet for en endring av hvileposisjonen.
  */
 function SelectionGizmo({ visible }: { visible: SceneObject[] }) {
   const selectedIds = useEditor((s) => s.selectedIds);
+  const folders = useEditor((s) => s.folders);
+  const activeFolderId = useEditor((s) => s.activeFolderId);
+  const clips = useEditor((s) => s.clips);
+  const clipId = usePlayer((s) => s.clipId);
+  const time = usePlayer((s) => s.time);
+  const playing = usePlayer((s) => s.playing);
+  const clip = clips.find((c) => c.id === clipId) ?? null;
   const mode = useEditor((s) => s.transformMode);
   const snap = useEditor((s) => s.snap);
   const objectSnap = useEditor((s) => s.objectSnap);
@@ -77,14 +97,31 @@ function SelectionGizmo({ visible }: { visible: SceneObject[] }) {
     startPos: THREE.Vector3;
     items: { id: string; matrix: THREE.Matrix4 }[];
     snap: SnapContext;
+    /** Opptak: klippet, tidspunktet, klippene før dra og målene. */
+    record?: { clip: AnimClip; t: number; base: AnimClip[]; targets: RecordTarget[] };
   } | null>(null);
 
   const selected = useMemo(() => visible.filter((o) => selectedIds.includes(o.id)), [visible, selectedIds]);
 
   // Plasser proxyen på utvalget (men ikke midt i en dra-operasjon).
   useLayoutEffect(() => {
-    if (drag.current || !selected.length) return;
-    if (selected.length === 1) {
+    if (drag.current || !selected.length || playing) return;
+    if (clip) {
+      // Opptak: på det som vises – mappas pivot, objektets positur eller midt mellom de valgte.
+      const { objects } = useEditor.getState();
+      const a = makeAnimator(clip, objects, folders);
+      const tg = animationTargets(objects, folders, activeFolderId, selectedIds);
+      let m: THREE.Matrix4;
+      if (tg.folder) m = a.folderMotion(tg.folder, time).multiply(a.frameOf(tg.folder) ?? new THREE.Matrix4());
+      else if (selected.length === 1) m = a.objectWorld(selected[0], time);
+      else {
+        const c = new THREE.Vector3();
+        for (const o of selected) c.add(new THREE.Vector3().setFromMatrixPosition(a.objectWorld(o, time)));
+        m = new THREE.Matrix4().makeTranslation(c.divideScalar(selected.length));
+      }
+      const s = new THREE.Vector3();
+      m.decompose(proxy.position, proxy.quaternion, s);
+    } else if (selected.length === 1) {
       const o = selected[0];
       proxy.position.set(...o.position);
       proxy.rotation.set(o.rotation[0] * DEG, o.rotation[1] * DEG, o.rotation[2] * DEG);
@@ -94,11 +131,27 @@ function SelectionGizmo({ visible }: { visible: SceneObject[] }) {
     }
     proxy.scale.set(1, 1, 1);
     proxy.updateMatrixWorld();
-  }, [selected, proxy]);
+  }, [selected, proxy, clip, time, playing, folders, activeFolderId, selectedIds]);
 
-  if (!selected.length) return null;
+  // Mens et klipp spilles, er det ingenting å dra i.
+  if (!selected.length || playing) return null;
 
-  const { pushHistory, updateObjectsLive } = useEditor.getState();
+  const { pushHistory, updateObjectsLive, setClipsLive } = useEditor.getState();
+
+  /** Målene og deres utgangspunkt når et opptak starter. */
+  const recordTargets = (c: AnimClip): RecordTarget[] => {
+    const { objects } = useEditor.getState();
+    const a = makeAnimator(c, objects, folders);
+    const tg = animationTargets(objects, folders, activeFolderId, selectedIds);
+    const ids = tg.folder ? [tg.folder] : tg.objects;
+    return ids.flatMap((id) => {
+      const F = a.frameOf(id);
+      if (!F) return [];
+      const parent = folders.find((f) => f.id === id)?.parentId ?? objects.find((o) => o.id === id)?.folderId ?? null;
+      const keys = c.tracks.find((tr) => tr.target === id)?.keys ?? [];
+      return [{ id, F, P: a.folderMotion(parent, time), D: deltaMatrix(keys, time), keys }];
+    });
+  };
 
   return (
     <>
@@ -124,6 +177,7 @@ function SelectionGizmo({ visible }: { visible: SceneObject[] }) {
               startBox: boxOf(selected),
               others: visible.filter((o) => !ids.has(o.id) && !isHelper(o.type)).map(objectBox),
             },
+            ...(clip ? { record: { clip, t: time, base: useEditor.getState().clips, targets: recordTargets(clip) } } : {}),
           };
         }}
         onMouseUp={() => {
@@ -135,6 +189,19 @@ function SelectionGizmo({ visible }: { visible: SceneObject[] }) {
           if (!d) return;
           // `axis` (aksen musa holder i, f.eks. "X" eller "XZ") er privat i typene, men offentlig i three.
           const axis = (controls.current as unknown as { axis: string | null } | null)?.axis;
+          if (d.record) {
+            // Opptak: endringen i verdensrommet (Δ) blir ny egen endring for hvert mål: D' = F⁻¹ · P⁻¹ · Δ · P · F · D.
+            proxy.updateMatrixWorld();
+            const delta = proxy.matrixWorld.clone().multiply(d.proxyInverse);
+            const { clip: c, t, base, targets } = d.record;
+            let next = base;
+            for (const tg of targets) {
+              const D2 = tg.F.clone().invert().multiply(tg.P.clone().invert()).multiply(delta).multiply(tg.P).multiply(tg.F).multiply(tg.D);
+              next = upsertKey(next, c.id, tg.id, keyFromDelta(tg.keys, t, D2));
+            }
+            setClipsLive(next);
+            return;
+          }
           if (mode === "translate" && objectSnap && axis) {
             // Snap-avstanden vokser med kameraavstanden, så den føles lik uansett zoom.
             const threshold = THREE.MathUtils.clamp(camera.position.distanceTo(proxy.position) * 0.012, 0.02, 0.5);
@@ -169,7 +236,7 @@ function useSelectHandler(id: string) {
  * Under avspilling settes verdensmatrisen rett på meshen (objektene ligger flatt i scenen); ellers gjelder
  * posisjon/rotasjon/størrelse fra dataene som vanlig.
  */
-function useAnimatedPose(id: string) {
+function useAnimatedPose(id: string, withoutScale = false) {
   const ref = useRef<THREE.Object3D>(null);
   useFrame(() => {
     const o = ref.current;
@@ -178,6 +245,13 @@ function useAnimatedPose(id: string) {
     if (m) {
       o.matrixAutoUpdate = false;
       o.matrix.copy(m);
+      // Lys og noder: gruppa har ingen størrelse (markøren skaleres inni den).
+      if (withoutScale) {
+        const p = new THREE.Vector3();
+        const q = new THREE.Quaternion();
+        m.decompose(p, q, new THREE.Vector3());
+        o.matrix.compose(p, q, new THREE.Vector3(1, 1, 1));
+      }
       o.matrixWorldNeedsUpdate = true;
     } else if (!o.matrixAutoUpdate) {
       o.matrixAutoUpdate = true;
@@ -254,9 +328,10 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
 
 function LightObject({ obj, selected, accent }: { obj: SceneObject; selected: boolean; accent: string }) {
   const onClick = useSelectHandler(obj.id);
+  const poseRef = useAnimatedPose(obj.id, true);
   const [target] = useState(() => new THREE.Object3D());
   return (
-    <group position={obj.position} rotation={obj.rotation.map((d) => d * DEG) as Vec3}>
+    <group ref={poseRef as React.RefObject<THREE.Group>} position={obj.position} rotation={obj.rotation.map((d) => d * DEG) as Vec3}>
       {/* Markøren som kan klikkes på – kaster ikke skygge selv. */}
       <mesh name={obj.name} userData={{ lunaId: obj.id }} geometry={getGeometry(obj.type)} scale={obj.scale} onClick={onClick}>
         <meshBasicMaterial color={obj.color} toneMapped={false} />
@@ -290,6 +365,7 @@ const NODE_MIN_SCREEN = 0.08;
 /** Markør-node: pil langs +Z (forover). Navnet vises når den er valgt – spillet finner noden på navnet. */
 function NodeMarker({ obj, selected, accent }: { obj: SceneObject; selected: boolean; accent: string }) {
   const onClick = useSelectHandler(obj.id);
+  const poseRef = useAnimatedPose(obj.id, true);
   const mesh = useRef<THREE.Mesh>(null);
   useFrame(({ camera }) => {
     const m = mesh.current;
@@ -298,7 +374,7 @@ function NodeMarker({ obj, selected, accent }: { obj: SceneObject; selected: boo
     m.scale.set(obj.scale[0] * k, obj.scale[1] * k, obj.scale[2] * k);
   });
   return (
-    <group position={obj.position} rotation={obj.rotation.map((d) => d * DEG) as Vec3}>
+    <group ref={poseRef as React.RefObject<THREE.Group>} position={obj.position} rotation={obj.rotation.map((d) => d * DEG) as Vec3}>
       <mesh ref={mesh} name={obj.name} userData={{ lunaId: obj.id }} geometry={getGeometry(obj.type)} onClick={onClick}>
         <meshBasicMaterial color={obj.color} toneMapped={false} />
         {selected && <Outlines thickness={3} color={accent} />}
