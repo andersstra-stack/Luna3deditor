@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.15.1] — 2026-10-26
+
 ### Added
 - Import finner teksturene til en FBX i `<navn>.fbm`-mappa ved siden av (der Blender, Tripo o.l. legger dem), ikke bare
   i samme mappe som modellen.
