@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10-26
+
 ### Added
 - **Kurverør** (Legg til → Flere former, MCP/Python `curve`): et rør langs en jevn kurve gjennom punkter, med én radius
   per punkt så det kan smalne av – greiner, røtter, kabler, håndtak. Punktene oppgis i verdensrommet (`points`), og
