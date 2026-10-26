@@ -3,6 +3,9 @@ import type { RootState } from "@react-three/fiber";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { useEditor } from "../store";
 import { isVisibleNote, noteWorldPosition } from "../notes";
+import { boxOf, round } from "../bounds";
+import { isInside } from "../folders";
+import { isHelper, type Vec3 } from "../types";
 
 /**
  * Gir kode utenfor <Canvas> (MCP-broen, eksport) tilgang til three.js-tilstanden.
@@ -41,16 +44,31 @@ export function sceneMeshes(): THREE.Mesh[] {
 
 /** Plasserer kameraet slik at hele scenen synes fra gitt retning. */
 export function frameScene(view: ViewName = "iso") {
-  const { camera, controls } = three();
-  const orbit = controls as unknown as OrbitControlsImpl | null;
   const box = new THREE.Box3();
   for (const m of sceneMeshes()) if (m.visible) box.expandByObject(m);
   if (box.isEmpty()) box.set(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 1, 1));
+  frameBox(box, view);
+}
 
+/**
+ * Rammer inn objekter (og alt i mapper, når id-en er en mappe) fra gitt retning. `zoom` over 1 går nærmere,
+ * under 1 lenger unna.
+ */
+export function frameObjects(ids: string[], view: ViewName = "current", zoom = 1) {
+  const { objects, folders } = useEditor.getState();
+  const folderIds = ids.filter((id) => folders.some((f) => f.id === id));
+  const chosen = objects.filter((o) => ids.includes(o.id) || (o.folderId && folderIds.some((f) => isInside(folders, o.folderId, f))));
+  if (!chosen.length) throw new Error(`Fant ingen objekter å fokusere på (${ids.join(", ")})`);
+  frameBox(boxOf(chosen), view, zoom);
+}
+
+function frameBox(box: THREE.Box3, view: ViewName, zoom = 1) {
+  const { camera, controls } = three();
+  const orbit = controls as unknown as OrbitControlsImpl | null;
   const center = box.getCenter(new THREE.Vector3());
-  const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.5);
+  const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.05);
   const fov = ((camera as THREE.PerspectiveCamera).fov ?? 50) * (Math.PI / 180);
-  const distance = (radius / Math.sin(fov / 2)) * 1.05;
+  const distance = ((radius / Math.sin(fov / 2)) * 1.05) / Math.max(zoom, 0.01);
 
   const dir =
     view === "current"
@@ -67,6 +85,101 @@ export function frameScene(view: ViewName = "iso") {
   } else {
     camera.lookAt(center);
   }
+}
+
+export interface CameraState {
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+  fov: number;
+}
+
+/** Kameraet slik det står nå (for å sette det tilbake etter et skjermbilde). */
+export function cameraState(): CameraState {
+  const { camera, controls } = three();
+  const orbit = controls as unknown as OrbitControlsImpl | null;
+  return {
+    position: camera.position.clone(),
+    target: orbit?.target.clone() ?? new THREE.Vector3(),
+    fov: (camera as THREE.PerspectiveCamera).fov ?? 50,
+  };
+}
+
+/** Kameraet i `position`, rettet mot `target` (og eventuelt med ny synsvinkel i grader). */
+export function setCamera(position: Vec3, target: Vec3, fov?: number) {
+  const { camera, controls } = three();
+  const orbit = controls as unknown as OrbitControlsImpl | null;
+  const persp = camera as THREE.PerspectiveCamera;
+  camera.position.set(...position);
+  if (fov !== undefined && persp.isPerspectiveCamera) persp.fov = THREE.MathUtils.clamp(fov, 5, 120);
+  camera.updateProjectionMatrix();
+  if (orbit) {
+    orbit.target.set(...target);
+    orbit.update();
+  } else camera.lookAt(...target);
+}
+
+export function restoreCamera(s: CameraState) {
+  setCamera(s.position.toArray() as Vec3, s.target.toArray() as Vec3, s.fov);
+}
+
+export interface RayHit {
+  objectId: string;
+  name: string;
+  /** Treffpunktet i verdensrommet. */
+  point: Vec3;
+  /** Flatenormalen i treffpunktet, snudd mot strålen. */
+  normal: Vec3;
+  distance: number;
+}
+
+/** Hjørnenormalene interpolert i treffpunktet (glatt på kuler o.l.), i meshens lokale rom. */
+function smoothNormal(h: THREE.Intersection): THREE.Vector3 | null {
+  const mesh = h.object as THREE.Mesh;
+  const pos = mesh.geometry?.getAttribute("position");
+  const nrm = mesh.geometry?.getAttribute("normal");
+  if (!h.face || !pos || !nrm) return null;
+  const { a, b, c } = h.face;
+  const v = (attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, i: number) => new THREE.Vector3().fromBufferAttribute(attr, i);
+  const local = mesh.worldToLocal(h.point.clone());
+  const n = THREE.Triangle.getInterpolation(local, v(pos, a), v(pos, b), v(pos, c), v(nrm, a), v(nrm, b), v(nrm, c), new THREE.Vector3());
+  return n && n.lengthSq() > 1e-10 ? n.normalize() : null;
+}
+
+/**
+ * Sender en stråle fra `origin` langs `direction` og finner hva den treffer – slik det vises (med hull skåret ut og
+ * animasjoner tatt med). Hull, lys og noder hoppes over, og det samme gjør `ignore`.
+ */
+export function raycast(origin: Vec3, direction: Vec3, opts: { maxDistance?: number; ignore?: string[]; all?: boolean } = {}): RayHit[] {
+  const { objects } = useEditor.getState();
+  const byId = new Map(objects.map((o) => [o.id, o]));
+  const ignore = new Set(opts.ignore ?? []);
+  const meshes = sceneMeshes().filter((m) => {
+    const o = byId.get(m.userData.lunaId as string);
+    return !!o && !isHelper(o.type) && !o.hole && !ignore.has(o.id) && m.visible;
+  });
+  const dir = new THREE.Vector3(...direction);
+  if (dir.lengthSq() < 1e-12) throw new Error("direction kan ikke være [0, 0, 0]");
+  dir.normalize();
+  three().scene.updateMatrixWorld();
+  const ray = new THREE.Raycaster(new THREE.Vector3(...origin), dir, 0, opts.maxDistance ?? Infinity);
+  // Samme objekt og samme avstand = samme treff (en stråle gjennom et hjørne treffer alle trekantene rundt det).
+  const unique = ray.intersectObjects(meshes, false).filter(
+    (h, i, all) => !all.slice(0, i).some((p) => p.object === h.object && Math.abs(p.distance - h.distance) < 1e-4),
+  );
+  const hits = unique.map((h) => {
+    const normal = smoothNormal(h) ?? h.face?.normal.clone() ?? dir.clone().negate();
+    normal.applyMatrix3(new THREE.Matrix3().getNormalMatrix(h.object.matrixWorld)).normalize();
+    if (normal.dot(dir) > 0) normal.negate();
+    const o = byId.get(h.object.userData.lunaId as string)!;
+    return {
+      objectId: o.id,
+      name: o.name,
+      point: h.point.toArray().map((v) => round(v)) as Vec3,
+      normal: normal.toArray().map((v) => round(v)) as Vec3,
+      distance: round(h.distance),
+    };
+  });
+  return opts.all ? hits : hits.slice(0, 1);
 }
 
 /** Punktet på bakken kameraet ser mot, avrundet til rutenettet. */

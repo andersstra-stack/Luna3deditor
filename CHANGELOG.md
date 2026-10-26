@@ -10,6 +10,14 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Overflate-treff** (MCP `raycast`): stråler inn i scenen gir treffpunkt, glatt flatenormal og hvilket objekt de
+  traff – slik det vises, med hull og animasjon. Mange stråler i ett kall. Gjør at Claude kan plassere ting *på*
+  overflater (epler på løvet, lamper i taket, fugler på greiner) i stedet for å regne blindt.
+- **Fritt kamera for skjermbilder**: `screenshot` kan ramme inn bestemte objekter eller mapper (`focus`, `zoom`) eller
+  ta bildet fra en valgt posisjon mot et punkt (`camera`). Brukerens kamera settes tilbake etterpå. `set_view` kan
+  også fokusere på objekter.
+
 ## [0.13.0] — 2026-10-26
 
 ### Added

@@ -11,7 +11,17 @@ import { splitLooseParts } from "../meshSplit";
 import { mergeObjects } from "../meshMerge";
 import { usePlayer } from "../animationPlayer";
 import type { AnimClip } from "../types";
-import { captureViewport, frameScene, VIEWS, type ViewName } from "../viewport/three-handle";
+import {
+  cameraState,
+  captureViewport,
+  frameObjects,
+  frameScene,
+  raycast,
+  restoreCamera,
+  setCamera,
+  VIEWS,
+  type ViewName,
+} from "../viewport/three-handle";
 import type { BridgeMethod } from "./protocol";
 
 type Params = Record<string, any>;
@@ -314,15 +324,42 @@ export const handlers: Record<BridgeMethod, Handler> = {
   },
 
   set_view: (p) => {
-    frameScene(checkView(p.view));
+    if (Array.isArray(p.focus) && p.focus.length) frameObjects(p.focus, checkView(p.view), typeof p.zoom === "number" ? p.zoom : 1);
+    else frameScene(checkView(p.view));
     return { ok: true };
   },
 
   screenshot: async (p) => {
-    if (p.view && p.view !== "current") {
+    // Eget kamera eller fokus: brukerens kamera settes tilbake etterpå (med mindre keep_view).
+    const saved = cameraState();
+    const custom = !!p.camera || (Array.isArray(p.focus) && p.focus.length > 0);
+    if (p.camera) {
+      const c = p.camera as { position: Vec3; target: Vec3; fov?: number };
+      setCamera(c.position, c.target, c.fov);
+    } else if (custom) {
+      frameObjects(p.focus as string[], checkView(p.view), typeof p.zoom === "number" ? p.zoom : 1);
+    } else if (p.view && p.view !== "current") {
       frameScene(checkView(p.view));
     }
-    return captureViewport(typeof p.width === "number" ? p.width : 1024);
+    try {
+      return await captureViewport(typeof p.width === "number" ? p.width : 1024);
+    } finally {
+      if (custom && p.keep_view !== true) restoreCamera(saved);
+    }
+  },
+
+  raycast: (p) => {
+    const one = (r: Params) => {
+      const origin = r.origin as Vec3;
+      if (!Array.isArray(origin) || origin.length !== 3) throw new Error("origin må være [x, y, z]");
+      const hits = raycast(origin, (r.direction as Vec3 | undefined) ?? [0, -1, 0], {
+        maxDistance: (r.max_distance ?? p.max_distance) as number | undefined,
+        ignore: p.ignore as string[] | undefined,
+        all: p.all === true,
+      });
+      return p.all === true ? hits : (hits[0] ?? null);
+    };
+    return Array.isArray(p.rays) ? (p.rays as Params[]).map(one) : one(p);
   },
 
   save_scene: async (p) => {

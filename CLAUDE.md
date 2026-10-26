@@ -20,6 +20,9 @@ MCP-verktøybeskrivelser er på engelsk.
   `geometryOf(o)` og `geometryKey(o)` (cache-nøkkel, også i `csg.ts`). Kurverør lagrer punktene lokalt (sentrert, meter) og
   normaliseres som modeller; utad (MCP/Python, `get_scene`) er punktene i verdensrommet. `points`/`radius` i
   add/update regnes om i `store.ts` (`newCurveProps`, `withUpdate`). Boksen tas fra den glatte varianten.
+- `three-handle.ts`: `raycast` (mot det som vises: CSG-resultat og animasjonspositur; hull/lys/noder hoppes over, like treff
+  slås sammen, normalen interpoleres fra hjørnenormalene) og kamera (`frameObjects`, `setCamera`, `cameraState`/`restoreCamera`
+  – skjermbilder med `focus`/`camera` setter brukerens kamera tilbake).
 - `src/bounds.ts` – nøyaktige verdensbokser beregnet fra dataene (ikke fra 3D-visningen); brukes av snapping,
   plassering, målvisning og `get_scene`. `src/placement.ts` – til bakken, innrett, speil.
 - Utvalg: `selectedIds` (siste = hovedvalget, se `primaryId`). Nye former legges i `types.ts` (SHAPES, størrelse,

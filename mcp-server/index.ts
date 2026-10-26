@@ -316,6 +316,11 @@ across x = 0), align_objects, drop_to_ground. split_loose_parts splits imported 
 several shapes/meshes into one mesh inside Luna (like Ctrl+J; every part keeps its color, the rest of the look comes from
 the primary). Prefer model folders for export – merged meshes can't be edited part by part.
 
+Seeing and placing precisely: screenshot with focus=[ids] (and zoom) or camera={position, target} gives close-ups
+without disturbing the user's view. raycast finds surfaces: to put something ON a surface, shoot a ray toward it
+(e.g. from outside the tree crown toward its center, or straight down onto a roof), place the object at the hit point
+and orient it with the normal (in Python: luna.orient(forward=..., up=normal)).
+
 Workflow tips: call get_scene first to see existing objects and their ids. Build composite things from several shapes
 with one add_objects call. Use screenshot to check your work visually — try different views. Every change is undoable by the user.`;
 
@@ -528,10 +533,14 @@ server.registerTool(
   "set_view",
   {
     title: "Set camera view",
-    description: "Move the user's camera so the whole scene is framed from the given direction.",
-    inputSchema: { view: z.enum(VIEWS).describe("'current' keeps the direction but re-frames the scene.") },
+    description: "Move the user's camera so the whole scene – or just the 'focus' objects/folders – is framed from the given direction.",
+    inputSchema: {
+      view: z.enum(VIEWS).describe("'current' keeps the direction but re-frames."),
+      focus: z.array(z.string()).optional().describe("Object or folder ids to frame instead of the whole scene."),
+      zoom: z.number().positive().optional().describe("With focus: >1 closer, <1 further away (default 1)."),
+    },
   },
-  ({ view }) => run("set_view", { view }),
+  (p) => run("set_view", p),
 );
 
 server.registerTool(
@@ -539,15 +548,25 @@ server.registerTool(
   {
     title: "Screenshot viewport",
     description:
-      "Capture an image of the 3D viewport so you can see the scene. Optionally reframe the camera first (this also moves the user's view).",
+      "Capture an image of the 3D viewport so you can see the scene. 'view' alone reframes the whole scene (and moves the user's view). For a close look use 'focus' (frame given objects/folders from 'view', with 'zoom') or 'camera' (exact position and look-at target) – the user's camera is put back afterwards unless keep_view is true.",
     inputSchema: {
-      view: z.enum(VIEWS).optional().describe("Reframe from this direction first. Omit to capture exactly what the user sees."),
+      view: z.enum(VIEWS).optional().describe("Direction to look from. Omit (and omit focus/camera) to capture exactly what the user sees."),
+      focus: z.array(z.string()).optional().describe("Object or folder ids to frame (close-up of a part)."),
+      zoom: z.number().positive().optional().describe("With focus: >1 closer, <1 further away (default 1)."),
+      camera: z
+        .object({
+          position: vec3.describe("Camera position in meters"),
+          target: vec3.describe("Point the camera looks at"),
+          fov: z.number().min(5).max(120).optional().describe("Field of view in degrees (default 50)"),
+        })
+        .optional(),
+      keep_view: z.boolean().optional().describe("Leave the user's camera at the new place after a focus/camera shot."),
       width: z.number().int().min(256).max(1920).optional().describe("Max image width in pixels (default 1024)."),
     },
   },
-  async ({ view, width }) => {
+  async ({ view, focus, zoom, camera, keep_view, width }) => {
     try {
-      const shot = await bridge.call("screenshot", { view, width });
+      const shot = await bridge.call("screenshot", { view, focus, zoom, camera, keep_view, width });
       return {
         content: [
           { type: "image" as const, data: shot.base64 as string, mimeType: "image/png" },
@@ -558,6 +577,27 @@ server.registerTool(
       return { content: [{ type: "text" as const, text: (e as Error).message }], isError: true };
     }
   },
+);
+
+server.registerTool(
+  "raycast",
+  {
+    title: "Raycast",
+    description:
+      "Shoot rays into the scene and get what they hit: point, surface normal (facing the ray), object id/name and distance – as rendered (holes cut, animation pose shown). Use it to put things ON surfaces: apples on foliage, lamps under a ceiling, a bird on a branch, decals on a hull. Holes, lights and nodes are ignored. Many rays in one call via 'rays'.",
+    inputSchema: {
+      origin: vec3.optional().describe("Ray start (single ray)."),
+      direction: vec3.optional().describe("Ray direction (single ray, default [0, -1, 0] = straight down)."),
+      rays: z
+        .array(z.object({ origin: vec3, direction: vec3.optional(), max_distance: z.number().positive().optional() }))
+        .optional()
+        .describe("Several rays at once; the result is a list in the same order (null = no hit)."),
+      max_distance: z.number().positive().optional(),
+      ignore: z.array(z.string()).optional().describe("Object ids the rays pass through (e.g. the object you are placing)."),
+      all: z.boolean().optional().describe("Return every hit along each ray (nearest first) instead of only the nearest."),
+    },
+  },
+  (p) => run("raycast", p),
 );
 
 server.registerTool(

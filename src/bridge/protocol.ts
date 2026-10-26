@@ -39,6 +39,7 @@ export const BRIDGE_METHODS = [
   "get_animations",
   "delete_animations",
   "preview_animation",
+  "raycast",
 ] as const;
 export type BridgeMethod = (typeof BRIDGE_METHODS)[number];
 
