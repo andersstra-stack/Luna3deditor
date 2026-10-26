@@ -621,7 +621,10 @@ export async function importModelData(
   return result;
 }
 
-/** Importerer en fil fra disk. Uten sti åpnes en fildialog. Teksturer/.mtl leses fra samme mappe. */
+/**
+ * Importerer en fil fra disk. Uten sti åpnes en fildialog. Teksturer/.mtl leses fra samme mappe, eller fra
+ * `<navn>.fbm/` ved siden av (der Blender, Tripo o.l. legger teksturene til en FBX).
+ */
 export async function importModelFile(path?: string, opts?: ImportOptions) {
   let target = path ?? null;
   if (!target) {
@@ -632,8 +635,15 @@ export async function importModelFile(path?: string, opts?: ImportOptions) {
   const data = await invoke<ArrayBuffer>("read_binary_file", { path: target });
   const dir = target.replace(/[\\/][^\\/]*$/, "");
   const sep = target.includes("\\") ? "\\" : "/";
-  const siblings: ResourceResolver = (file) =>
-    invoke<ArrayBuffer>("read_binary_file", { path: `${dir}${sep}${file.split(/[\\/]/).pop()}` }).catch(() => null);
+  const folders = [dir, `${dir}${sep}${baseName(target)}.fbm`];
+  const siblings: ResourceResolver = async (file) => {
+    const name = file.split(/[\\/]/).pop();
+    for (const folder of folders) {
+      const buf = await invoke<ArrayBuffer>("read_binary_file", { path: `${folder}${sep}${name}` }).catch(() => null);
+      if (buf) return buf;
+    }
+    return null;
+  };
   return importModelData(target, data, opts, siblings);
 }
 
