@@ -117,7 +117,7 @@ if [ "$VERIFY_VERSION" = "$VERSION" ]; then
     echo "    $PUBLIC_BASE/latest.json"
     echo "    $PUBLIC_BASE/$EXE_NAME"
     echo ""
-    echo "Installerte Luna 3D-er ser oppdateringen ved neste oppstart (knapp i statuslinja)."
+    echo "Installerte Luna 3D-er ser oppdateringen ved oppstart eller innen en halvtime (linje under tittellinja)."
 else
     echo "WARN: latest.json viser '$VERIFY_VERSION', forventet '$VERSION'."
     echo "Sjekk: curl $PUBLIC_BASE/latest.json"
