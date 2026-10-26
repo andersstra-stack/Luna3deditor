@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.14.1] — 2026-10-26
+
 ### Fixed
 - Modeller med fotografisk tekstur (AI-genererte fra f.eks. Tripo, skannede modeller) ble nesten svarte ved import:
   bare de 24 vanligste eksakte fargene ble beholdt, og det er de mørke, minst støyete. Fargene grupperes nå
