@@ -108,6 +108,8 @@ input {
   background: var(--bg-1);
   backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--border);
+  /* «Legg til»-menyen skal ligge over det flytende panelet i 3D-visningen. */
+  z-index: 2;
 }
 
 .brand-moon {
@@ -635,21 +637,49 @@ select.text option {
   direction: rtl;
 }
 
-/* ---------- Flere former ---------- */
+/* ---------- Legg til-menyen ---------- */
 .more {
   position: relative;
 }
 
-.shape-btn.active {
+.add-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 10px 0 12px;
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.add-btn:hover {
+  background: var(--bg-3);
+}
+
+.add-btn.active {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.add-caret {
+  display: grid;
+  color: var(--text-dim);
+  transform: rotate(90deg);
+  transition: transform 0.15s;
+}
+
+.add-btn.active .add-caret {
+  color: inherit;
+  transform: rotate(-90deg);
 }
 
 .more-menu {
   position: absolute;
   top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
   z-index: 20;
   width: 290px;
   padding: 10px;
@@ -678,6 +708,29 @@ select.text option {
 .more-grid .shape-btn {
   min-width: 0;
   padding: 6px 2px;
+}
+
+/* ---------- Flytende verktøypanel i 3D-visningen ---------- */
+.viewport-tools {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px #0004;
+}
+
+.tool-sep {
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--border);
 }
 
 /* ---------- Mål i 3D-visningen ---------- */

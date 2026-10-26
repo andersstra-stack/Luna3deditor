@@ -19,6 +19,10 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 - **Materialnavn** per objekt (f.eks. `nova_glass`, så Unity bytter inn sitt glass). Importerte modeller beholder
   materialnavnene fra fila.
 
+### Changed
+- **Ryddigere verktøylinje**: alle former, lys og markører ligger nå bak én «Legg til»-knapp. Flytt/roter/skaler,
+  festing, kommentar-pinne og «vis alt» er flyttet til et flytende panel oppe til venstre i 3D-visningen.
+
 ## [0.10.0] — 2026-10-23
 
 ### Added

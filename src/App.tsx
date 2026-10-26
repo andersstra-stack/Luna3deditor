@@ -11,6 +11,7 @@ import { copySelection, pasteText } from "./clipboard";
 import { IMPORT_EXTENSIONS, importDroppedFiles, importModelFile } from "./importer";
 import { SelectionInfo } from "./ui/SelectionInfo";
 import { Toolbar } from "./ui/Toolbar";
+import { ViewportTools } from "./ui/ViewportTools";
 import { TitleBar } from "./ui/TitleBar";
 import { LeftPanel } from "./ui/LeftPanel";
 import { Inspector } from "./ui/Inspector";
@@ -133,6 +134,7 @@ export default function App() {
         <LeftPanel />
         <div className="viewport">
           <Viewport />
+          <ViewportTools />
           <SelectionInfo />
         </div>
         <Inspector />
