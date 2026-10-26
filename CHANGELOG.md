@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-10-26
+
 ### Added
 - **Animasjon** for bevegelige deler (dører, hjul, vindmøller, tårn, greiner):
   - Navngitte klipp («Åpne», «Snurr» …) med nøkkelrammer på objekter eller mapper. Nøkkelrammene er endringer fra
