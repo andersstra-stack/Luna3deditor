@@ -15,7 +15,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
   kapper – alt som ikke er en grunnform. Hjørnene er i formens eget koordinatsystem, med valgfri farge per hjørne og
   myk eller flat skyggelegging. Like former lagres bare én gang, så hundrevis av like blader koster nesten ingenting.
 - `luna.orient(forward, up)` i Python: rotasjonen som peker en form langs en retning (samme akser som nodene).
-- Eksempeltreet (`tegneserietre.py`) har fått ekte blader: 565 blader på 48 trekanter hver i stedet for glatte kuler.
+- Eksempeltreet (`tegneserietre.py`) har fått ekte blader: krona er bare blader (1 046 på 48 trekanter hver) i tre lag –
+  lyst ytterst, mørkt innerst for dybde – med egen fargetone per løvklump, i stedet for glatte kuler.
 
 ### Changed
 - Store skriptkjøringer svarer Claude med antall i stedet for alle id-ene (sparer mye når hundrevis av objekter lages).
