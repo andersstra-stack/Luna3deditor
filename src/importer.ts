@@ -217,27 +217,77 @@ function triangleColors(mesh: THREE.Mesh, geometry: THREE.BufferGeometry): strin
   return varies ? out : null;
 }
 
-const rgbDistance = (a: string, b: string) => {
-  const ca = new THREE.Color(a);
-  const cb = new THREE.Color(b);
-  return (ca.r - cb.r) ** 2 + (ca.g - cb.g) ** 2 + (ca.b - cb.b) ** 2;
-};
+type Rgb = [number, number, number];
+const rgbDistance = (a: Rgb, b: Rgb) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+const toHex = (c: Rgb) => `#${c.map((v) => Math.round(THREE.MathUtils.clamp(v, 0, 255)).toString(16).padStart(2, "0")).join("")}`;
+
+/**
+ * Slår sammen mange farger til `k` representative (fotografiske teksturer fra AI- og skannemodeller).
+ * De vanligste eksakte fargene er der bare de mørke, minst støyete – så i stedet grupperes fargene med
+ * k-means i sRGB, vektet med antall trekanter, og hver gruppe får snittfargen sin.
+ */
+function quantizeColors(groups: [string, number[]][], k: number): [string, number[]][] {
+  // Grovsortér først (32 nivåer per kanal), så k-means jobber på få punkter.
+  const bins = new Map<number, { sum: Rgb; weight: number; members: number[][] }>();
+  for (const [hex, tris] of groups) {
+    const v = parseInt(hex.slice(1), 16);
+    const rgb: Rgb = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+    const key = ((rgb[0] >> 3) << 10) | ((rgb[1] >> 3) << 5) | (rgb[2] >> 3);
+    let bin = bins.get(key);
+    if (!bin) bins.set(key, (bin = { sum: [0, 0, 0], weight: 0, members: [] }));
+    for (let i = 0; i < 3; i++) bin.sum[i] += rgb[i] * tris.length;
+    bin.weight += tris.length;
+    bin.members.push(tris);
+  }
+  const points = [...bins.values()].map((b) => ({ c: b.sum.map((s) => s / b.weight) as Rgb, w: b.weight, members: b.members }));
+
+  // Startpunkter: den tyngste fargen, så hele tiden den som veier mest × ligger lengst unna de valgte.
+  const centers: Rgb[] = [[...points.reduce((a, b) => (b.w > a.w ? b : a)).c]];
+  const nearest = points.map((p) => rgbDistance(p.c, centers[0]));
+  while (centers.length < Math.min(k, points.length)) {
+    let best = 0;
+    points.forEach((p, i) => {
+      if (p.w * nearest[i] > points[best].w * nearest[best]) best = i;
+    });
+    if (nearest[best] === 0) break;
+    centers.push([...points[best].c]);
+    points.forEach((p, i) => (nearest[i] = Math.min(nearest[i], rgbDistance(p.c, points[best].c))));
+  }
+
+  const assign = new Int32Array(points.length);
+  for (let iter = 0; iter < 12; iter++) {
+    const sums = centers.map(() => [0, 0, 0, 0]);
+    points.forEach((p, i) => {
+      let j = 0;
+      for (let c = 1; c < centers.length; c++) if (rgbDistance(p.c, centers[c]) < rgbDistance(p.c, centers[j])) j = c;
+      assign[i] = j;
+      for (let d = 0; d < 3; d++) sums[j][d] += p.c[d] * p.w;
+      sums[j][3] += p.w;
+    });
+    centers.forEach((c, j) => {
+      if (sums[j][3]) for (let d = 0; d < 3; d++) c[d] = sums[j][d] / sums[j][3];
+    });
+  }
+
+  const out = centers.map((c) => [toHex(c), [] as number[]] as [string, number[]]);
+  points.forEach((p, i) => {
+    const tris = out[assign[i]][1];
+    for (const m of p.members) for (const t of m) tris.push(t);
+  });
+  return out.filter((g) => g[1].length).sort((a, b) => b[1].length - a[1].length);
+}
 
 /** Deler en geometri opp i én bit per farge (største først). */
 function splitByColor(geometry: THREE.BufferGeometry, colors: string[]): { color: string; geometry: THREE.BufferGeometry }[] {
   const byColor = new Map<string, number[]>();
-  colors.forEach((c, t) => byColor.set(c, [...(byColor.get(c) ?? []), t]));
+  colors.forEach((c, t) => {
+    const tris = byColor.get(c);
+    if (tris) tris.push(t);
+    else byColor.set(c, [t]);
+  });
 
-  // For mange farger (f.eks. et fotografisk bilde): behold de vanligste og flytt resten til nærmeste.
   let groups = [...byColor.entries()].sort((a, b) => b[1].length - a[1].length);
-  if (groups.length > MAX_COLORS_PER_MESH) {
-    const keep = groups.slice(0, MAX_COLORS_PER_MESH);
-    for (const [c, tris] of groups.slice(MAX_COLORS_PER_MESH)) {
-      const nearest = keep.reduce((best, g) => (rgbDistance(c, g[0]) < rgbDistance(c, best[0]) ? g : best));
-      nearest[1].push(...tris);
-    }
-    groups = keep;
-  }
+  if (groups.length > MAX_COLORS_PER_MESH) groups = quantizeColors(groups, MAX_COLORS_PER_MESH);
 
   const pos = geometry.getAttribute("position");
   const nor = geometry.getAttribute("normal");
