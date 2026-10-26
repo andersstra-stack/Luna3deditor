@@ -9,6 +9,8 @@ import { applyScriptOps, sceneForScripts } from "../scripting";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { splitLooseParts } from "../meshSplit";
 import { mergeObjects } from "../meshMerge";
+import { usePlayer } from "../animationPlayer";
+import type { AnimClip } from "../types";
 import { captureViewport, frameScene, VIEWS, type ViewName } from "../viewport/three-handle";
 import type { BridgeMethod } from "./protocol";
 
@@ -55,6 +57,27 @@ function findNote(ref: unknown) {
   if (!note) throw new Error(`Fant ikke pinne ${ref}`);
   return note;
 }
+
+/** Et klipp etter id eller navn. */
+function findClip(ref: unknown): AnimClip {
+  const clip = editor().clips.find((c) => c.id === ref || c.name === ref);
+  if (!clip) throw new Error(`Fant ikke animasjonsklipp «${ref}». Klipp: ${editor().clips.map((c) => c.name).join(", ") || "ingen"}`);
+  return clip;
+}
+
+/** Navnet på et mål (objekt eller mappe) for svarene til Claude. */
+function targetName(id: string) {
+  const { objects, folders } = editor();
+  return objects.find((o) => o.id === id)?.name ?? folders.find((f) => f.id === id)?.name ?? "(slettet)";
+}
+
+const clipSummary = (c: AnimClip) => ({
+  id: c.id,
+  name: c.name,
+  duration: c.duration,
+  loop: c.loop,
+  tracks: c.tracks.map((t) => ({ target: t.target, targetName: targetName(t.target), keys: t.keys })),
+});
 
 export const handlers: Record<BridgeMethod, Handler> = {
   // Nøyaktige omsluttende bokser (verdensrom) gjør det lett å plassere ting inntil hverandre.
@@ -219,6 +242,57 @@ export const handlers: Record<BridgeMethod, Handler> = {
     const result = mergeObjects(ids);
     say(`slo sammen ${result.merged} deler til ${result.name}`);
     return result;
+  },
+
+  animate: (p) => {
+    const target = requireString(p, "target");
+    const clips = editor().addAnimation(target, p.preset, {
+      axis: p.axis,
+      amount: p.amount,
+      duration: p.duration,
+      clip: p.clip,
+    });
+    const touched = clips.filter((c) => c.tracks.some((t) => t.target === target));
+    say(`animerte ${targetName(target)} (${touched.map((c) => c.name).join(", ")})`);
+    return touched.map(clipSummary);
+  },
+
+  set_keyframes: (p) => {
+    const clip = editor().setKeyframes(requireString(p, "clip"), requireString(p, "target"), p.keys, {
+      duration: p.duration,
+      loop: p.loop,
+    });
+    say(`satte nøkkelrammer i «${clip.name}»`);
+    return clipSummary(clip);
+  },
+
+  get_animations: () => editor().clips.map(clipSummary),
+
+  delete_animations: (p) => {
+    if (typeof p.target === "string") {
+      editor().removeAnimations(p.target);
+      return { removedFrom: targetName(p.target) };
+    }
+    const clips = ((p.clips ?? []) as string[]).map(findClip);
+    if (!clips.length) throw new Error("Oppgi clips (navn eller id-er) eller target");
+    editor().deleteClips(clips.map((c) => c.id));
+    say(`slettet ${clips.length} animasjonsklipp`);
+    return { deleted: clips.map((c) => c.name) };
+  },
+
+  preview_animation: (p) => {
+    const player = usePlayer.getState();
+    if (p.clip === null || p.clip === undefined) {
+      player.select(null);
+      return { clip: null, note: "Showing the rest pose (as saved)." };
+    }
+    const clip = findClip(p.clip);
+    if (usePlayer.getState().clipId !== clip.id) player.select(clip.id);
+    usePlayer.getState().setTime(typeof p.time === "number" ? p.time : 0);
+    if (p.play === true) usePlayer.getState().play();
+    else usePlayer.getState().pause();
+    const s = usePlayer.getState();
+    return { clip: clip.name, time: s.time, duration: clip.duration, playing: s.playing };
   },
 
   clear_scene: () => {

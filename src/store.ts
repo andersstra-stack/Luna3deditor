@@ -8,6 +8,7 @@ import {
   isLight,
   isNode,
   startHeight,
+  type AnimClip,
   type Folder,
   type Note,
   type NoteReply,
@@ -23,6 +24,7 @@ import { uniqueNodeName } from "./nodes";
 import { newCurveProps, placeCurve, reshapeCurve } from "./curves";
 import { meshFromVertices, singleVertexColor, type MeshInput } from "./customMesh";
 import { hasMesh } from "./meshes";
+import { PRESETS, checkKeys, presetClips, withTrack, type Preset, type PresetOptions } from "./animation";
 
 const HISTORY_LIMIT = 100;
 
@@ -33,6 +35,8 @@ export interface Snapshot {
   objects: SceneObject[];
   folders: Folder[];
   notes: Note[];
+  /** Animasjonsklipp (se animation.ts). */
+  clips: AnimClip[];
 }
 
 export type Tool = "select" | "note";
@@ -103,6 +107,14 @@ export interface EditorState extends Snapshot {
   openNote: (id: string | null, editing?: boolean) => void;
   setShowNotes: (show: boolean) => void;
   setShowResolvedNotes: (show: boolean) => void;
+  /** Ferdig bevegelse (snurr, svai, hopp, åpne/lukke) på et objekt eller en mappe – byttes ut hvis målet har den fra før. */
+  addAnimation: (target: string, preset: Preset, options?: PresetOptions) => AnimClip[];
+  /** Egne nøkkelrammer for et mål i et klipp (lages om det ikke finnes). */
+  setKeyframes: (clip: string, target: string, keys: unknown, options?: { duration?: number; loop?: boolean }) => AnimClip;
+  updateClip: (id: string, props: Partial<Pick<AnimClip, "name" | "duration" | "loop">>) => void;
+  deleteClips: (ids: string[]) => void;
+  /** Fjerner all animasjon fra et mål (tomme klipp slettes). */
+  removeAnimations: (target: string) => void;
   setScene: (scene: Partial<Snapshot> & Pick<Snapshot, "objects" | "folders">) => void;
   clearScene: () => void;
   select: (id: string | null, mode?: SelectMode) => void;
@@ -130,8 +142,9 @@ export const newId = (prefix = "obj") => `${prefix}_${Date.now().toString(36)}_$
  * (og angre tilbake til lagret tilstand gir de samme referansene igjen). En tom scene uten fil har ingenting å miste.
  */
 export function hasUnsavedChanges(s: Pick<EditorState, keyof Snapshot | "saved" | "filePath">): boolean {
-  const changed = s.objects !== s.saved.objects || s.folders !== s.saved.folders || s.notes !== s.saved.notes;
-  return changed && !(s.filePath === null && !s.objects.length && !s.folders.length && !s.notes.length);
+  const changed =
+    s.objects !== s.saved.objects || s.folders !== s.saved.folders || s.notes !== s.saved.notes || s.clips !== s.saved.clips;
+  return changed && !(s.filePath === null && !s.objects.length && !s.folders.length && !s.notes.length && !s.clips.length);
 }
 
 /** Hovedvalget (sist valgte objekt). */
@@ -200,8 +213,25 @@ const applyUpdates = (objects: SceneObject[], updates: ObjectUpdate[]) => {
 };
 
 export const useEditor = create<EditorState>((set, get) => {
-  const empty: Snapshot = { objects: [], folders: [], notes: [] };
-  const snapshot = (): Snapshot => ({ objects: get().objects, folders: get().folders, notes: get().notes });
+  const empty: Snapshot = { objects: [], folders: [], notes: [], clips: [] };
+  const snapshot = (): Snapshot => ({ objects: get().objects, folders: get().folders, notes: get().notes, clips: get().clips });
+
+  /** Målet (objekt eller mappe) må finnes. */
+  const assertTarget = (target: string, objects = get().objects, folders = get().folders) => {
+    if (!objects.some((o) => o.id === target) && !folders.some((f) => f.id === target)) throw new Error(`Fant ikke objekt eller mappe ${target}`);
+  };
+  const presetInto = (clips: AnimClip[], target: string, preset: string, options: PresetOptions = {}) => {
+    if (!(PRESETS as readonly string[]).includes(preset)) throw new Error(`Ukjent bevegelse «${preset}». Gyldige: ${PRESETS.join(", ")}`);
+    return presetClips(preset as Preset, options).reduce((acc, part) => withTrack(acc, part, target, () => newId("clip")), clips);
+  };
+  const keyframesInto = (clips: AnimClip[], name: string, target: string, keys: unknown, options: { duration?: number; loop?: boolean } = {}) => {
+    if (!name?.trim()) throw new Error("Klippet trenger et navn");
+    const ks = checkKeys(keys);
+    const old = clips.find((c) => c.name === name);
+    const duration = options.duration ?? Math.max(ks[ks.length - 1].t, old?.duration ?? 0);
+    if (!(duration > 0)) throw new Error("duration må være over 0 (eller ha en nøkkelramme etter t = 0)");
+    return withTrack(clips, { name, duration, loop: options.loop ?? old?.loop ?? false, keys: ks }, target, () => newId("clip"));
+  };
 
   /** Lagrer nåværende tilstand i angre-historikken før en endring. */
   const commit = (next: Partial<Snapshot>, extra: Partial<EditorState> = {}) => {
@@ -220,6 +250,7 @@ export const useEditor = create<EditorState>((set, get) => {
     return {
       ...snap,
       notes: snap.notes ?? [],
+      clips: snap.clips ?? [],
       activeNoteId: (snap.notes ?? []).some((n) => n.id === get().activeNoteId) ? get().activeNoteId : null,
       selectedIds: keepSelection(snap.objects),
       activeFolderId: snap.folders.some((f) => f.id === activeFolderId) ? activeFolderId : null,
@@ -408,7 +439,8 @@ export const useEditor = create<EditorState>((set, get) => {
       const oldFolders = script ? folders.filter((f) => f.script === script) : [];
       const reused = new Set<string>();
       const keys = new Map<string, string>();
-      const result: ScriptResult = { replaced: previous, created: [], folders: [], updated: 0, deleted: 0, keys: {} };
+      const result: ScriptResult = { replaced: previous, created: [], folders: [], updated: 0, deleted: 0, animated: 0, keys: {} };
+      let clips = get().clips;
 
       // "@…" er nøkler fra skriptet; ellers id-er som må finnes i scenen.
       const resolve = (ref: string, kind: "objekt" | "mappe") => {
@@ -467,6 +499,15 @@ export const useEditor = create<EditorState>((set, get) => {
           const ids = new Set(op.ids.map((ref) => resolve(ref, "objekt")));
           objects = objects.filter((o) => !ids.has(o.id));
           result.deleted += ids.size;
+        } else if (op.op === "animate" || op.op === "keyframes") {
+          // Målet kan være et objekt eller en mappe.
+          const target = op.target.startsWith("@") ? resolve(op.target, op.target.startsWith("@f") ? "mappe" : "objekt") : op.target;
+          assertTarget(target, objects, folders);
+          clips =
+            op.op === "animate"
+              ? presetInto(clips, target, op.preset, (op.options ?? {}) as PresetOptions)
+              : keyframesInto(clips, op.clip, target, op.keys, { duration: op.duration, loop: op.loop });
+          result.animated++;
         }
       }
 
@@ -486,8 +527,40 @@ export const useEditor = create<EditorState>((set, get) => {
 
       result.keys = Object.fromEntries(keys);
       const alive = new Set(objects.map((o) => o.id));
-      commit({ objects, folders }, { selectedIds: result.created.filter((id) => alive.has(id)) });
+      commit({ objects, folders, clips }, { selectedIds: result.created.filter((id) => alive.has(id)) });
       return result;
+    },
+
+    addAnimation: (target, preset, options) => {
+      assertTarget(target);
+      const clips = presetInto(get().clips, target, preset, options);
+      commit({ clips });
+      return clips;
+    },
+
+    setKeyframes: (clip, target, keys, options) => {
+      assertTarget(target);
+      const clips = keyframesInto(get().clips, clip, target, keys, options);
+      commit({ clips });
+      return clips.find((c) => c.name === clip)!;
+    },
+
+    updateClip: (id, props) => {
+      if (!get().clips.some((c) => c.id === id)) throw new Error(`Fant ikke klipp ${id}`);
+      if (props.duration !== undefined && !(props.duration > 0)) throw new Error("duration må være over 0");
+      commit({ clips: get().clips.map((c) => (c.id === id ? { ...c, ...props } : c)) });
+    },
+
+    deleteClips: (ids) => {
+      const remove = new Set(ids);
+      commit({ clips: get().clips.filter((c) => !remove.has(c.id)) });
+    },
+
+    removeAnimations: (target) => {
+      const clips = get()
+        .clips.map((c) => ({ ...c, tracks: c.tracks.filter((t) => t.target !== target) }))
+        .filter((c) => c.tracks.length);
+      commit({ clips });
     },
 
     addNote: (props) => {
@@ -524,9 +597,10 @@ export const useEditor = create<EditorState>((set, get) => {
     setShowNotes: (showNotes) => set({ showNotes }),
     setShowResolvedNotes: (showResolvedNotes) => set({ showResolvedNotes }),
 
-    setScene: ({ objects, folders, notes = [] }) =>
-      commit({ objects, folders, notes }, { selectedIds: [], activeFolderId: null, activeNoteId: null }),
-    clearScene: () => commit({ objects: [], folders: [], notes: [] }, { selectedIds: [], activeFolderId: null, activeNoteId: null }),
+    setScene: ({ objects, folders, notes = [], clips = [] }) =>
+      commit({ objects, folders, notes, clips }, { selectedIds: [], activeFolderId: null, activeNoteId: null }),
+    clearScene: () =>
+      commit({ objects: [], folders: [], notes: [], clips: [] }, { selectedIds: [], activeFolderId: null, activeNoteId: null }),
 
     select: (id, mode = "replace") => {
       if (!id) return set({ selectedIds: [] });

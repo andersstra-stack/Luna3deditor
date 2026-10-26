@@ -211,6 +211,39 @@ export interface Note {
   replies: NoteReply[];
 }
 
+/**
+ * Én nøkkelramme: en ENDRING fra hvileposisjonen, rundt målets pivot og i pivotens egne akser – så animasjonen
+ * følger med når objektet eller mappa flyttes. Kanaler som mangler interpoleres fra nabo-rammene.
+ */
+export interface AnimKey {
+  /** Sekunder fra starten av klippet. */
+  t: number;
+  /** Flytting i meter. */
+  position?: Vec3;
+  /** Rotasjon i grader (XYZ). Interpoleres lineært, så 360 er én hel runde. */
+  rotation?: Vec3;
+  /** Størrelsesfaktor (1 = uendret). */
+  scale?: Vec3;
+  /** Overgangen FRA denne rammen til neste: jevn (myk start og stopp) eller lineær (standard). */
+  ease?: "linear" | "smooth";
+}
+
+/** Nøkkelrammene for ett mål: et objekt (roterer om sitt eget midtpunkt) eller en mappe (om noden «pivot»). */
+export interface AnimTrack {
+  target: string;
+  keys: AnimKey[];
+}
+
+/** Et navngitt animasjonsklipp («Åpne», «Snurr» …) – blir én glTF-animasjon som spillet spiller etter navn. */
+export interface AnimClip {
+  id: string;
+  name: string;
+  /** Lengde i sekunder. */
+  duration: number;
+  loop: boolean;
+  tracks: AnimTrack[];
+}
+
 export interface SceneFile {
   format: "luna3d";
   version: 3;
@@ -220,6 +253,8 @@ export interface SceneFile {
   meshes?: SerializedMesh[];
   /** Kommentar-pinner. */
   notes?: Note[];
+  /** Animasjonsklipp. */
+  clips?: AnimClip[];
 }
 
 export interface SerializedMesh {
@@ -239,7 +274,9 @@ export type ScriptOp =
   | { op: "folder"; key: string; name: string; parent?: string | null; model?: boolean }
   | { op: "add"; key: string; type: ShapeType; props: Record<string, unknown> }
   | { op: "update"; id: string; props: Record<string, unknown> }
-  | { op: "delete"; ids: string[] };
+  | { op: "delete"; ids: string[] }
+  | { op: "animate"; target: string; preset: string; options?: Record<string, unknown> }
+  | { op: "keyframes"; target: string; clip: string; keys: unknown[]; duration?: number; loop?: boolean };
 
 export interface ScriptResult {
   /** Objekter fra forrige kjøring av samme skript som ble fjernet. */
@@ -248,6 +285,8 @@ export interface ScriptResult {
   folders: string[];
   updated: number;
   deleted: number;
+  /** Animasjonsspor som ble lagt til eller byttet ut. */
+  animated: number;
   /** Skriptets nøkler (@o1, @f1 …) → id-er i scenen. */
   keys: Record<string, string>;
 }

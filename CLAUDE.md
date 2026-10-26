@@ -62,6 +62,12 @@ MCP-verktøybeskrivelser er på engelsk.
   Mapper med `model: true` bakes til én mesh (én gruppe/primitive per materiale) i modellens rom: origo fra en node som
   heter «pivot», ellers midt under delene. Et objekt hører til nærmeste modell-mappe oppover (`modelOf`); modell-mapper
   inni modeller blir barn-mesher. Sjekk resultatet ved å lese GLB-ens JSON-del (nodene bruker `matrix`, ikke `translation`).
+- Animasjon: `clips` i `Snapshot` (angre-historikk) og scenefila. `src/animation.ts` er felles matte for visning og eksport:
+  nøkkelrammer er endringer fra hvile rundt målets pivot (`pivotFrame`: objektets midtpunkt, eller en node `pivot`/`pivot_02` i
+  mappa, ellers midt under innholdet), `makeAnimator` gir `motion`/`folderMotion`/`objectWorld`. `src/animationPlayer.ts` er
+  spilleren (ikke i scenen) og `currentPose()`; `useAnimatedPose` i `Viewport.tsx` setter matrisen rett på meshen (bare faste
+  former – noder/lys følger ikke med i visningen). Eksporten sampler 30 bilder/s til glTF-spor på nodenes `uuid` (alt samles
+  under én `THREE.Scene`, ellers finner eksportøren bare nodene under første rot).
 - `src-tauri/src/lib.rs` – filkommandoer (`write_text_file`, `read_text_file`, `write_binary_file`) + dialog-plugin.
 
 ## Versjon og endringslogg

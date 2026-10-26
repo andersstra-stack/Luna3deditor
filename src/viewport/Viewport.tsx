@@ -14,6 +14,7 @@ import { setThreeGetter } from "./three-handle";
 import { NoteGroundCatcher, NotePins, placeNote } from "./Notes";
 import { FlyControls } from "./FlyControls";
 import { themeColors, useUi } from "../ui/uiStore";
+import { advancePlayer, currentPose } from "../animationPlayer";
 
 const DEG = Math.PI / 180;
 
@@ -164,8 +165,36 @@ function useSelectHandler(id: string) {
   };
 }
 
+/**
+ * Under avspilling settes verdensmatrisen rett på meshen (objektene ligger flatt i scenen); ellers gjelder
+ * posisjon/rotasjon/størrelse fra dataene som vanlig.
+ */
+function useAnimatedPose(id: string) {
+  const ref = useRef<THREE.Object3D>(null);
+  useFrame(() => {
+    const o = ref.current;
+    if (!o) return;
+    const m = currentPose()?.get(id);
+    if (m) {
+      o.matrixAutoUpdate = false;
+      o.matrix.copy(m);
+      o.matrixWorldNeedsUpdate = true;
+    } else if (!o.matrixAutoUpdate) {
+      o.matrixAutoUpdate = true;
+    }
+  });
+  return ref;
+}
+
+/** Driver animasjonsklokka. */
+function AnimationClock() {
+  useFrame((_, dt) => advancePlayer(Math.min(dt, 0.1)));
+  return null;
+}
+
 function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selected: boolean; holes: SceneObject[]; accent: string }) {
   const onClick = useSelectHandler(obj.id);
+  const poseRef = useAnimatedPose(obj.id);
   const transparent = obj.opacity < 1 || !!obj.hole;
 
   // Hull i samme mappe skjæres bort live (CSG). Uten hull brukes den delte geometrien.
@@ -191,6 +220,7 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
 
   return (
     <mesh
+      ref={poseRef as React.RefObject<THREE.Mesh>}
       name={obj.name}
       userData={{ lunaId: obj.id }}
       geometry={geometry}
@@ -374,6 +404,7 @@ export function Viewport() {
       }}
     >
       <ThreeBridge />
+      <AnimationClock />
       <hemisphereLight args={["#dfe6ff", "#3a3326", 0.9]} />
       <directionalLight
         position={[6, 12, 8]}

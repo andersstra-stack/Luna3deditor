@@ -739,6 +739,72 @@ select.text option {
   padding: 6px 2px;
 }
 
+/* ---------- Tidslinje (animasjon) ---------- */
+.timeline {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(560px, calc(100% - 24px));
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px #0004;
+}
+
+.timeline-clip {
+  max-width: 150px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.timeline-track {
+  position: relative;
+  flex: 1;
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+}
+
+.timeline-track input {
+  width: 100%;
+}
+
+.timeline-tick {
+  position: absolute;
+  top: -5px;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 1px;
+  background: var(--accent);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.timeline-time {
+  min-width: 96px;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Målvisningen flytter seg opp over tidslinja. */
+.viewport:has(.timeline) .selection-info {
+  bottom: 64px;
+}
+
 /* ---------- Flytende verktøypanel i 3D-visningen ---------- */
 .viewport-tools {
   position: absolute;
@@ -835,6 +901,84 @@ select.text option {
 
 .small-btn:hover {
   background: var(--bg-3);
+}
+
+/* Animasjon i egenskapspanelet */
+.anim-panel .hint {
+  margin: 0 0 8px;
+}
+
+.anim-clips,
+.anim-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.anim-clip,
+.anim-preset {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  font-size: 11.5px;
+}
+
+.anim-clip:hover,
+.anim-preset:hover {
+  background: var(--bg-3);
+}
+
+.anim-preset.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.anim-clip.danger:hover {
+  color: var(--red);
+}
+
+.anim-options {
+  display: grid;
+  grid-template-columns: 0.8fr 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.anim-options label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.anim-options select,
+.anim-options input {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.anim-add {
+  width: 100%;
+  padding: 6px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.anim-add:hover {
+  filter: brightness(1.15);
 }
 
 .small-btn.axis-x {

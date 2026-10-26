@@ -33,7 +33,9 @@ function reportExport(r: GlbExport | null) {
     .setActivity(
       `Eksporterte ${file(r.path)}: ${r.colors} farger i ${file(r.palette)}${r.emission ? ` + ${file(r.emission)}` : ""}` +
         (r.models ? `, ${r.models} modell${r.models === 1 ? "" : "er"}` : "") +
-        (r.nodes ? `, ${r.nodes} noder` : ""),
+        (r.nodes ? `, ${r.nodes} noder` : "") +
+        (r.animations.length ? `, ${r.animations.length} animasjon${r.animations.length === 1 ? "" : "er"}` : "") +
+        (r.warnings.length ? ` – ${r.warnings[0]}` : ""),
     );
 }
 

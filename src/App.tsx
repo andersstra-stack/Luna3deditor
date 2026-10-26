@@ -12,6 +12,8 @@ import { IMPORT_EXTENSIONS, importDroppedFiles, importModelFile } from "./import
 import { SelectionInfo } from "./ui/SelectionInfo";
 import { Toolbar } from "./ui/Toolbar";
 import { ViewportTools } from "./ui/ViewportTools";
+import { Timeline } from "./ui/Timeline";
+import { usePlayer } from "./animationPlayer";
 import { TitleBar } from "./ui/TitleBar";
 import { LeftPanel } from "./ui/LeftPanel";
 import { Inspector } from "./ui/Inspector";
@@ -132,6 +134,11 @@ function useShortcuts() {
       else if (key === "end" && sel.length) dropToGround(sel);
       else if ((key === "delete" || key === "backspace") && sel.length) s.deleteObjects(sel);
       else if (key === "n") s.setTool(s.tool === "note" ? "select" : "note");
+      else if (key === " " && usePlayer.getState().clipId) {
+        const p = usePlayer.getState();
+        if (p.playing) p.pause();
+        else p.play();
+      }
       else if (key === "escape") {
         if (s.tool === "note") s.setTool("select");
         else if (s.activeNoteId) s.openNote(null);
@@ -162,6 +169,7 @@ export default function App() {
         <div className="viewport">
           <Viewport />
           <ViewportTools />
+          <Timeline />
           <SelectionInfo />
         </div>
         <Inspector />

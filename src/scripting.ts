@@ -14,7 +14,7 @@ export const SCRIPT_MARKER = "@@LUNA3D_OPS@@";
 
 /** Scenen slik skript ser den (også med nøyaktige omsluttende bokser). Samme som MCP get_scene. */
 export function sceneForScripts() {
-  const { objects, folders, selectedIds, filePath } = useEditor.getState();
+  const { objects, folders, selectedIds, filePath, clips } = useEditor.getState();
   const withBounds = objects.map((o) => {
     const b = objectBox(o);
     const bounds = { min: b.min.toArray().map((v) => round(v)), max: b.max.toArray().map((v) => round(v)) };
@@ -27,7 +27,7 @@ export function sceneForScripts() {
     }
     return { ...o, bounds };
   });
-  return { folders, objects: withBounds, selectedIds, filePath };
+  return { folders, objects: withBounds, clips, selectedIds, filePath };
 }
 
 /** Skiller skriptets egne utskrifter fra endringene. Endringene er null hvis skriptet ikke fullførte. */
@@ -51,6 +51,7 @@ export function describeResult(r: ScriptResult): string {
     r.folders.length && plural(r.folders.length, "mappe", "mapper"),
     r.updated && `endret ${r.updated}`,
     r.deleted && `slettet ${r.deleted}`,
+    r.animated && `${plural(r.animated, "animasjon", "animasjoner")}`,
   ].filter(Boolean);
   return parts.length ? parts.join(", ") : "ingen endringer";
 }

@@ -49,7 +49,7 @@ __all__ = [
     "scene", "objects", "get", "folders", "folder", "add", "update", "delete",
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
     "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "curve", "point_light", "spot_light", "node", "mesh",
-    "orient",
+    "orient", "animate", "keyframes",
 ]
 
 SHAPES = {
@@ -257,6 +257,45 @@ tube = _shape("tube")
 rounded_box = _shape("roundedBox")
 curve = _shape("curve")
 mesh = _shape("mesh")
+
+
+def animate(target, preset, axis=None, amount=None, duration=None, clip=None):
+    """Ferdig bevegelse på et objekt eller en mappe (id eller nøkkel fra dette skriptet).
+
+    preset: "spin" (amount = runder), "sway" (grader fram og tilbake), "bob" (meter opp og ned) eller "open"
+    (grader; lager klippene «Åpne» og «Lukke»). En mappe beveger seg rundt en node som heter «pivot» i mappa.
+    """
+    if preset not in ("spin", "sway", "bob", "open"):
+        raise ValueError(f"Ukjent bevegelse {preset!r}. Gyldige: spin, sway, bob, open")
+    options = {k: v for k, v in {"axis": axis, "amount": amount, "duration": duration, "clip": clip}.items() if v is not None}
+    if "axis" in options and options["axis"] not in ("x", "y", "z"):
+        raise ValueError("axis må være 'x', 'y' eller 'z'")
+    _push({"op": "animate", "target": str(target), "preset": preset, "options": options})
+
+
+def keyframes(target, clip, keys, duration=None, loop=None):
+    """Egne nøkkelrammer for et objekt eller en mappe i klippet `clip` (lages om det ikke finnes).
+
+    keys: [{"t": sekunder, "position": (x, y, z), "rotation": (grader), "scale": (x, y, z), "ease": "smooth"}, ...] –
+    endringer fra hvileposisjonen, rundt målets pivot.
+    """
+    out = []
+    for k in keys:
+        if "t" not in k:
+            raise ValueError(f"Nøkkelrammen mangler t: {k!r}")
+        key = {"t": float(k["t"])}
+        for ch in ("position", "rotation", "scale"):
+            if k.get(ch) is not None:
+                key[ch] = _vec3(ch, k[ch])
+        if k.get("ease"):
+            key["ease"] = k["ease"]
+        out.append(key)
+    op = {"op": "keyframes", "target": str(target), "clip": str(clip), "keys": out}
+    if duration is not None:
+        op["duration"] = float(duration)
+    if loop is not None:
+        op["loop"] = bool(loop)
+    _push(op)
 
 
 def orient(forward, up=(0, 1, 0)):

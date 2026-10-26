@@ -11,6 +11,16 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 ## [Unreleased]
 
 ### Added
+- **Animasjon** for bevegelige deler (dører, hjul, vindmøller, tårn, greiner):
+  - Navngitte klipp («Åpne», «Snurr» …) med nøkkelrammer på objekter eller mapper. Nøkkelrammene er endringer fra
+    hvileposisjonen rundt målets pivot – et objekt dreier om midtpunktet sitt, en mappe om en markør-node som heter
+    `pivot` (hengsel, aksel) – så animasjonen følger med når ting flyttes.
+  - Ferdige bevegelser i egenskapspanelet: snurr, svai, hopp og åpne/lukke (med akse, mengde og varighet).
+  - Tidslinje nederst i 3D-visningen: velg klipp, spill av/pause (mellomrom), dra i tiden, sløyfe og slett.
+  - GLB-eksporten tar med klippene som glTF-animasjoner (Unity/glTFast leser dem som klipp). Deler som er bakt inn i
+    en ytre modell gir en advarsel.
+  - MCP: `animate`, `set_keyframes`, `get_animations`, `delete_animations` og `preview_animation`; Python:
+    `luna.animate` og `luna.keyframes`. Klippene lagres i scenefila og kan angres.
 - **Egne former fra hjørner og trekanter** (MCP `add_objects` med `type: "mesh"`, Python `luna.mesh`): blader, steiner,
   kapper – alt som ikke er en grunnform. Hjørnene er i formens eget koordinatsystem, med valgfri farge per hjørne og
   myk eller flat skyggelegging. Like former lagres bare én gang, så hundrevis av like blader koster nesten ingenting.

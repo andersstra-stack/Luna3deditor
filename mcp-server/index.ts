@@ -295,6 +295,17 @@ own subfolder with model: true and a "pivot" node on its hinge/axle – it becom
 game can rotate. Skeletal rigs (characters) are done in Blender/Mixamo on the exported mesh. Keep parts as separate
 shapes in Luna while working (easy to edit) – merging happens at export.
 
+Animation: named clips ("Åpne", "Snurr" …) with keyframes on objects or folders, exported as glTF animations that
+the game plays by name (Unity/glTFast imports them as clips). Keys are OFFSETS from the rest pose, around the
+target's pivot and in the pivot's axes, so the animation survives moving the object later: an object turns around its
+own center; a folder turns around a marker node named "pivot" inside it (put it on the hinge/axle and rotate it so its
+axes match the motion), else around the bottom center of its contents. Animate a door by putting its parts in a folder
+with a pivot on the hinge and call animate(target=folder, preset="open", amount=95). Use animate for spin/sway/bob/open
+and set_keyframes for anything else; preview_animation + screenshot to check a pose (e.g. halfway). In Python:
+luna.animate(target, "spin", axis="y", amount=1, duration=2) and luna.keyframes(target, "Clip", [{"t": 0, ...}, ...]).
+For export, a moving part must not be baked into an outer model folder: give it its own folder with model: true (it
+becomes a child mesh), or keep it out of model folders.
+
 Folders: purely organizational (like a file tree) — they have no transform of their own and can be nested.
 For anything with more than a handful of parts, put parts in descriptive folders (e.g. "House" > "Roof", "Walls").
 Create folders first with create_folders, then pass folderId in add_objects. Hidden folders hide everything inside them.
@@ -709,6 +720,88 @@ server.registerTool(
     inputSchema: { ids: z.array(z.string()).min(2).describe("Ids of the objects to merge; the last one is the primary") },
   },
   ({ ids }) => run("merge_objects", { ids }),
+);
+
+const axisEnum = z.enum(["x", "y", "z"]);
+const keyframe = z.object({
+  t: z.number().min(0).describe("Seconds from the start of the clip."),
+  position: vec3.optional().describe("Offset in meters from the rest position, in the pivot's axes."),
+  rotation: vec3.optional().describe("Rotation in DEGREES around the pivot (XYZ, pivot's axes); interpolated linearly, so 360 = one full turn."),
+  scale: vec3.optional().describe("Scale factor (1 = unchanged)."),
+  ease: z.enum(["linear", "smooth"]).optional().describe("Easing from this key to the next (default linear)."),
+});
+
+server.registerTool(
+  "animate",
+  {
+    title: "Animate (preset)",
+    description:
+      "Add a ready-made motion to an object or a folder: spin (amount = turns, loops), sway (amount = degrees back and forth, loops), bob (amount = meters up and down, loops) or open (amount = degrees; makes the clips 'Åpne' and 'Lukke'). Replaces the target's track in a clip with the same name. See 'Animation' in the instructions.",
+    inputSchema: {
+      target: z.string().describe("Object id or folder id. A folder moves around its marker node named 'pivot' (hinge/axle), else the bottom center of its contents."),
+      preset: z.enum(["spin", "sway", "bob", "open"]),
+      axis: axisEnum.optional().describe("Axis in the pivot's own axes (defaults: spin y, sway z, bob y, open y)."),
+      amount: z.number().optional().describe("Turns (spin), degrees (sway/open) or meters (bob). Negative = the other way."),
+      duration: z.number().positive().optional().describe("Seconds (defaults: spin 2, sway 3, bob 1, open 1)."),
+      clip: z.string().optional().describe("Clip name (defaults: Snurr, Svai, Hopp, Åpne + Lukke). Clips are played by name in the game."),
+    },
+  },
+  (p) => run("animate", p),
+);
+
+server.registerTool(
+  "set_keyframes",
+  {
+    title: "Set keyframes",
+    description:
+      "Set your own keyframes for one target (object or folder) in a named clip (created if missing; the target's old track in it is replaced). Keys are offsets from the rest pose around the target's pivot.",
+    inputSchema: {
+      clip: z.string().describe("Clip name, e.g. 'Åpne', 'Idle', 'Spin'"),
+      target: z.string().describe("Object id or folder id"),
+      keys: z.array(keyframe).min(1),
+      duration: z.number().positive().optional().describe("Clip length in seconds (default: the last key's t, or the clip's current length)."),
+      loop: z.boolean().optional(),
+    },
+  },
+  (p) => run("set_keyframes", p),
+);
+
+server.registerTool(
+  "get_animations",
+  {
+    title: "Get animations",
+    description: "List all animation clips with their tracks (target id and name) and keyframes.",
+    inputSchema: {},
+  },
+  () => run("get_animations"),
+);
+
+server.registerTool(
+  "delete_animations",
+  {
+    title: "Delete animations",
+    description: "Delete whole clips (by name or id), or remove every track of one target from all clips.",
+    inputSchema: {
+      clips: z.array(z.string()).optional(),
+      target: z.string().optional().describe("Object or folder id whose animation should be removed everywhere."),
+    },
+  },
+  (p) => run("delete_animations", p),
+);
+
+server.registerTool(
+  "preview_animation",
+  {
+    title: "Preview animation",
+    description:
+      "Show a clip in the editor at a given time (then call screenshot to see the pose), or play it. clip: null shows the rest pose again. Only the editor view changes – nothing in the scene.",
+    inputSchema: {
+      clip: z.string().nullable().describe("Clip name or id; null = rest pose"),
+      time: z.number().min(0).optional().describe("Seconds (default 0)"),
+      play: z.boolean().optional().describe("true = start playing from 'time'"),
+    },
+  },
+  (p) => run("preview_animation", p),
 );
 
 server.registerTool(

@@ -34,6 +34,11 @@ export const BRIDGE_METHODS = [
   "add_note",
   "reply_to_note",
   "delete_notes",
+  "animate",
+  "set_keyframes",
+  "get_animations",
+  "delete_animations",
+  "preview_animation",
 ] as const;
 export type BridgeMethod = (typeof BRIDGE_METHODS)[number];
 

@@ -9,6 +9,7 @@ import { splitLooseParts } from "../meshSplit";
 import { mergeObjects } from "../meshMerge";
 import { maxRadius, scaledRadius } from "../curves";
 import { hasVertexColors } from "../meshes";
+import { AnimationPanel } from "./AnimationPanel";
 import { reportError } from "./StatusBar";
 import { Icon } from "./icons";
 
@@ -639,6 +640,7 @@ export function Inspector() {
         <HoleToggle objs={objs} />
         <Placement objs={objs} />
         <ModelTools objs={objs} />
+        <AnimationPanel objs={objs} />
         <Actions objs={objs} />
       </aside>
     );
@@ -695,6 +697,7 @@ export function Inspector() {
 
       <Placement objs={objs} />
       <ModelTools objs={objs} />
+      {!light && !node && <AnimationPanel objs={objs} />}
       <Actions objs={objs} />
     </aside>
   );

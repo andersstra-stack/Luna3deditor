@@ -10,12 +10,17 @@ import { boxOf, objectMatrix, objectQuaternion, round } from "./bounds";
 import { sceneMeshes } from "./viewport/three-handle";
 import { buildPalette } from "./palette";
 import { deserializeMesh, hasMesh, registerMesh, serializeUsedMeshes, vertexHexes } from "./meshes";
+import { isPivotNode, makeAnimator } from "./animation";
+
+type Animator = ReturnType<typeof makeAnimator>;
+/** Bilder per sekund når animasjonene samples til glTF-spor. */
+const ANIMATION_FPS = 30;
 
 const SCENE_FILTER = { name: "Luna 3D-scene", extensions: ["luna.json", "json"] };
 
 export function serializeScene(): SceneFile {
-  const { objects, folders, notes } = useEditor.getState();
-  return { format: "luna3d", version: 3, objects, folders, notes, meshes: serializeUsedMeshes(objects) };
+  const { objects, folders, notes, clips } = useEditor.getState();
+  return { format: "luna3d", version: 3, objects, folders, notes, ...(clips.length ? { clips } : {}), meshes: serializeUsedMeshes(objects) };
 }
 
 function parseScene(text: string): Snapshot {
@@ -32,7 +37,8 @@ function parseScene(text: string): Snapshot {
     .filter((o) => o.type !== "mesh" || hasMesh(o.meshId))
     .map((o) => ({ ...o, folderId: o.folderId && folderIds.has(o.folderId) ? o.folderId : null }));
   const notes = Array.isArray(data.notes) ? data.notes : [];
-  return { objects, folders, notes };
+  const clips = Array.isArray(data.clips) ? data.clips : [];
+  return { objects, folders, notes, clips };
 }
 
 /** Lagrer scenen. Uten sti spørres brukeren (eller forrige sti brukes). */
@@ -100,6 +106,10 @@ export interface GlbExport {
   nodes: number;
   /** Mapper som ble eksportert som én modell. */
   models: number;
+  /** Animasjonsklippene i fila (navn og antall spor). */
+  animations: { name: string; channels: number }[];
+  /** Ting i animasjonene som ikke kunne eksporteres, og hvorfor. */
+  warnings: string[];
   /** Palett-PNG ved siden av GLB-en (bildet ligger også inne i GLB-en), og glød-bildet hvis noe gløder. */
   palette: string;
   emission?: string;
@@ -131,7 +141,17 @@ export async function exportGlb(path?: string): Promise<GlbExport | null> {
     emission = `${dir}${sep}${fileBase(target)}_emission.png`;
     await invoke("write_binary_file", { path: emission, contents: Array.from(built.emissionPng) });
   }
-  return { path: target, nodes: built.nodes, models: built.models, palette, emission, colors: built.colors, materials: built.materials };
+  return {
+    path: target,
+    nodes: built.nodes,
+    models: built.models,
+    animations: built.animations,
+    warnings: built.warnings,
+    palette,
+    emission,
+    colors: built.colors,
+    materials: built.materials,
+  };
 }
 
 /** Bygger GLB-en i minnet (uten å skrive filer) – også brukt til testing. */
@@ -201,7 +221,7 @@ export async function buildGlb(base: string) {
     }
     return null;
   };
-  const isPivot = (o: SceneObject) => isNode(o.type) && o.name.toLowerCase() === "pivot" && !!modelOf(o.folderId);
+  const isPivot = (o: SceneObject) => isPivotNode(o) && !!modelOf(o.folderId);
   const worldOf = (o: SceneObject) =>
     new THREE.Matrix4().compose(new THREE.Vector3(...o.position), objectQuaternion(o), new THREE.Vector3(1, 1, 1));
 
@@ -266,6 +286,8 @@ export async function buildGlb(base: string) {
   };
 
   // ---------- Hierarkiet ----------
+  // Hver eksportert node: målet den tilsvarer, og verdensmatrisen ved tid t i et klipp (for animasjonene).
+  const worldFns = new Map<THREE.Object3D, { target: string; world: (a: Animator, t: number) => THREE.Matrix4 }>();
   const nodesByFolder = new Map<string, THREE.Object3D>();
   const roots: THREE.Object3D[] = [];
   let models = 0;
@@ -291,6 +313,10 @@ export async function buildGlb(base: string) {
         node.name = folder.name;
       }
       nodesByFolder.set(folder.id, node);
+      worldFns.set(node, {
+        target: folder.id,
+        world: (a, t) => (model ? a.folderMotion(folder.id, t).multiply(modelFrame(model)) : a.folderMotion(folder.id, t)),
+      });
       if (parent) parent.add(node);
       else roots.push(node);
     }
@@ -298,7 +324,9 @@ export async function buildGlb(base: string) {
   };
 
   /** Plasserer et objekt (verdensmatrise) under mappa si – i modellens rom hvis mappa hører til en modell. */
-  const attach = (child: THREE.Object3D, world: THREE.Matrix4, folderId: string | null) => {
+  const attach = (child: THREE.Object3D, world: THREE.Matrix4, folderId: string | null, target: string) => {
+    const rest = world.clone();
+    worldFns.set(child, { target, world: (a, t) => a.folderMotion(folderId, t).multiply(a.motion(target, t)).multiply(rest) });
     const model = modelOf(folderId);
     const local = model ? modelFrame(model).clone().invert().multiply(world) : world;
     local.decompose(child.position, child.quaternion, child.scale);
@@ -316,7 +344,7 @@ export async function buildGlb(base: string) {
     const n = new THREE.Object3D();
     n.name = obj.name;
     n.userData = { ...obj.props };
-    attach(n, worldOf(obj), obj.folderId);
+    attach(n, worldOf(obj), obj.folderId, obj.id);
     nodes++;
     count++;
   }
@@ -329,11 +357,61 @@ export async function buildGlb(base: string) {
     }
     const c = new THREE.Mesh(paletteGeometry(obj), materialFor(obj));
     c.name = obj.name;
-    attach(c, objectMatrix(obj), obj.folderId);
+    attach(c, objectMatrix(obj), obj.folderId, obj.id);
   }
   if (!count) throw new Error("Scenen er tom – ingenting å eksportere");
 
-  const result = await new GLTFExporter().parseAsync(roots, { binary: true });
+  // ---------- Animasjoner ----------
+  // Alt under én scene, så hvert spor finner noden sin (sporene peker på nodenes uuid – navn kan gå igjen).
+  const scene = new THREE.Scene();
+  for (const r of roots) scene.add(r);
+  const { clips } = useEditor.getState();
+  const warnings: string[] = [];
+  const animations: THREE.AnimationClip[] = [];
+  for (const clip of clips) {
+    const animator = makeAnimator(clip, objects, folders);
+    // Deler som er bakt inn i en ytre modell kan ikke bevege seg for seg selv.
+    for (const track of clip.tracks) {
+      const obj = objects.find((o) => o.id === track.target);
+      const owner = obj ? modelOf(obj.folderId) : modelOf(track.target);
+      const baked = obj ? !isNode(obj.type) && !!owner : !!owner && owner.id !== track.target;
+      if (baked) {
+        warnings.push(
+          `«${obj?.name ?? folderById.get(track.target)?.name}» i «${clip.name}» er bakt inn i modellen «${owner!.name}» – gi den en egen mappe med «Én modell» for å animere den.`,
+        );
+      }
+    }
+    const steps = Math.max(1, Math.ceil(clip.duration * ANIMATION_FPS));
+    const times = Array.from({ length: steps + 1 }, (_, i) => Math.min(clip.duration, i / ANIMATION_FPS));
+    const tracks: THREE.KeyframeTrack[] = [];
+    for (const [node, info] of worldFns) {
+      if (!animator.animates(info.target)) continue;
+      const parent = node.parent ? worldFns.get(node.parent) : undefined;
+      const p: number[] = [];
+      const q: number[] = [];
+      const s: number[] = [];
+      const pos = new THREE.Vector3();
+      const quat = new THREE.Quaternion();
+      const scl = new THREE.Vector3();
+      let prev: THREE.Quaternion | null = null;
+      for (const t of times) {
+        const local = (parent ? parent.world(animator, t).invert() : new THREE.Matrix4()).multiply(info.world(animator, t));
+        local.decompose(pos, quat, scl);
+        // Samme vei rundt som forrige bilde (q og -q er samme rotasjon), ellers spinner interpoleringen feil vei.
+        if (prev && prev.dot(quat) < 0) quat.set(-quat.x, -quat.y, -quat.z, -quat.w);
+        prev = quat.clone();
+        p.push(pos.x, pos.y, pos.z);
+        q.push(quat.x, quat.y, quat.z, quat.w);
+        s.push(scl.x, scl.y, scl.z);
+      }
+      tracks.push(new THREE.VectorKeyframeTrack(`${node.uuid}.position`, times, p));
+      tracks.push(new THREE.QuaternionKeyframeTrack(`${node.uuid}.quaternion`, times, q));
+      if (s.some((v, i) => Math.abs(v - s[i % 3]) > 1e-5)) tracks.push(new THREE.VectorKeyframeTrack(`${node.uuid}.scale`, times, s));
+    }
+    if (tracks.length) animations.push(new THREE.AnimationClip(clip.name, clip.duration, tracks));
+  }
+
+  const result = await new GLTFExporter().parseAsync(scene, { binary: true, animations });
   const pngs = await palette.png();
   return {
     glb: new Uint8Array(result as ArrayBuffer),
@@ -341,6 +419,8 @@ export async function buildGlb(base: string) {
     emissionPng: pngs.emission,
     nodes,
     models,
+    animations: animations.map((a) => ({ name: a.name, channels: a.tracks.length })),
+    warnings,
     colors: palette.colors,
     materials: [...materials.values()].map((m) => m.name),
   };
