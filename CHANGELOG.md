@@ -17,6 +17,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 - **Fritt kamera for skjermbilder**: `screenshot` kan ramme inn bestemte objekter eller mapper (`focus`, `zoom`) eller
   ta bildet fra en valgt posisjon mot et punkt (`camera`). Brukerens kamera settes tilbake etterpå. `set_view` kan
   også fokusere på objekter.
+- **Tegneserie-visning** (knapp i verktøypanelet, tasten T, Innstillinger → 3D-visning): flate lystrinn og mørke
+  konturlinjer, så modellene ser tegnet ut mens du jobber. Bare visning og skjermbilder – GLB-eksporten endres ikke.
 
 ### Fixed
 - Tall i scenefila og i svarene til Claude får ikke lenger avrundingsstøy (`0.951`, ikke `0.9510000000000001`).

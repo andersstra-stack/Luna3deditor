@@ -12,7 +12,8 @@ export function SettingsDialog() {
   const theme = useUi((s) => s.theme);
   const keepOrigin = useUi((s) => s.importKeepOrigin);
   const detail = useUi((s) => s.geometryDetail);
-  const { setTheme, setImportKeepOrigin, setGeometryDetail, closeSettings } = useUi.getState();
+  const toon = useUi((s) => s.toonView);
+  const { setTheme, setImportKeepOrigin, setGeometryDetail, setToonView, closeSettings } = useUi.getState();
 
   useEffect(() => {
     if (!open) return;
@@ -57,6 +58,21 @@ export function SettingsDialog() {
               );
             })}
           </div>
+        </section>
+
+        <section>
+          <h3 className="settings-h3">3D-visning</h3>
+          <label className={`toggle-row ${toon ? "on" : ""}`}>
+            <input type="checkbox" checked={toon} onChange={() => setToonView(!toon)} />
+            <Icon name="toon" size={16} />
+            <span>
+              Tegneserie-visning
+              <small>
+                Flate lystrinn og mørke konturlinjer, så modellene ser tegnet ut mens du jobber (tasten T). Gjelder bare
+                visningen og skjermbildene – GLB-eksporten endres ikke; i spillmotoren er det shaderen som bestemmer.
+              </small>
+            </span>
+          </label>
         </section>
 
         <section>

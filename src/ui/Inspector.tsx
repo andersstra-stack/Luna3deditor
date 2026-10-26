@@ -581,6 +581,8 @@ function Help() {
         <dd>Lagre som</dd>
         <dt>Ctrl+I</dt>
         <dd>Importer 3D-modell</dd>
+        <dt>T</dt>
+        <dd>Tegneserie-visning</dd>
         <dt>N</dt>
         <dd>Kommentar-pinne</dd>
       </dl>

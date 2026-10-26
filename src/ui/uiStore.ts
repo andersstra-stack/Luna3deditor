@@ -44,6 +44,7 @@ function readSavedTheme(): Theme {
 
 const KEEP_ORIGIN_KEY = "luna3d.importKeepOrigin";
 const DETAIL_KEY = "luna3d.geometryDetail";
+const TOON_KEY = "luna3d.toonView";
 
 /** Hvor glatte formene (kuler, sylindre …) er: glatt for visning, lavpoly for spill. */
 export type GeometryDetail = "smooth" | "lowpoly";
@@ -53,6 +54,14 @@ function readDetail(): GeometryDetail {
     return window.localStorage.getItem(DETAIL_KEY) === "lowpoly" ? "lowpoly" : "smooth";
   } catch {
     return "smooth";
+  }
+}
+
+function readToon(): boolean {
+  try {
+    return window.localStorage.getItem(TOON_KEY) === "1";
+  } catch {
+    return false;
   }
 }
 
@@ -76,6 +85,9 @@ interface UiState {
   setImportKeepOrigin: (on: boolean) => void;
   geometryDetail: GeometryDetail;
   setGeometryDetail: (d: GeometryDetail) => void;
+  /** Tegneserie-visning: flate lystrinn og konturlinjer i 3D-visningen (bare visning – eksporten endres ikke). */
+  toonView: boolean;
+  setToonView: (on: boolean) => void;
   settingsOpen: boolean;
   openSettings: () => void;
   closeSettings: () => void;
@@ -109,6 +121,15 @@ export const useUi = create<UiState>((set) => ({
       /* ignore */
     }
     set({ geometryDetail: d });
+  },
+  toonView: readToon(),
+  setToonView: (on) => {
+    try {
+      window.localStorage.setItem(TOON_KEY, on ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+    set({ toonView: on });
   },
   settingsOpen: false,
   openSettings: () => set({ settingsOpen: true }),

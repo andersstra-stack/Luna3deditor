@@ -85,6 +85,8 @@ MCP-verktøybeskrivelser er på engelsk.
   temablokkene her; nye temaer legges inn der og kopieres. `App.css` mapper Luna-tokens (`--bg-1`, `--text` …) til
   LunaChat-variablene. Tema-tilstand i `src/ui/uiStore.ts` (`luna3d.theme` i localStorage + inline-skript i `index.html`).
 - 3D-visningen har gjennomsiktig bakgrunn (temaets gradient synes); rutenett/utvalgsfarge avledes i `useThemeColors()`.
+- Tegneserie-visning: `toonView` i `uiStore` (localStorage). `SolidMesh` bytter til `meshToonMaterial` (`TOON_GRADIENT`, tre lystrinn)
+  og legger på drei `Outlines` i `INK` (ikke på hull og plan; valgte får aksentfargen). Bare visning – eksporten er uendret.
 
 ## Nytt MCP-verktøy
 1. Legg metoden til `BRIDGE_METHODS` i `src/bridge/protocol.ts`.

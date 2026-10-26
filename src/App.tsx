@@ -134,6 +134,7 @@ function useShortcuts() {
       else if (key === "end" && sel.length) dropToGround(sel);
       else if ((key === "delete" || key === "backspace") && sel.length) s.deleteObjects(sel);
       else if (key === "n") s.setTool(s.tool === "note" ? "select" : "note");
+      else if (key === "t") useUi.getState().setToonView(!useUi.getState().toonView);
       else if (key === " " && usePlayer.getState().clipId) {
         const p = usePlayer.getState();
         if (p.playing) p.pause();

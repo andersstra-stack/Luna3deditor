@@ -266,8 +266,20 @@ function AnimationClock() {
   return null;
 }
 
+/** Tre faste lystrinn for tegneserie-visningen (skygge, halvskygge, lys). */
+const TOON_GRADIENT = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([105, 180, 255]), 3, 1, THREE.RedFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+})();
+/** Konturfargen i tegneserie-visningen. */
+const INK = "#121218";
+
 function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selected: boolean; holes: SceneObject[]; accent: string }) {
   const onClick = useSelectHandler(obj.id);
+  const toon = useUi((s) => s.toonView);
   const poseRef = useAnimatedPose(obj.id);
   const transparent = obj.opacity < 1 || !!obj.hole;
 
@@ -305,23 +317,45 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
       receiveShadow={!obj.hole}
       onClick={onClick}
     >
-      <meshStandardMaterial
-        // Ny nøkkel når hjørnefargene kommer/går – three må kompilere shaderen på nytt.
-        key={colored ? "vertex-colors" : "color"}
-        vertexColors={colored}
-        color={colored ? "#ffffff" : obj.color}
-        metalness={obj.metalness}
-        roughness={obj.roughness}
-        emissive={obj.color}
-        emissiveIntensity={obj.hole ? 0 : (obj.emissive ?? 0)}
-        transparent={transparent}
-        opacity={obj.hole ? 0.28 : obj.opacity}
-        depthWrite={!transparent}
-        side={obj.type === "plane" || obj.hole || isCut ? THREE.DoubleSide : THREE.FrontSide}
-      />
+      {toon && !obj.hole ? (
+        // Tegneserie: flate lystrinn (metall/ruhet brukes ikke).
+        <meshToonMaterial
+          key={colored ? "toon-vertex-colors" : "toon"}
+          vertexColors={colored}
+          color={colored ? "#ffffff" : obj.color}
+          gradientMap={TOON_GRADIENT}
+          emissive={obj.color}
+          emissiveIntensity={obj.emissive ?? 0}
+          transparent={transparent}
+          opacity={obj.opacity}
+          depthWrite={!transparent}
+          side={obj.type === "plane" || isCut ? THREE.DoubleSide : THREE.FrontSide}
+        />
+      ) : (
+        <meshStandardMaterial
+          // Ny nøkkel når hjørnefargene kommer/går – three må kompilere shaderen på nytt.
+          key={colored ? "vertex-colors" : "color"}
+          vertexColors={colored}
+          color={colored ? "#ffffff" : obj.color}
+          metalness={obj.metalness}
+          roughness={obj.roughness}
+          emissive={obj.color}
+          emissiveIntensity={obj.hole ? 0 : (obj.emissive ?? 0)}
+          transparent={transparent}
+          opacity={obj.hole ? 0.28 : obj.opacity}
+          depthWrite={!transparent}
+          side={obj.type === "plane" || obj.hole || isCut ? THREE.DoubleSide : THREE.FrontSide}
+        />
+      )}
       {/* drei 10 har byttet om grenene i shaderen: uten `screenspace` er tykkelsen i piksler. */}
-      {selected && <Outlines thickness={3} color={accent} />}
-      {obj.hole && !selected && <Outlines thickness={1.5} color="#ff6b6b" />}
+      {selected ? (
+        <Outlines thickness={3} color={accent} />
+      ) : obj.hole ? (
+        <Outlines thickness={1.5} color="#ff6b6b" />
+      ) : (
+        // Tegneserie: mørk kontur rundt alt som har volum.
+        toon && obj.type !== "plane" && <Outlines thickness={1.6} color={INK} />
+      )}
     </mesh>
   );
 }
