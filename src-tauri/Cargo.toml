@@ -1,6 +1,6 @@
 [package]
 name = "luna3deditor"
-version = "0.14.1"
+version = "0.14.2"
 description = "Luna 3D – enkel 3D-editor med MCP for Claude"
 authors = ["Anders"]
 edition = "2024"

@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.14.2] — 2026-10-26
+
 ### Changed
 - Ny versjon vises som en linje rett under tittellinja («Luna 3D vX.Y.Z er klar» + notatet, «Oppdater nå» og kryss
   for «ikke nå») i stedet for en liten knapp i statuslinja. Appen ser også etter oppdateringer hver halvtime mens den
