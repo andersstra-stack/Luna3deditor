@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-10-26
+
 ### Added
 - **Tekstur på importerte modeller**: modeller med fotografisk tekstur (AI-genererte fra Tripo o.l., skannede modeller)
   vises nå med bildet sitt i stedet for én farge per trekant – paneler, lys og merker som er malt inn i teksturen kommer
