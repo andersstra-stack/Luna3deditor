@@ -63,6 +63,8 @@ export interface EditorState extends Snapshot {
   past: Snapshot[];
   future: Snapshot[];
   bridgeStatus: BridgeStatus;
+  /** Fra huben: vinduets prosjekt-id og hvor mange Claude-økter som jobber i det. */
+  bridgeInfo: { project: string; sessions: number } | null;
   /** Aktivt verktøy i 3D-visningen: velge, eller sette kommentar-pinner. */
   tool: Tool;
   /** Pinnen som har kortet sitt åpent (og om teksten redigeres). */
@@ -130,6 +132,7 @@ export interface EditorState extends Snapshot {
   undo: () => void;
   redo: () => void;
   setBridgeStatus: (status: BridgeStatus) => void;
+  setBridgeInfo: (info: { project: string; sessions: number } | null) => void;
   setActivity: (msg: string | null) => void;
   setFilePath: (path: string | null) => void;
   /** Nåværende scene regnes som lagret (etter lagring, åpning eller ny scene). */
@@ -271,6 +274,7 @@ export const useEditor = create<EditorState>((set, get) => {
     past: [],
     future: [],
     bridgeStatus: "disconnected",
+    bridgeInfo: null,
     tool: "select",
     activeNoteId: null,
     editingNoteId: null,
@@ -650,7 +654,8 @@ export const useEditor = create<EditorState>((set, get) => {
       set({ past: [...past, snapshot()], future: future.slice(1), ...restore(future[0]) });
     },
 
-    setBridgeStatus: (bridgeStatus) => set({ bridgeStatus }),
+    setBridgeStatus: (bridgeStatus) => set(bridgeStatus === "connected" ? { bridgeStatus } : { bridgeStatus, bridgeInfo: null }),
+    setBridgeInfo: (bridgeInfo) => set({ bridgeInfo }),
     setActivity: (activity) => set({ activity }),
     setFilePath: (filePath) => set({ filePath }),
     markSaved: () => set({ saved: snapshot() }),

@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde::Serialize;
 use tauri::Manager;
@@ -102,6 +103,27 @@ async fn run_python_script(app: tauri::AppHandle, path: String, scene_json: Stri
     .map_err(|e| e.to_string())?
 }
 
+static NEXT_WINDOW: AtomicU32 = AtomicU32::new(2);
+
+/// Åpner et nytt prosjektvindu med samme oppsett som hovedvinduet. Vinduet åpner `path` selv ved oppstart
+/// (`window.__LUNA_OPEN__`) og kobler seg til MCP-huben for seg selv. Async: på Windows låser synkrone kommandoer
+/// seg når de lager vinduer.
+#[tauri::command]
+async fn open_project_window(app: tauri::AppHandle, path: Option<String>) -> Result<String, String> {
+    let label = format!("luna-{}", NEXT_WINDOW.fetch_add(1, Ordering::Relaxed));
+    let script = format!("window.__LUNA_OPEN__ = {};", serde_json::to_string(&path).map_err(|e| e.to_string())?);
+    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
+        .title("Luna 3D")
+        .inner_size(1440.0, 900.0)
+        .min_inner_size(900.0, 600.0)
+        .decorations(false)
+        .disable_drag_drop_handler()
+        .initialization_script(&script)
+        .build()
+        .map_err(|e| format!("Kunne ikke åpne vindu: {e}"))?;
+    Ok(label)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -114,7 +136,8 @@ pub fn run() {
             read_text_file,
             read_binary_file,
             write_binary_file,
-            run_python_script
+            run_python_script,
+            open_project_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

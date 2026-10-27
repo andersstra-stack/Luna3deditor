@@ -10,6 +10,17 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Flere prosjekter samtidig**: «Nytt vindu» (Ctrl+Shift+N) åpner et eget prosjektvindu med sin egen scene,
+  angrehistorikk og 3D-visning. Flere Claude-økter kan jobbe samtidig, hver i sitt vindu, uten å vente på hverandre:
+  MCP-serveren er nå en felles hub (`~/.luna3d/hub.log` viser hvilken økt som gjorde hva) som Claude-øktene kobler seg
+  til. Nye verktøy `list_projects`, `use_project` og `open_project` (åpner en scenefil i nytt vindu). Er bare ett vindu
+  åpent, brukes det automatisk. Claude-pillen viser hvor mange økter som jobber i vinduet.
+
+### Fixed
+- Skjermbilder fra Claude virker også når vinduet er minimert eller dekket av andre vinduer (ventet før på at
+  vinduet tegnet seg selv, og ga tidsavbrudd).
+
 ## [0.15.1] — 2026-10-26
 
 ### Added

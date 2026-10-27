@@ -2,130 +2,23 @@
 /**
  * Luna 3D MCP-server.
  *
- * Claude Code starter denne over stdio. Serveren åpner en WebSocket på
- * 127.0.0.1 som Luna 3D-appen kobler seg til, og videresender verktøykall
- * fra Claude til appen. Kjøres direkte med Node (type stripping), uten byggesteg.
+ * Claude Code starter denne over stdio. Uten argumenter er den en tynn proxy (proxy.ts) som sender alt videre til
+ * huben (hub.ts, `--hub`): én langlevende prosess som eier WebSocket-porten Luna 3D-vinduene kobler seg til, og som
+ * tar imot én MCP-økt per Claude-økt. Slik kan flere økter jobbe samtidig, hver i sitt eget prosjektvindu.
+ * Verktøyene defineres her og kjøres i huben. Kjøres direkte med Node (type stripping), uten byggesteg.
  *
  * NB: stdout tilhører MCP-protokollen – all logging går til stderr.
  */
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { WebSocketServer, WebSocket } from "ws";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runPythonScript } from "./python.ts";
-import { BRIDGE_BUSY_CODE, BRIDGE_PORT, type BridgeMethod, type BridgeResponse } from "../src/bridge/protocol.ts";
+import { Hub, bridge, currentCall, type ToolDef } from "./hub.ts";
+import { runProxy } from "./proxy.ts";
+import type { BridgeMethod } from "../src/bridge/protocol.ts";
 import { ADDABLE_SHAPES } from "../src/types.ts";
-
-const VERSION: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
-const PORT = Number(process.env.LUNA_BRIDGE_PORT ?? BRIDGE_PORT);
-const log = (...args: unknown[]) => console.error("[luna3d-mcp]", ...args);
-const LISTEN_RETRY_MS = 3000;
-
-// Kun appen (dev-server eller bygget Tauri-app) får koble til – ikke tilfeldige nettsider.
-const ALLOWED_ORIGINS = new Set(["http://localhost:1420", "http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"]);
-
-interface Pending {
-  resolve: (value: unknown) => void;
-  reject: (err: Error) => void;
-  timer: NodeJS.Timeout;
-}
-
-class AppBridge {
-  socket: WebSocket | null = null;
-  listenError: string | null = null;
-  pending = new Map<string, Pending>();
-  seq = 0;
-
-  constructor(port: number) {
-    this.listen(port);
-  }
-
-  listen(port: number) {
-    const wss = new WebSocketServer({
-      host: "127.0.0.1",
-      port,
-      verifyClient: ({ origin }: { origin?: string }) => !origin || ALLOWED_ORIGINS.has(origin),
-    });
-    wss.on("listening", () => {
-      this.listenError = null;
-      log(`venter på Luna 3D-appen på ws://127.0.0.1:${port}`);
-    });
-    wss.on("error", (err: NodeJS.ErrnoException) => {
-      const busy = err.code === "EADDRINUSE";
-      const error = busy
-        ? `Port ${port} er opptatt – trolig kjører en annen Claude-økt med Luna 3D-broen allerede. Lukk den, eller sett LUNA_BRIDGE_PORT. Prøver igjen av seg selv.`
-        : `Kunne ikke starte broen: ${err.message}`;
-      if (error !== this.listenError) log(error);
-      this.listenError = error;
-      // Porten blir ledig når den andre økten avslutter – prøv igjen, så broen kommer seg uten omstart.
-      if (busy) {
-        wss.close();
-        setTimeout(() => this.listen(port), LISTEN_RETRY_MS).unref();
-      }
-    });
-    wss.on("connection", (ws) => {
-      // Første vindu beholder koblingen; ellers ville to vinduer sparket hverandre ut i en løkke.
-      if (this.socket?.readyState === WebSocket.OPEN) {
-        log("avviser ekstra app-vindu (et annet er allerede tilkoblet)");
-        ws.close(BRIDGE_BUSY_CODE, "busy");
-        return;
-      }
-      log("appen koblet til");
-      this.socket = ws;
-      ws.on("message", (data) => this.onMessage(String(data)));
-      ws.on("close", () => {
-        if (this.socket !== ws) return;
-        log("appen koblet fra");
-        this.socket = null;
-        for (const [id, p] of this.pending) {
-          clearTimeout(p.timer);
-          p.reject(new Error("Luna 3D-appen koblet fra før svaret kom"));
-          this.pending.delete(id);
-        }
-      });
-    });
-  }
-
-  onMessage(raw: string) {
-    let msg: BridgeResponse | { type: string };
-    try {
-      msg = JSON.parse(raw);
-    } catch {
-      return log("ugyldig melding fra appen");
-    }
-    if ("type" in msg) return log("hei fra appen:", raw);
-    const p = this.pending.get(msg.id);
-    if (!p) return;
-    clearTimeout(p.timer);
-    this.pending.delete(msg.id);
-    if (msg.ok) p.resolve(msg.result);
-    else p.reject(new Error(msg.error));
-  }
-
-  call(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 20000): Promise<any> {
-    if (this.listenError) return Promise.reject(new Error(this.listenError));
-    const socket = this.socket;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      return Promise.reject(
-        new Error("Luna 3D-appen er ikke tilkoblet. Be brukeren starte den (`npm run tauri dev` i prosjektmappa) og prøv igjen."),
-      );
-    }
-    const id = `r${++this.seq}`;
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Tidsavbrudd: appen svarte ikke på ${method}`));
-      }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
-      socket.send(JSON.stringify({ id, method, params }));
-    });
-  }
-}
-
-const bridge = new AppBridge(PORT);
 
 // ---------- Skjema ----------
 
@@ -321,10 +214,21 @@ without disturbing the user's view. raycast finds surfaces: to put something ON 
 (e.g. from outside the tree crown toward its center, or straight down onto a roof), place the object at the hit point
 and orient it with the normal (in Python: luna.orient(forward=..., up=normal)).
 
+Several projects: Luna 3D can have several projects open at once, one window each, and several Claude sessions can work
+at the same time – every session works on ONE window, and the tools only touch that window. With a single window open
+you get it automatically; otherwise call list_projects and use_project, or open_project to open a scene file in a new
+window. Don't load_scene or clear_scene in a window the user or another session is working in – use open_project.
+
 Workflow tips: call get_scene first to see existing objects and their ids. Build composite things from several shapes
 with one add_objects call. Use screenshot to check your work visually — try different views. Every change is undoable by the user.`;
 
-const server = new McpServer({ name: "luna3d", version: VERSION }, { instructions: INSTRUCTIONS });
+// Verktøyene samles her og registreres på nytt for hver MCP-økt i huben (én McpServer per økt).
+const tools: ToolDef[] = [];
+const server = {
+  registerTool: ((name: string, config: unknown, handler: ToolDef["handler"]) => {
+    tools.push({ name, config, handler });
+  }) as unknown as McpServer["registerTool"],
+};
 
 const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
 
@@ -614,7 +518,8 @@ server.registerTool(
   "load_scene",
   {
     title: "Load scene",
-    description: "Open a Luna 3D scene file (.luna.json), replacing the current scene (undoable).",
+    description:
+      "Open a Luna 3D scene file (.luna.json) in this session's window, replacing its scene (undoable). To work on another file next to what is open, use open_project instead.",
     inputSchema: { path: z.string().describe("Absolute file path") },
   },
   ({ path }) => run("load_scene", { path }),
@@ -855,9 +760,48 @@ server.registerTool(
   ({ path }) => run("export_glb", { path }),
 );
 
-await server.connect(new StdioServerTransport());
-log("MCP-server klar");
+// ---------- Prosjekter (kjøres i huben, ikke i appen) ----------
 
-// Avslutt når Claude Code lukker forbindelsen, så porten ikke blir hengende opptatt.
-process.stdin.on("end", () => process.exit(0));
-process.stdin.on("close", () => process.exit(0));
+async function local(fn: (call: ReturnType<typeof currentCall>) => unknown) {
+  try {
+    return json(await fn(currentCall()));
+  } catch (e) {
+    return { content: [{ type: "text" as const, text: (e as Error).message }], isError: true };
+  }
+}
+
+server.registerTool(
+  "list_projects",
+  {
+    title: "List projects",
+    description:
+      "List the Luna 3D projects that are open (one window each): project id, scene file, how many Claude sessions work in it, and which one THIS session works on. Read-only.",
+    inputSchema: {},
+  },
+  () => local(({ hub, session }) => hub.listProjects(session)),
+);
+
+server.registerTool(
+  "use_project",
+  {
+    title: "Use project",
+    description:
+      "Make this session work on an open project (window). All other tools then act on it; other sessions keep theirs. Not needed when only one window is open.",
+    inputSchema: { project: z.string().describe("Project id from list_projects, or the scene file path / file name") },
+  },
+  ({ project }) => local(({ hub, session }) => hub.useProject(session, project)),
+);
+
+server.registerTool(
+  "open_project",
+  {
+    title: "Open project",
+    description:
+      "Open a scene file in a NEW Luna 3D window (or an empty window without 'path') and make this session work on it. Use this instead of load_scene when the current window belongs to the user or another session. A file that is already open is just selected.",
+    inputSchema: { path: z.string().optional().describe("Absolute path to a .luna.json scene file") },
+  },
+  ({ path }) => local(({ hub, session }) => hub.openProject(session, path)),
+);
+
+if (process.argv.includes("--hub")) new Hub(tools, INSTRUCTIONS).start();
+else await runProxy();

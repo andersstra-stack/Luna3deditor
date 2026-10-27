@@ -2,7 +2,9 @@
 // Holdes fri for imports slik at Node kan kjøre filen direkte.
 
 export const BRIDGE_PORT = 47317;
-/** WebSocket-lukkekode når et annet app-vindu allerede er koblet til. */
+/** HTTP-porten der huben tar imot MCP-økter (Streamable HTTP). */
+export const HUB_PORT = 47318;
+/** WebSocket-lukkekode fra eldre MCP-servere når et annet app-vindu allerede er koblet til. */
 export const BRIDGE_BUSY_CODE = 4001;
 
 export const BRIDGE_METHODS = [
@@ -40,6 +42,7 @@ export const BRIDGE_METHODS = [
   "delete_animations",
   "preview_animation",
   "raycast",
+  "open_window",
 ] as const;
 export type BridgeMethod = (typeof BRIDGE_METHODS)[number];
 
@@ -53,8 +56,27 @@ export interface BridgeRequest {
 /** App → MCP-server */
 export type BridgeResponse = { id: string; ok: true; result: unknown } | { id: string; ok: false; error: string };
 
-export interface BridgeHello {
+/** Scenefila et vindu har åpent (null = ulagret scene). */
+export interface BridgeProject {
+  file: string | null;
+}
+
+/** App → hub, når vinduet kobler til. `window` er Tauri-etiketten (unik per vindu). */
+export interface BridgeHello extends BridgeProject {
   type: "hello";
   app: "luna3d";
   version: string;
+  window: string;
+}
+
+/** App → hub, når vinduet åpner eller lagrer en annen fil. */
+export interface BridgeProjectUpdate extends BridgeProject {
+  type: "project";
+}
+
+/** Hub → app: prosjekt-id-en vinduet har og hvor mange Claude-økter som bruker det. */
+export interface BridgeStatusMessage {
+  type: "status";
+  project: string;
+  sessions: number;
 }

@@ -22,6 +22,7 @@ import { StatusBar, reportError } from "./ui/StatusBar";
 import { SettingsDialog } from "./ui/SettingsDialog";
 import { useUi } from "./ui/uiStore";
 import { hasNativeWindow } from "./ui/WindowControls";
+import { openWindow } from "./windows";
 
 /** Ctrl+C / Ctrl+X / Ctrl+V for objekter. Tekstfelt beholder vanlig kopier/lim inn. */
 function useClipboard() {
@@ -122,6 +123,7 @@ function useShortcuts() {
       else if (ctrl && key === "s" && e.shiftKey) saveSceneAs().catch(reportError);
       else if (ctrl && key === "s") saveScene().catch(reportError);
       else if (ctrl && key === "o") openScene().catch(reportError);
+      else if (ctrl && key === "n" && e.shiftKey) openWindow().catch(reportError);
       else if (ctrl && key === "i") importModelFile().catch(reportError);
       else if (ctrl && key === "d" && sel.length) s.duplicateObjects(sel);
       else if (ctrl && key === "a") s.selectMany(s.objects.map((o) => o.id));

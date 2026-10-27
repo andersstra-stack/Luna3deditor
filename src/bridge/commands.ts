@@ -22,6 +22,7 @@ import {
   VIEWS,
   type ViewName,
 } from "../viewport/three-handle";
+import { openWindow } from "../windows";
 import type { BridgeMethod } from "./protocol";
 
 type Params = Record<string, any>;
@@ -372,6 +373,13 @@ export const handlers: Record<BridgeMethod, Handler> = {
     const path = await openScene(requireString(p, "path"));
     say(`åpnet ${path}`);
     return { path, objects: editor().objects.length };
+  },
+
+  open_window: async (p) => {
+    const path = typeof p.path === "string" ? p.path : undefined;
+    const window = await openWindow(path);
+    say(path ? `åpnet ${path.split(/[\\/]/).pop()} i nytt vindu` : "åpnet nytt vindu");
+    return { window };
   },
 
   import_model: async (p) => {

@@ -60,9 +60,17 @@ MCP-verktøybeskrivelser er på engelsk.
   skjermbilder i `captureViewport`. Når brukeren nevner pinner/kommentarer: `get_notes`, gjør jobben, `reply_to_note`
   med status `done`.
 - `src/bridge/` – `protocol.ts` deles med MCP-serveren (ingen imports!), `commands.ts` er handlerne
-  appen kjører, `useMcpBridge.ts` er WebSocket-klienten med auto-reconnect.
-- `mcp-server/index.ts` – kjøres direkte av Node 24 (type stripping, ingen build): kun slettbar
-  TS-syntaks, `.ts`-endelser i relative imports, logging kun til stderr.
+  appen kjører, `useMcpBridge.ts` er WebSocket-klienten med auto-reconnect (hello med vindusetikett + fil).
+- `mcp-server/` – kjøres direkte av Node 24 (type stripping, ingen build): kun slettbar TS-syntaks (ikke
+  parameter-properties i konstruktører), `.ts`-endelser i relative imports, logging kun til stderr.
+  `index.ts` definerer verktøyene; uten argumenter er den en stdio-proxy (`proxy.ts`) som starter huben ved behov og
+  gjentar handshaken hvis huben dør. `hub.ts` (`--hub`) er én langlevende prosess: WebSocket 47317 for vinduene, MCP over
+  HTTP på `127.0.0.1:47318/mcp` (én `McpServer` per økt; `bridge.call` finner økta via AsyncLocalStorage). Hver økt
+  jobber i ett vindu (`use_project`/`open_project`, automatisk ved ett vindu, låst med `/mcp/<id>` eller
+  `LUNA3D_PROJECT`); kall til samme vindu køes. Prosjekt-id = filnavnet (`slug`). Huben logger til `~/.luna3d/hub.log`,
+  avslutter etter 10 min uten økter, og byttes ut av proxyen når koden er endret (`codeStamp`) og ingen økter bruker den.
+- Flere vinduer: `src/windows.ts` + Rust `open_project_window` (etikett `luna-N`, fila i `window.__LUNA_OPEN__`).
+  Hvert vindu er egen JS-kontekst (egen store, angrehistorikk, 3D-visning); localStorage deles.
 - Eksport: `src/io.ts` `buildGlb` (i minnet, testbar) + `exportGlb` (skriver filer). `src/palette.ts` lager palett- og
   glød-bildet (én piksel per farge+glød, `flipY = false`, UV med v = 0 øverst). Materialer deles per
   materialnavn + metall/ruhet/gjennomsiktighet; `emissive` (0–1) og `material` ligger på `SceneObject`.
@@ -100,10 +108,12 @@ MCP-verktøybeskrivelser er på engelsk.
 ## Nytt MCP-verktøy
 1. Legg metoden til `BRIDGE_METHODS` i `src/bridge/protocol.ts`.
 2. Implementer handleren i `src/bridge/commands.ts`.
-3. Registrer verktøyet i `mcp-server/index.ts`. Claude Code må koble MCP-serveren til på nytt.
+3. Registrer verktøyet i `mcp-server/index.ts`. Claude Code må koble MCP-serveren til på nytt (huben byttes ut når ingen
+   økter bruker den).
 
 ## Sjekk
 - `npx tsc --noEmit` (frontend), `cargo build` i `src-tauri`.
+- `node mcp-server/hub-test.mjs` – huben med falske vinduer og flere økter (egne testporter, trenger ikke appen).
 - `npm run tauri dev`, så `node mcp-server/smoke-test.mjs <prosjekt> <utmappe>` for ende-til-ende via MCP.
 
 ## Fallgruve
@@ -113,7 +123,12 @@ MCP-verktøybeskrivelser er på engelsk.
 - `three-mesh-bvh` er tvunget til 0.9 via `overrides` (three-bvh-csg krever det; drei vil ha 0.8).
   Advarselen «maxLeafSize has been deprecated» kommer fra three-bvh-csg og er ufarlig.
 - HTML-dra-og-slipp i scenelista krever `"dragDropEnabled": false` i `tauri.conf.json` (ellers tar WebView2 dra-hendelsene).
-- Kun ett app-vindu kan være koblet til MCP-broen; flere avvises med lukkekode 4001 (`BRIDGE_BUSY_CODE`).
+- Eldre MCP-servere (før huben) i åpne Claude-økter eier port 47317 til økta kobles til på nytt; huben prøver igjen
+  hvert 3. sekund. Gamle servere avviser vindu nr. 2 med lukkekode 4001 (`BRIDGE_BUSY_CODE`).
+- Etter endringer i `mcp-server/` byttes huben bare ut når ingen økter bruker den – ellers kjører gammel kode videre
+  (se `stamp` på `http://127.0.0.1:47318/health`).
+- `captureViewport` tegner selv (`state.advance`) og venter med MessageChannel, ikke requestAnimationFrame – den
+  stoppes i minimerte vinduer.
 - Hot reload bytter ikke ut handlerne i en åpen WebSocket – last vinduet helt på nytt etter endringer i `src/bridge/`.
 - Etter hot reload av `Viewport.tsx` kan gamle lys/skygger henge igjen i scenen (rare mørke felt på flater som
   ikke finnes etter full omlasting). Last vinduet helt på nytt før du feilsøker belysning.

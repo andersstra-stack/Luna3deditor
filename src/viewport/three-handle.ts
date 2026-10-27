@@ -235,16 +235,33 @@ function drawNotePins(ctx: CanvasRenderingContext2D) {
   }
 }
 
-const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+/**
+ * Lar React (og React Three Fiber) gjøre ferdig endringene før vi tegner. MessageChannel går også i minimerte eller
+ * tildekkede vinduer, der nettleseren ikke gir requestAnimationFrame.
+ */
+const afterCommit = () =>
+  new Promise<void>((r) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => r();
+    channel.port2.postMessage(null);
+  });
 
-/** Tar et bilde av 3D-visningen (uten utvalgs-gizmo) og returnerer base64-PNG. */
+/** Størrelsen et minimert vindu (lerret uten størrelse) tegner skjermbildet i. */
+const HIDDEN_SIZE = { width: 1280, height: 800 };
+
+/** Tar et bilde av 3D-visningen (uten utvalgs-gizmo) og returnerer base64-PNG. Virker også når vinduet er skjult. */
 export async function captureViewport(maxWidth = 1024): Promise<{ base64: string; width: number; height: number }> {
   const { selectedIds, selectMany } = useEditor.getState();
   selectMany([]);
-  await nextFrame();
-  await nextFrame();
+  await afterCommit();
+  await afterCommit();
+  const state = three();
+  const restore = state.size.width && state.size.height ? null : { ...state.size };
+  if (restore) state.setSize(HIDDEN_SIZE.width, HIDDEN_SIZE.height);
   try {
-    const src = three().gl.domElement;
+    // Tegn bildet selv (med useFrame-oppdateringene) i stedet for å vente på nettleserens neste bilde.
+    state.advance(performance.now());
+    const src = state.gl.domElement;
     const scale = Math.min(1, maxWidth / src.width);
     const out = document.createElement("canvas");
     out.width = Math.round(src.width * scale);
@@ -258,6 +275,7 @@ export async function captureViewport(maxWidth = 1024): Promise<{ base64: string
     const base64 = out.toDataURL("image/png").split(",")[1];
     return { base64, width: out.width, height: out.height };
   } finally {
+    if (restore) state.setSize(restore.width, restore.height);
     selectMany(selectedIds);
   }
 }

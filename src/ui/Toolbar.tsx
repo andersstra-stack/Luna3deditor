@@ -12,6 +12,7 @@ import {
 } from "../types";
 import { exportGlb, newScene, openScene, saveScene, saveSceneAs, type GlbExport } from "../io";
 import { importModelFile } from "../importer";
+import { openWindow } from "../windows";
 import { runPythonScriptFile } from "../scripting";
 import { useUi } from "./uiStore";
 import { viewTargetOnGround } from "../viewport/three-handle";
@@ -20,10 +21,21 @@ import { reportError } from "./StatusBar";
 import { PolyCounter } from "./PolyCounter";
 
 const BRIDGE_TEXT: Record<BridgeStatus, { label: string; title: string }> = {
-  connected: { label: "Claude tilkoblet", title: "Claude Code er koblet til via MCP og kan endre scenen" },
+  connected: { label: "Claude klar", title: "Koblet til Luna 3D-huben – Claude-økter kan velge dette vinduet" },
   disconnected: { label: "Claude ikke tilkoblet", title: "Venter på Claude Code (MCP-serveren startes av Claude Code)" },
-  busy: { label: "Claude i annet vindu", title: "Et annet Luna 3D-vindu er allerede koblet til Claude" },
+  busy: { label: "Claude i annet vindu", title: "En eldre Luna 3D-MCP-server tar bare ett vindu – start Claude-økta på nytt" },
 };
+
+/** Teksten på Claude-pillen: hvor mange økter som jobber i akkurat dette vinduet, og vinduets prosjekt-id. */
+function bridgeText(status: BridgeStatus, info: { project: string; sessions: number } | null) {
+  const text = BRIDGE_TEXT[status];
+  if (status !== "connected" || !info) return text;
+  const n = info.sessions;
+  return {
+    label: n ? `Claude: ${n} økt${n === 1 ? "" : "er"}` : text.label,
+    title: `Prosjekt-id «${info.project}» – ${n ? `${n} Claude-økt${n === 1 ? "" : "er"} jobber i dette vinduet` : "ingen Claude-økt jobber i dette vinduet ennå"}`,
+  };
+}
 
 function reportExport(r: GlbExport | null) {
   if (!r) return;
@@ -45,6 +57,8 @@ export function Toolbar() {
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
   const bridge = useEditor((s) => s.bridgeStatus);
+  const bridgeInfo = useEditor((s) => s.bridgeInfo);
+  const pill = bridgeText(bridge, bridgeInfo);
   const { addObject, undo, redo } = useEditor.getState();
 
   // Lukk «Legg til»-menyen ved klikk utenfor.
@@ -79,6 +93,13 @@ export function Toolbar() {
         </button>
         <button className="icon-btn" title="Åpne… (Ctrl+O)" onClick={() => openScene().catch(reportError)}>
           <Icon name="folder" />
+        </button>
+        <button
+          className="icon-btn"
+          title="Nytt vindu (Ctrl+Shift+N) – et eget prosjekt ved siden av dette, som Claude kan jobbe i for seg"
+          onClick={() => openWindow().catch(reportError)}
+        >
+          <Icon name="window" />
         </button>
         <button className="icon-btn" title="Lagre (Ctrl+S)" onClick={() => saveScene().catch(reportError)}>
           <Icon name="save" />
@@ -148,9 +169,9 @@ export function Toolbar() {
         <Icon name="settings" />
       </button>
 
-      <div className={`claude-pill ${bridge}`} title={BRIDGE_TEXT[bridge].title}>
+      <div className={`claude-pill ${bridge}`} title={pill.title}>
         <span className="dot" />
-        {BRIDGE_TEXT[bridge].label}
+        {pill.label}
       </div>
     </header>
   );
