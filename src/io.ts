@@ -311,8 +311,11 @@ export async function buildGlb(base: string) {
         }
       }
       const key = materialKey(o);
+      // materialFor for hver del, ikke bare den første i gruppa: en glødende del lenger ut kobler glødkartet på
+      // det delte materialet (ellers mister modellen gløden når første del ikke gløder).
+      const material = materialFor(o);
       let group = byMaterial.get(key);
-      if (!group) byMaterial.set(key, (group = { material: materialFor(o), geos: [] }));
+      if (!group) byMaterial.set(key, (group = { material, geos: [] }));
       group.geos.push(geo);
     }
     const groups = [...byMaterial.values()];

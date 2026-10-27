@@ -11,6 +11,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 ## [Unreleased]
 
 ### Fixed
+- **Glød i modeller eksporteres alltid**: i en mappe som eksporteres som én modell ble glødkartet (`_emission.png`) bare
+  koblet på materialet hvis den første delen i materialgruppa glødet. Nå holder det at én av delene gløder.
 - **Mindre flimring i 3D-visningen**: kameraets nær-plan følger nå avstanden tettere (avstand/250 i stedet for
   /2000), så dybdebufferen skiller flater som ligger noen millimeter fra hverandre – maling, merker og skilt på
   modeller – også når man ser en hel stasjon eller et skip på avstand.
