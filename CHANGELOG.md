@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-27
+
 ### Added
 - **Flere prosjekter samtidig**: «Nytt vindu» (Ctrl+Shift+N) åpner et eget prosjektvindu med sin egen scene,
   angrehistorikk og 3D-visning. Flere Claude-økter kan jobbe samtidig, hver i sitt vindu, uten å vente på hverandre:
