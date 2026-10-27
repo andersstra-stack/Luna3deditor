@@ -10,6 +10,11 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Fixed
+- **Mindre flimring i 3D-visningen**: kameraets nær-plan følger nå avstanden tettere (avstand/250 i stedet for
+  /2000), så dybdebufferen skiller flater som ligger noen millimeter fra hverandre – maling, merker og skilt på
+  modeller – også når man ser en hel stasjon eller et skip på avstand.
+
 ## [0.16.0] — 2026-10-27
 
 ### Added

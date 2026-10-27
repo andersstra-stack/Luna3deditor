@@ -76,7 +76,7 @@ function frameBox(box: THREE.Box3, view: ViewName, zoom = 1) {
       : VIEW_DIRS[view].clone().normalize();
 
   camera.position.copy(center).addScaledVector(dir, distance);
-  camera.near = Math.max(distance / 1000, 0.01);
+  camera.near = Math.max(distance / 250, 0.03); // som CameraRange i Viewport.tsx (dybdepresisjon mot flimring)
   camera.far = distance * 100;
   camera.updateProjectionMatrix();
   if (orbit) {

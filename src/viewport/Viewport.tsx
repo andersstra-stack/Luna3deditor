@@ -430,14 +430,16 @@ function NodeMarker({ obj, selected, accent }: { obj: SceneObject; selected: boo
 
 /**
  * Nær- og fjernplanet følger avstanden til det kameraet ser på, så både små ting og
- * stasjoner på flere kilometer vises uten å bli klippet eller flimre.
+ * stasjoner på flere kilometer vises uten å bli klippet eller flimre. Dybdepresisjonen styres
+ * nesten bare av nær-planet, så det holdes så langt ut som mulig (dist/250): da skilles flater
+ * som ligger noen millimeter fra hverandre (maling, merker) også når man ser et helt skip.
  */
 function CameraRange() {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3 } | null;
   useFrame(() => {
     const dist = controls ? camera.position.distanceTo(controls.target) : 10;
-    const near = THREE.MathUtils.clamp(dist / 2000, 0.02, 5);
+    const near = THREE.MathUtils.clamp(dist / 250, 0.03, 20);
     const far = Math.max(1000, dist * 60);
     if (Math.abs(camera.near - near) / near > 0.2 || Math.abs(camera.far - far) / far > 0.2) {
       camera.near = near;
