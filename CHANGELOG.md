@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.16.1] — 2026-10-28
+
 ### Fixed
 - **Hull skjærer også egne former**: hull ble ikke skåret i egne og importerte former (`type: "mesh"`) når en vanlig
   form med UV-er (f.eks. en boks) var skåret først i vinduet. Da ble formen vist og eksportert uten hull.
