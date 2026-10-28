@@ -132,4 +132,6 @@ MCP-verktøybeskrivelser er på engelsk.
 - Hot reload bytter ikke ut handlerne i en åpen WebSocket – last vinduet helt på nytt etter endringer i `src/bridge/`.
 - Etter hot reload av `Viewport.tsx` kan gamle lys/skygger henge igjen i scenen (rare mørke felt på flater som
   ikke finnes etter full omlasting). Last vinduet helt på nytt før du feilsøker belysning.
+- three-bvh-csg 0.0.18 rydder ikke bort attributter mellom kutt i samme `Evaluator`. `csg.ts` har derfor én evaluator
+  per attributtsett. Ellers kaster mesher uten uv etter en boks, og formen vises uten hull.
 - drei 10 `Outlines`: `screenspace`-grenene i shaderen er byttet om – uten `screenspace` er `thickness` i piksler.

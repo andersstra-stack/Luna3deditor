@@ -4,9 +4,20 @@ import type { SceneObject } from "../types";
 import { objectBox, objectMatrix } from "../bounds";
 import { geometryKey, geometryOf } from "./geometries";
 
-const evaluator = new Evaluator();
-evaluator.attributes = ["position", "normal"];
-evaluator.useGroups = false;
+// Én evaluator per sett med attributter: three-bvh-csg 0.0.18 rydder ikke bort attributter fra forrige kutt
+// (GeometryBuilder.initFromGeometry), så etter en boks med uv kastet kutt i en mesh uten uv «Attribute uv not available».
+const evaluators = new Map<string, Evaluator>();
+function evaluatorFor(attributes: string[]): Evaluator {
+  const key = attributes.join(",");
+  let evaluator = evaluators.get(key);
+  if (!evaluator) {
+    evaluator = new Evaluator();
+    evaluator.attributes = attributes;
+    evaluator.useGroups = false;
+    evaluators.set(key, evaluator);
+  }
+  return evaluator;
+}
 
 // Egne kopier med bare attributtene CSG trenger (alle brushes må ha like attributter). Skjæres det i en modell med
 // farge per hjørne eller tekstur, får også hullene hjørnefarger (hvite) og UV-er, så fargene følger med gjennom kuttet.
@@ -49,7 +60,7 @@ export function overlappingHoles(solid: SceneObject, holes: SceneObject[]): Scen
 export function cutGeometry(solid: SceneObject, holes: SceneObject[]): THREE.BufferGeometry {
   const src = geometryOf(solid);
   const keep = ["position", "normal", ...["color", "uv"].filter((name) => src.getAttribute(name))];
-  evaluator.attributes = keep;
+  const evaluator = evaluatorFor(keep);
   let result = new Brush(brushGeometry(solid, keep));
   result.updateMatrixWorld();
   const toLocal = objectMatrix(solid).invert();

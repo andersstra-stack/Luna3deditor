@@ -11,6 +11,10 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 ## [Unreleased]
 
 ### Fixed
+- **Hull skjærer også egne former**: hull ble ikke skåret i egne og importerte former (`type: "mesh"`) når en vanlig
+  form med UV-er (f.eks. en boks) var skåret først i vinduet. Da ble formen vist og eksportert uten hull.
+  three-bvh-csg 0.0.18 tar med seg attributtene fra forrige kutt, så nå har hvert sett med attributter sin egen
+  evaluator.
 - **Glød i modeller eksporteres alltid**: i en mappe som eksporteres som én modell ble glødkartet (`_emission.png`) bare
   koblet på materialet hvis den første delen i materialgruppa glødet. Nå holder det at én av delene gløder.
 - **Mindre flimring i 3D-visningen**: kameraets nær-plan følger nå avstanden tettere (avstand/250 i stedet for
