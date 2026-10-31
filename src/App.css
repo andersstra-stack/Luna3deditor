@@ -693,6 +693,10 @@ select.text option {
   color: var(--accent);
 }
 
+.view-btn {
+  padding: 0 12px;
+}
+
 .add-caret {
   display: grid;
   color: var(--text-dim);

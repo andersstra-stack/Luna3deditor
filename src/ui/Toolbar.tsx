@@ -59,6 +59,7 @@ export function Toolbar() {
   const bridge = useEditor((s) => s.bridgeStatus);
   const bridgeInfo = useEditor((s) => s.bridgeInfo);
   const pill = bridgeText(bridge, bridgeInfo);
+  const toon = useUi((s) => s.toonView);
   const { addObject, undo, redo } = useEditor.getState();
 
   // Lukk «Legg til»-menyen ved klikk utenfor.
@@ -160,6 +161,15 @@ export function Toolbar() {
           <Icon name="redo" />
         </button>
       </div>
+
+      <button
+        className={`add-btn view-btn ${toon ? "active" : ""}`}
+        title="Tegneserie-visning: flate lystrinn og konturlinjer (T) – bare visning, eksporten endres ikke"
+        onClick={() => useUi.getState().setToonView(!toon)}
+      >
+        <Icon name="toon" />
+        <span>Tegneserie</span>
+      </button>
 
       <div className="spacer" />
 

@@ -10,6 +10,10 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Changed
+- **Tegneserie-knapp i verktøylinja**: av/på for tegneserie-visningen ligger nå som en egen knapp med tekst øverst
+  ved siden av angre/gjør om, i stedet for et lite ikon i verktøypanelet i 3D-visningen. Tasten T virker som før.
+
 ## [0.16.1] — 2026-10-28
 
 ### Fixed

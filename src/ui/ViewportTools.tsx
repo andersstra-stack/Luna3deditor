@@ -2,7 +2,6 @@ import { useEditor } from "../store";
 import type { TransformMode } from "../types";
 import { frameScene } from "../viewport/three-handle";
 import { Icon } from "./icons";
-import { useUi } from "./uiStore";
 
 const MODES: { mode: TransformMode; label: string; key: string; icon: "move" | "rotate" | "scale" }[] = [
   { mode: "translate", label: "Flytt", key: "W", icon: "move" },
@@ -16,7 +15,6 @@ export function ViewportTools() {
   const snap = useEditor((s) => s.snap);
   const objectSnap = useEditor((s) => s.objectSnap);
   const tool = useEditor((s) => s.tool);
-  const toon = useUi((s) => s.toonView);
   const { setTool, setTransformMode, toggleSnap, toggleObjectSnap } = useEditor.getState();
 
   return (
@@ -52,14 +50,6 @@ export function ViewportTools() {
       </button>
       <button className="icon-btn" title="Vis hele scenen (F)" onClick={() => frameScene("current")}>
         <Icon name="frame" />
-      </button>
-      <div className="tool-sep" />
-      <button
-        className={`icon-btn ${toon ? "active" : ""}`}
-        title="Tegneserie-visning: flate lystrinn og konturlinjer (T) – bare visning, eksporten endres ikke"
-        onClick={() => useUi.getState().setToonView(!toon)}
-      >
-        <Icon name="toon" />
       </button>
     </div>
   );
