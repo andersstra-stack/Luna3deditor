@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-11-02
+
 ### Added
 - **Ikoner (`render_icon`)**: nytt MCP-verktøy som lager et kvadratisk ikon av objekter eller mapper, for eksempel til
   inventaret eller byggemenyen i spillet. Bakgrunnen er gjennomsiktig, modellen rammes tett inn med et ortografisk
