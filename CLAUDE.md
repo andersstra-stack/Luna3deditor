@@ -22,7 +22,9 @@ MCP-verktøybeskrivelser er på engelsk.
   add/update regnes om i `store.ts` (`newCurveProps`, `withUpdate`). Boksen tas fra den glatte varianten.
 - `three-handle.ts`: `raycast` (mot det som vises: CSG-resultat og animasjonspositur; hull/lys/noder hoppes over, like treff
   slås sammen, normalen interpoleres fra hjørnenormalene) og kamera (`frameObjects`, `setCamera`, `cameraState`/`restoreCamera`
-  – skjermbilder med `focus`/`camera` setter brukerens kamera tilbake).
+  – skjermbilder med `focus`/`camera` setter brukerens kamera tilbake). `renderIcon` (MCP `render_icon`) tegner de valgte
+  formene i brukerens lerret med eget ortografisk kamera og gjennomsiktig bakgrunn: alt annet som tegnes (rutenett,
+  skyggeplan, noder, gizmo) skjules mens det står på, og saks/visningsfelt/tømmefarge settes tilbake etterpå.
 - `src/bounds.ts` – nøyaktige verdensbokser beregnet fra dataene (ikke fra 3D-visningen); brukes av snapping,
   plassering, målvisning og `get_scene`. `src/placement.ts` – til bakken, innrett, speil.
 - Utvalg: `selectedIds` (siste = hovedvalget, se `primaryId`). Nye former legges i `types.ts` (SHAPES, størrelse,

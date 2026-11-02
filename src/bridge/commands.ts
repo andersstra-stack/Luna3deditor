@@ -1,4 +1,5 @@
 import { useEditor, type FolderUpdate, type NewObject } from "../store";
+import { invoke } from "@tauri-apps/api/core";
 import { exportGlb, openScene, saveScene } from "../io";
 import { importModelFile } from "../importer";
 import { ADDABLE_SHAPES, type SceneObject, type ScriptOp, type ScriptResult, type ShapeType, type Vec3 } from "../types";
@@ -17,6 +18,7 @@ import {
   frameObjects,
   frameScene,
   raycast,
+  renderIcon,
   restoreCamera,
   setCamera,
   VIEWS,
@@ -347,6 +349,26 @@ export const handlers: Record<BridgeMethod, Handler> = {
     } finally {
       if (custom && p.keep_view !== true) restoreCamera(saved);
     }
+  },
+
+  render_icon: async (p) => {
+    const view = checkView(p.view ?? "iso");
+    if (view === "current") throw new Error('render_icon trenger en fast retning (iso, front, top …), ikke "current"');
+    const icon = await renderIcon({
+      ids: Array.isArray(p.ids) ? (p.ids as string[]) : undefined,
+      view,
+      size: typeof p.size === "number" ? p.size : undefined,
+      padding: typeof p.padding === "number" ? p.padding : undefined,
+      background: typeof p.background === "string" ? p.background : undefined,
+    });
+    const path = typeof p.path === "string" && p.path ? p.path : null;
+    if (path) {
+      if (!/\.png$/i.test(path)) throw new Error("path må slutte på .png");
+      const bytes = Uint8Array.from(atob(icon.base64), (c) => c.charCodeAt(0));
+      await invoke("write_binary_file", { path, contents: Array.from(bytes) });
+      say(`lagret ikon ${path.split(/[\\/]/).pop()}`);
+    }
+    return { ...icon, path };
   },
 
   raycast: (p) => {

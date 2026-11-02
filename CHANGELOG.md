@@ -10,7 +10,15 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Ikoner (`render_icon`)**: nytt MCP-verktøy som lager et kvadratisk ikon av objekter eller mapper, for eksempel til
+  inventaret eller byggemenyen i spillet. Bakgrunnen er gjennomsiktig, modellen rammes tett inn med et ortografisk
+  kamera (skrått forfra som standard), og bare de valgte formene tegnes: ikke rutenett, skyggeplan, noder,
+  lys-markører eller resten av scenen. Lyset og fargene er som i visningen. Ikonet lagres som PNG, og brukerens kamera
+  røres ikke.
+
 ### Changed
+- **Eksport lager mappen**: GLB-eksport og ikoner lager mappen de skal skrives til, hvis den mangler.
 - **Tegneserie-knapp i verktøylinja**: av/på for tegneserie-visningen ligger nå som en egen knapp med tekst øverst
   ved siden av angre/gjør om, i stedet for et lite ikon i verktøypanelet i 3D-visningen. Tasten T virker som før.
 

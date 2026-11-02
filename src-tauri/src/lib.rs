@@ -25,9 +25,12 @@ fn read_binary_file(path: String) -> Result<tauri::ipc::Response, String> {
         .map_err(|e| format!("Kunne ikke lese {path}: {e}"))
 }
 
-/// Brukes til GLB-eksport.
+/// Brukes til GLB-eksport og ikoner. Mappen lages om den mangler (f.eks. `icons/`).
 #[tauri::command]
 fn write_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> {
+    if let Some(dir) = std::path::Path::new(&path).parent() {
+        fs::create_dir_all(dir).map_err(|e| format!("Kunne ikke lage mappen {}: {e}", dir.display()))?;
+    }
     fs::write(&path, contents).map_err(|e| format!("Kunne ikke skrive {path}: {e}"))
 }
 

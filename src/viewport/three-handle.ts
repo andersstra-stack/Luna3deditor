@@ -4,7 +4,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { useEditor } from "../store";
 import { isVisibleNote, noteWorldPosition } from "../notes";
 import { boxOf, round } from "../bounds";
-import { isInside } from "../folders";
+import { hiddenFolderIds, isInside } from "../folders";
 import { isHelper, type Vec3 } from "../types";
 
 /**
@@ -277,5 +277,137 @@ export async function captureViewport(maxWidth = 1024): Promise<{ base64: string
   } finally {
     if (restore) state.setSize(restore.width, restore.height);
     selectMany(selectedIds);
+  }
+}
+
+export interface IconOptions {
+  /** Objekter og mapper som skal med (tom = alle synlige). */
+  ids?: string[];
+  view?: Exclude<ViewName, "current">;
+  /** Bildet er kvadratisk, `size` × `size` piksler. */
+  size?: number;
+  /** Luft rundt modellen, som andel av bildet på hver side. */
+  padding?: number;
+  /** Bakgrunnsfarge; uten er bakgrunnen gjennomsiktig. */
+  background?: string;
+}
+
+/**
+ * Ikon av objekter (og alt i mapper): ortografisk kamera som rammer modellen tett inn, gjennomsiktig bakgrunn og bare
+ * de valgte formene – uten rutenett, skyggeplan, noder, lys-markører, gizmo eller resten av scenen. Tegnes i
+ * brukerens lerret (samme lys, tonemapping og fargerom som visningen), med dobbel oppløsning når lerretet er stort nok,
+ * og skaleres ned. Brukerens kamera og visning røres ikke.
+ */
+export async function renderIcon(opts: IconOptions = {}): Promise<{ base64: string; size: number; objects: number; rendered: number }> {
+  const { objects, folders, selectedIds, selectMany } = useEditor.getState();
+  const size = THREE.MathUtils.clamp(Math.round(opts.size ?? 256), 16, 2048);
+  const padding = THREE.MathUtils.clamp(opts.padding ?? 0.06, 0, 0.4);
+  const ids = opts.ids ?? [];
+  const hidden = hiddenFolderIds(folders);
+  const folderIds = ids.filter((id) => folders.some((f) => f.id === id));
+  const chosen = objects.filter(
+    (o) =>
+      o.visible &&
+      !(o.folderId && hidden.has(o.folderId)) &&
+      !isHelper(o.type) &&
+      !o.hole &&
+      (!ids.length || ids.includes(o.id) || (!!o.folderId && folderIds.some((f) => isInside(folders, o.folderId, f)))),
+  );
+  if (!chosen.length) throw new Error(`Fant ingen synlige former å lage ikon av${ids.length ? ` (${ids.join(", ")})` : ""}`);
+  const keep = new Set(chosen.map((o) => o.id));
+
+  selectMany([]);
+  await afterCommit();
+  await afterCommit();
+  const state = three();
+  const { gl, scene } = state;
+  const restoreSize = state.size.width && state.size.height ? null : { ...state.size };
+  if (restoreSize) state.setSize(HIDDEN_SIZE.width, HIDDEN_SIZE.height);
+
+  // Skjul alt som ikke hører til de valgte formene (barn som konturer følger formen sin).
+  const hiddenNow: THREE.Object3D[] = [];
+  const kept: THREE.Mesh[] = [];
+  scene.updateMatrixWorld();
+  scene.traverse((obj) => {
+    const drawable = obj as THREE.Mesh & THREE.Line & THREE.Points & THREE.Sprite;
+    if (!(drawable.isMesh || drawable.isLine || drawable.isPoints || drawable.isSprite)) return;
+    let id: string | undefined;
+    for (let a: THREE.Object3D | null = obj; a && !id; a = a.parent) id = a.userData.lunaId as string | undefined;
+    if (id && keep.has(id)) {
+      if (drawable.isMesh && obj.userData.lunaId) kept.push(drawable);
+      return;
+    }
+    if (obj.visible) {
+      obj.visible = false;
+      hiddenNow.push(obj);
+    }
+  });
+
+  // Ortografisk kamera fra visningsretningen, rammet inn etter hjørnene slik formene vises (positur og hull med).
+  const back = VIEW_DIRS[opts.view ?? "iso"].clone().normalize();
+  const up = Math.abs(back.y) > 0.99 ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(0, 1, 0);
+  const ax = new THREE.Vector3().crossVectors(up, back).normalize();
+  const ay = new THREE.Vector3().crossVectors(back, ax);
+  const lo = new THREE.Vector3(Infinity, Infinity, Infinity);
+  const hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  const p = new THREE.Vector3();
+  for (const m of kept) {
+    const pos = m.geometry.getAttribute("position");
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      const c = [p.dot(ax), p.dot(ay), p.dot(back)];
+      lo.set(Math.min(lo.x, c[0]), Math.min(lo.y, c[1]), Math.min(lo.z, c[2]));
+      hi.set(Math.max(hi.x, c[0]), Math.max(hi.y, c[1]), Math.max(hi.z, c[2]));
+    }
+  }
+  const half = (Math.max(hi.x - lo.x, hi.y - lo.y, 1e-3) / 2) * (1 + 2 * padding);
+  const depth = Math.max(hi.z - lo.z, 1e-3);
+  const cam = new THREE.OrthographicCamera(-half, half, half, -half, 0.01, depth * 3);
+  cam.position
+    .copy(ax)
+    .multiplyScalar((lo.x + hi.x) / 2)
+    .addScaledVector(ay, (lo.y + hi.y) / 2)
+    .addScaledVector(back, hi.z + depth);
+  cam.up.copy(ay);
+  cam.lookAt(cam.position.clone().sub(back));
+  cam.updateProjectionMatrix();
+  cam.updateMatrixWorld();
+
+  const pr = gl.getPixelRatio();
+  const buffer = gl.getDrawingBufferSize(new THREE.Vector2());
+  const rendered = Math.floor(Math.min(size * 2, buffer.x, buffer.y));
+  const clearColor = gl.getClearColor(new THREE.Color());
+  const clearAlpha = gl.getClearAlpha();
+  const viewport = gl.getViewport(new THREE.Vector4());
+  const scissor = gl.getScissor(new THREE.Vector4());
+  const scissorTest = gl.getScissorTest();
+  try {
+    gl.setRenderTarget(null);
+    if (opts.background) gl.setClearColor(opts.background, 1);
+    else gl.setClearColor(0x000000, 0);
+    // Tøm hele lerretet: nedskaleringen leser et par piksler utenfor utsnittet, og der skal ikke visningen ligge igjen.
+    gl.setScissorTest(false);
+    gl.clear(true, true, true);
+    gl.setScissorTest(true);
+    gl.setScissor(0, 0, rendered / pr, rendered / pr);
+    gl.setViewport(0, 0, rendered / pr, rendered / pr);
+    gl.render(scene, cam);
+    // Lerretet er tegnet nedenfra (WebGL); utsnittet ligger nederst til venstre.
+    const src = gl.domElement;
+    const out = document.createElement("canvas");
+    out.width = out.height = size;
+    const ctx = out.getContext("2d")!;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(src, 0, src.height - rendered, rendered, rendered, 0, 0, size, size);
+    return { base64: out.toDataURL("image/png").split(",")[1], size, objects: chosen.length, rendered };
+  } finally {
+    gl.setClearColor(clearColor, clearAlpha);
+    gl.setScissor(scissor);
+    gl.setViewport(viewport);
+    gl.setScissorTest(scissorTest);
+    for (const o of hiddenNow) o.visible = true;
+    if (restoreSize) state.setSize(restoreSize.width, restoreSize.height);
+    selectMany(selectedIds);
+    state.invalidate();
   }
 }

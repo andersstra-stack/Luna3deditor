@@ -484,6 +484,40 @@ server.registerTool(
 );
 
 server.registerTool(
+  "render_icon",
+  {
+    title: "Render icon",
+    description:
+      "Render a square icon of objects/folders (e.g. an inventory or build-menu icon of a piece of furniture): transparent background, tight orthographic framing from 'view', and only the chosen shapes – no grid, shadow plane, nodes, light markers or the rest of the scene. Same lights and colors as the viewport. With 'path' it is saved as a PNG (missing folders are created). The user's camera is not changed. Returns the image so you can check it.",
+    inputSchema: {
+      ids: z.array(z.string()).optional().describe("Object or folder ids to include (default: everything visible)."),
+      path: z.string().optional().describe("Absolute path ending in .png to save the icon to."),
+      view: z.enum(VIEWS).optional().describe("Direction to look from (default 'iso' = front-right, slightly from above; 'current' is not allowed)."),
+      size: z.number().int().min(16).max(2048).optional().describe("Width and height in pixels (default 256)."),
+      padding: z.number().min(0).max(0.4).optional().describe("Empty margin on each side as a share of the image (default 0.06)."),
+      background: z.string().optional().describe("Background color, e.g. '#1d2030'. Omit for a transparent PNG."),
+    },
+  },
+  async ({ ids, path, view, size, padding, background }) => {
+    try {
+      const icon = await bridge.call("render_icon", { ids, path, view, size, padding, background });
+      const note = icon.rendered < icon.size ? ` (rendered at ${icon.rendered}px and scaled up – make the Luna window bigger for sharper icons)` : "";
+      return {
+        content: [
+          { type: "image" as const, data: icon.base64 as string, mimeType: "image/png" },
+          {
+            type: "text" as const,
+            text: `${icon.size}×${icon.size}px, ${icon.objects} objects${icon.path ? `, saved to ${icon.path}` : ""}${note}`,
+          },
+        ],
+      };
+    } catch (e) {
+      return { content: [{ type: "text" as const, text: (e as Error).message }], isError: true };
+    }
+  },
+);
+
+server.registerTool(
   "raycast",
   {
     title: "Raycast",
