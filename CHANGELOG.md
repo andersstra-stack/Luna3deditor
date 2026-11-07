@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-11-07
+
 ### Added
 - **Forenkle modeller**: «Forenkle» i egenskapspanelet (ved «Del opp» og «Slå sammen») gir modeller færre trekanter –
   velg hvor mange prosent som skal bli igjen. Panelet viser antall trekanter i utvalget. UV-er, hjørnefarger, tekstur og
