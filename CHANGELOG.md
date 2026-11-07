@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-11-07
+
 ### Added
 - **Lysoppsett**: ny «Lys»-knapp i verktøylinja med ferdige oppsett (Standard, Studio, Overskyet, Kveld) og glidebrytere
   for solas retning, høyde, styrke og farge, omgivelseslys, fyll-, kant- og miljølys. Studio-oppsettet viser formen fra
