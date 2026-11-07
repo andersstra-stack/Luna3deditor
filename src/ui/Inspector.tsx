@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { primaryId, useEditor } from "../store";
 import { folderPath } from "../folders";
-import { SHAPE_LABELS, isHelper, isLight, isNode, type NodeProps, type SceneObject, type Vec3 } from "../types";
+import { SHAPE_LABELS, isHelper, isLight, isNode, isReference, type NodeProps, type SceneObject, type Vec3 } from "../types";
 import { AXES, type Axis } from "../bounds";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { nodeAxes, nodeNameProblem } from "../nodes";
@@ -650,6 +650,7 @@ export function Inspector() {
 
   const light = isLight(obj.type);
   const node = isNode(obj.type);
+  const reference = isReference(obj.type);
   return (
     <aside className="panel inspector">
       <h2>Egenskaper</h2>
@@ -680,9 +681,11 @@ export function Inspector() {
       {obj.type === "cylinder" && <Slider title="Avsmalning (toppens bredde)" objs={objs} field="taper" />}
       {obj.type === "curve" && <CurveInfo obj={obj} />}
 
-      <ColorRow objs={objs} />
+      {!reference && <ColorRow objs={objs} />}
 
-      {node ? (
+      {reference ? (
+        <Slider title="Synlighet" objs={objs} field="opacity" />
+      ) : node ? (
         <NodePropsEditor obj={obj} />
       ) : light ? (
         <Slider title="Lysstyrke" objs={objs} field="intensity" max={200} percent={false} />
@@ -699,7 +702,7 @@ export function Inspector() {
 
       <Placement objs={objs} />
       <ModelTools objs={objs} />
-      {!light && !node && <AnimationPanel objs={objs} />}
+      {!light && !node && !reference && <AnimationPanel objs={objs} />}
       <Actions objs={objs} />
     </aside>
   );

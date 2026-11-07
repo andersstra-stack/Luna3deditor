@@ -10,6 +10,12 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Referansebilder**: legg inn et foto eller en tegning å modellere etter, med «Legg til → Bilde…» eller ved å dra PNG/JPEG
+  inn i vinduet. Bildet vender mot kameraet, er halvgjennomsiktig og beholder fargene sine uansett lys. Det lagres i scenen,
+  men kommer ikke med i GLB-eksport eller ikoner, og snapping og hull ser bort fra det. Claude kan legge inn det samme fra
+  Python (`luna.reference`) og MCP (`type: "reference"`), og ser det på skjermbilder.
+
 ## [0.18.0] — 2026-11-07
 
 ### Added

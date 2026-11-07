@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { message, open, save } from "@tauri-apps/plugin-dialog";
 import { hasUnsavedChanges, useEditor, type Snapshot } from "./store";
 import { hiddenFolderIds } from "./folders";
-import { SHAPES, isLight, isNode, type Folder, type SceneFile, type SceneObject } from "./types";
+import { SHAPES, isHelper, isNode, type Folder, type SceneFile, type SceneObject } from "./types";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { boxOf, objectMatrix, objectQuaternion, round } from "./bounds";
 import { sceneMeshes } from "./viewport/three-handle";
@@ -189,7 +189,7 @@ export async function buildGlb(base: string) {
   const shown = (o: SceneObject) => o.visible && !(o.folderId && hidden.has(o.folderId));
 
   // Delene som eksporteres (hull og lys er editor-hjelpere; hullene er allerede skåret ut av geometrien).
-  const solids = objects.filter((o) => !isNode(o.type) && !isLight(o.type) && !o.hole && shown(o) && meshById.has(o.id));
+  const solids = objects.filter((o) => !isHelper(o.type) && !o.hole && shown(o) && meshById.has(o.id));
   // Deler med egne bilder (fotografisk tekstur, normalkart) beholder UV-ene sine og får eget materiale per bilde.
   // Et normalkart uten fargebilde kan ikke bruke paletten: den trenger UV-ene selv. Da følger hjørnefargene med i stedet.
   const imagesOf = new Map(

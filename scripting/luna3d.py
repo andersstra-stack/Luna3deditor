@@ -38,6 +38,12 @@ Detaljer finere enn hjørnene: uvs=[(u, v), ...] (én per hjørne, v = 0 øverst
 normal_map="normal.png" (PNG eller JPEG, full sti; normalkart i OpenGL-retning, +Y opp) og normal_scale=1. Hjørnefarger
 farger bildet og virker også med bare et normalkart. Bildene lagres i scenen og følger med i GLB-eksporten.
 
+Referansebilder å modellere etter (vises i scenen og på skjermbilder, ikke i eksport eller ikoner). Bildet står på
+bakken, vender mot +Z og er halvgjennomsiktig; height er høyden i meter, og bredden følger av bildet:
+
+    luna.reference("C:/foto/forfra.png", height=1.78, position=(0, 0.89, -0.5))
+    luna.reference("C:/foto/siden.png", height=1.78, position=(-0.5, 0.89, 0), rotation=(0, 90, 0))
+
 Markør-noder (node) er usynlige punkter med navn og retning som spillmotoren leser: lokal +Z er
 forover og +Y opp. Egendefinerte egenskaper legges i props={...} (eksporteres som glTF extras):
 
@@ -55,18 +61,18 @@ __all__ = [
     "scene", "objects", "get", "folders", "folder", "add", "update", "delete",
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
     "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "curve", "point_light", "spot_light", "node", "mesh",
-    "orient", "animate", "keyframes",
+    "reference", "orient", "animate", "keyframes",
 ]
 
 SHAPES = {
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
-    "pyramid", "stairs", "hemisphere", "tube", "roundedBox", "curve", "pointLight", "spotLight", "node", "mesh",
+    "pyramid", "stairs", "hemisphere", "tube", "roundedBox", "curve", "pointLight", "spotLight", "node", "mesh", "reference",
 }
 PROPS = {
     "name", "position", "rotation", "scale", "color", "metalness", "roughness",
     "opacity", "visible", "hole", "intensity", "emissive", "material", "props", "folder",
     "taper", "points", "radius", "vertices", "triangles", "vertex_colors", "smooth",
-    "uvs", "texture", "normal_map", "normal_scale",
+    "uvs", "texture", "normal_map", "normal_scale", "height",
 }
 MARKER = "@@LUNA3D_OPS@@"
 MAX_OPS = 20000
@@ -194,7 +200,7 @@ def _clean(props):
                 raise ValueError("uvs må være en liste med (u, v), én per hjørne") from None
         elif k in ("texture", "normal_map"):
             v = _image(k, v)
-        elif k == "normal_scale":
+        elif k in ("normal_scale", "height"):
             v = float(v)
         elif k == "taper":
             v = float(v)
@@ -299,6 +305,11 @@ tube = _shape("tube")
 rounded_box = _shape("roundedBox")
 curve = _shape("curve")
 mesh = _shape("mesh")
+
+
+def reference(path, **props):
+    """Referansebilde å modellere etter: vises i scenen, men eksporteres ikke. Vender mot +Z; rotation=(0, 90, 0) gir et bilde fra siden."""
+    return add("reference", texture=path, **props)
 
 
 def animate(target, preset, axis=None, amount=None, duration=None, clip=None):

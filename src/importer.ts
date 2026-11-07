@@ -9,6 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { newId, useEditor } from "./store";
 import { registerMesh, registerTexture, textureIdOf } from "./meshes";
+import { REFERENCE_EXTENSIONS, addReferenceImage } from "./referenceImage";
 import { round } from "./bounds";
 import { fbxUserProps } from "./fbxProps";
 import { DEFAULT_COLORS, type NodeProps, type Vec3 } from "./types";
@@ -647,7 +648,10 @@ export async function importModelFile(path?: string, opts?: ImportOptions) {
   return importModelData(target, data, opts, siblings);
 }
 
-/** Dra-og-slipp: modellfiler importeres, og bilder/.mtl som slippes sammen med dem brukes som ressurser. */
+/**
+ * Dra-og-slipp: modellfiler importeres, og bilder/.mtl som slippes sammen med dem brukes som ressurser.
+ * Bilder alene blir referansebilder.
+ */
 export async function importDroppedFiles(files: File[]): Promise<{ imported: string[]; skipped: string[] }> {
   const byName = new Map(files.map((f) => [f.name.toLowerCase(), f]));
   const resolve: ResourceResolver = async (name) => (await byName.get(fileKey(name))?.arrayBuffer()) ?? null;
@@ -659,6 +663,15 @@ export async function importDroppedFiles(files: File[]): Promise<{ imported: str
       imported.push(file.name);
     } else if (!MIME[extensionOf(file.name)] && extensionOf(file.name) !== "mtl") {
       skipped.push(file.name);
+    }
+  }
+  if (!imported.length) {
+    for (const file of files) {
+      if (!MIME[extensionOf(file.name)]) continue;
+      if (REFERENCE_EXTENSIONS.includes(extensionOf(file.name))) {
+        addReferenceImage(await file.arrayBuffer(), file.name);
+        imported.push(file.name);
+      } else skipped.push(file.name);
     }
   }
   return { imported, skipped };

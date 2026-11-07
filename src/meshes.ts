@@ -84,6 +84,35 @@ export function registerTexture(asset: TextureAsset) {
 
 export const hasTexture = (id: string | undefined) => !!id && textureAssets.has(id);
 
+/** Bredde og høyde i piksler, lest fra hodet i PNG- eller JPEG-fila (uten å pakke ut bildet, så det kan brukes synkront). */
+export function imageSizeOf(id: string): { width: number; height: number } | null {
+  const data = textureAssets.get(id)?.data;
+  if (!data) return null;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  if (data[0] === 0x89 && data[1] === 0x50 && data.length >= 24) return { width: view.getUint32(16), height: view.getUint32(20) };
+  if (data[0] === 0xff && data[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < data.length) {
+      if (data[i] !== 0xff) {
+        i++;
+        continue;
+      }
+      const marker = data[i + 1];
+      // SOF0–SOF15 har målene; C4 (Huffman), C8 og CC er andre segmenter med tall i samme område.
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { width: view.getUint16(i + 7), height: view.getUint16(i + 5) };
+      }
+      // Fyllbyte eller segment uten lengde.
+      if (marker === 0xff || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) {
+        i += marker === 0xff ? 1 : 2;
+        continue;
+      }
+      i += 2 + view.getUint16(i + 2);
+    }
+  }
+  return null;
+}
+
 /** three-teksturen til et bilde i registeret. Bildet lastes asynkront; teksturen oppdateres når det er klart. */
 export const textureById = (id: string) => loadTexture(id, THREE.SRGBColorSpace);
 
@@ -203,7 +232,7 @@ export function serializeUsedTextures(objects: SceneObject[]): SerializedTexture
     objects
       .flatMap((o) => {
         const asset = o.meshId ? assets.get(o.meshId) : undefined;
-        return [asset?.textureId, asset?.normalTextureId];
+        return [asset?.textureId, asset?.normalTextureId, o.imageId];
       })
       .filter((id): id is string => hasTexture(id)),
   );

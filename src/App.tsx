@@ -9,6 +9,7 @@ import { frameScene } from "./viewport/three-handle";
 import { dropToGround } from "./placement";
 import { copySelection, pasteText } from "./clipboard";
 import { IMPORT_EXTENSIONS, importDroppedFiles, importModelFile } from "./importer";
+import { REFERENCE_EXTENSIONS } from "./referenceImage";
 import { SelectionInfo } from "./ui/SelectionInfo";
 import { Toolbar } from "./ui/Toolbar";
 import { ViewportTools } from "./ui/ViewportTools";
@@ -66,7 +67,7 @@ function useFileDrop() {
       try {
         // Bilder (fargepaletter/teksturer) og .mtl som slippes sammen med modellen brukes til farger.
         const { imported, skipped } = await importDroppedFiles(Array.from(e.dataTransfer!.files));
-        if (skipped.length) reportError(new Error(`Kan ikke importere ${skipped.join(", ")} – støttet: ${IMPORT_EXTENSIONS.join(", ")}`));
+        if (skipped.length) reportError(new Error(`Kan ikke importere ${skipped.join(", ")} – støttet: ${[...IMPORT_EXTENSIONS, ...REFERENCE_EXTENSIONS].join(", ")}`));
         else if (!imported.length) reportError(new Error("Ingen 3D-modell blant filene"));
       } catch (err) {
         reportError(err);

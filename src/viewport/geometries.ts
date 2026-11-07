@@ -102,6 +102,13 @@ function build(type: ShapeType, detail: GeometryDetail): THREE.BufferGeometry {
       const up = new THREE.CylinderGeometry(0.022, 0.022, 0.3, 6).translate(0, 0.15, 0);
       return mergeGeometries([ball, shaft, tip, up])!;
     }
+    case "reference": {
+      // Står oppreist og vender mot +Z. Teksturregisteret bruker v = 0 øverst, så UV-ene snus.
+      const geo = new THREE.PlaneGeometry(1, 1);
+      const uv = geo.getAttribute("uv");
+      for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+      return geo;
+    }
     case "mesh":
     case "curve":
       // Importerte modeller og kurverør har egen geometri – se geometryOf().

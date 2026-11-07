@@ -12,6 +12,7 @@ import {
 } from "../types";
 import { exportGlb, newScene, openScene, saveScene, saveSceneAs, type GlbExport } from "../io";
 import { importModelFile } from "../importer";
+import { pickReferenceImage } from "../referenceImage";
 import { openWindow } from "../windows";
 import { runPythonScriptFile } from "../scripting";
 import { useUi } from "./uiStore";
@@ -150,6 +151,20 @@ export function Toolbar() {
             <div className="more-grid">{LIGHTS.map(shapeButton)}</div>
             <div className="more-title">Markører</div>
             <div className="more-grid">{MARKERS.map(shapeButton)}</div>
+            <div className="more-title">Referanse</div>
+            <div className="more-grid">
+              <button
+                className="shape-btn"
+                title="Legg inn et bilde å modellere etter (PNG eller JPEG). Det vender mot kameraet, lagres i scenen og eksporteres ikke. Du kan også dra bilder inn i vinduet."
+                onClick={() => {
+                  setMoreOpen(false);
+                  pickReferenceImage().catch(reportError);
+                }}
+              >
+                <ShapeIcon type="reference" />
+                <span>Bilde…</span>
+              </button>
+            </div>
           </div>
         )}
       </div>

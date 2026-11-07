@@ -62,6 +62,9 @@ MCP-verktøybeskrivelser er på engelsk.
   +Z forover / +Y opp, egenskaper i `props` (glTF `extras`). Lys og noder er «hjelpere» (`isHelper`): ingen hull, snapping
   eller underlag. `scale` er bare markørstørrelsen; eksporten skriver noden uten skala. `extras` i GLB er eneste kilde
   (Unity/glTFast leser dem selv) – egenskapene er flate tall eller tekst, ingen sannhetsverdier.
+- Referansebilder: `type: "reference"` (`isHelper`) med `imageId` i teksturregisteret i `meshes.ts`. Står i lokal XY og vender mot +Z,
+  `meshBasicMaterial` uten tonekurve (`ReferenceImage` i `Viewport.tsx`). `referenceProps` i `store.ts` regner bredden fra bildets hode
+  (`imageSizeOf`). Fra appen: `src/referenceImage.ts` (filvalg, dra-og-slipp når ingen modell følger med). Vises på skjermbilder; ikke i eksport eller ikoner.
 - Kommentar-pinner: `notes` i `Snapshot` (angre-historikk) og scenefila. En pinne er festet til et objekt via
   `local` (objektets koordinater), se `src/notes.ts`. Vises som DOM (`viewport/Notes.tsx`, drei `Html`) og tegnes inn i
   skjermbilder i `captureViewport`. Når brukeren nevner pinner/kommentarer: `get_notes`, gjør jobben, `reply_to_note`

@@ -1,16 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { GizmoHelper, GizmoViewport, Grid, Html, OrbitControls, Outlines, TransformControls } from "@react-three/drei";
+import { Edges, GizmoHelper, GizmoViewport, Grid, Html, OrbitControls, Outlines, TransformControls } from "@react-three/drei";
 import type { TransformControls as TransformControlsImpl } from "three-stdlib";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { lightDirection } from "../lighting";
 import { useEditor } from "../store";
 import { hiddenFolderIds } from "../folders";
 import { boxOf, objectBox, objectMatrix, round } from "../bounds";
-import { isHelper, isLight, isNode, type SceneObject, type Vec3 } from "../types";
+import { isHelper, isLight, isNode, isReference, type SceneObject, type Vec3 } from "../types";
 import { geometryKey, geometryOf, getGeometry } from "./geometries";
-import { normalMapFor, normalScaleOf, textureFor } from "../meshes";
+import { normalMapFor, normalScaleOf, textureById, textureFor } from "../meshes";
 import { cutGeometry, overlappingHoles } from "./csg";
 import { snapOffset, type SnapContext } from "./snapping";
 import { setThreeGetter } from "./three-handle";
@@ -376,6 +376,29 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
   );
 }
 
+/**
+ * Referansebilde: uten lys og tonekurve, så det har samme farger som fila uansett lysoppsett. Skriver ikke til dybden,
+ * så modellen synes bak et bilde foran den, og bildet synes rundt modellen foran det.
+ */
+function ReferenceImage({ obj, selected, accent }: { obj: SceneObject; selected: boolean; accent: string }) {
+  const onClick = useSelectHandler(obj.id);
+  const texture = obj.imageId ? textureById(obj.imageId) : null;
+  return (
+    <mesh
+      name={obj.name}
+      userData={{ lunaId: obj.id }}
+      geometry={getGeometry("reference")}
+      position={obj.position}
+      rotation={obj.rotation.map((d) => d * DEG) as Vec3}
+      scale={obj.scale}
+      onClick={onClick}
+    >
+      <meshBasicMaterial map={texture} transparent opacity={obj.opacity} depthWrite={false} side={THREE.DoubleSide} toneMapped={false} />
+      {selected && <Edges color={accent} />}
+    </mesh>
+  );
+}
+
 function LightObject({ obj, selected, accent }: { obj: SceneObject; selected: boolean; accent: string }) {
   const onClick = useSelectHandler(obj.id);
   const poseRef = useAnimatedPose(obj.id, true);
@@ -487,6 +510,8 @@ function Scene({ accent }: { accent: string }) {
           <NodeMarker key={`${o.id}:${detail}`} obj={o} selected={selected.has(o.id)} accent={accent} />
         ) : isLight(o.type) ? (
           <LightObject key={`${o.id}:${detail}`} obj={o} selected={selected.has(o.id)} accent={accent} />
+        ) : isReference(o.type) ? (
+          <ReferenceImage key={`${o.id}:${detail}`} obj={o} selected={selected.has(o.id)} accent={accent} />
         ) : (
           <SolidMesh
             key={`${o.id}:${detail}`}

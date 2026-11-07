@@ -33,13 +33,15 @@ export interface MeshInput {
   normal_map?: ImageInput;
   /** Hvor sterkt normalkartet virker (1 = som i bildet). */
   normal_scale?: number;
+  /** Kun referansebilder: høyden i meter (bredden følger av bildet). */
+  height?: number;
 }
 
 const MAX_TRIANGLES = 200_000;
 const IMAGE_TYPES = ["image/png", "image/jpeg"];
 
 /** Legger bildet i registeret om innholdet følger med, og gir id-en. */
-function storeImage(name: string, image: ImageInput): string {
+export function storeImage(name: string, image: ImageInput): string {
   if (typeof image?.id !== "string") throw new Error(`${name} må være et bilde (PNG eller JPEG)`);
   if (image.data !== undefined) {
     if (!IMAGE_TYPES.includes(image.mime ?? "")) throw new Error(`${name} må være PNG eller JPEG (fikk ${image.mime})`);

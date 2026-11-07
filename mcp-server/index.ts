@@ -98,7 +98,8 @@ const meshProps = {
     .array(z.tuple([z.number(), z.number()]))
     .optional()
     .describe("type 'mesh' only: one [u, v] per vertex, needed for texture and normal_map. v = 0 is the TOP of the image (glTF)."),
-  texture: z.string().optional().describe("type 'mesh' only: absolute path to a PNG or JPEG color image. The object's color tints it (default white)."),
+  texture: z.string().optional().describe("type 'mesh' or 'reference': absolute path to a PNG or JPEG image. On a mesh the object's color tints it (default white)."),
+  height: z.number().positive().optional().describe("type 'reference' only: height of the image in meters (default 2); the width follows from the image."),
   normal_map: z.string().optional().describe("type 'mesh' only: absolute path to a PNG or JPEG normal map (OpenGL style, +Y up): fine detail without more triangles."),
   normal_scale: z.number().min(0).optional().describe("type 'mesh' only: strength of normal_map (default 1)."),
 };
@@ -128,6 +129,10 @@ All shapes are unit-sized and centered on their origin, so 'scale' equals the ob
   or JPEG, the normal map OpenGL style, +Y up) and optional 'normal_scale'. Vertex colors tint the image and still work
   with only a normal map. The images are stored in the scene and exported in the GLB. A texture or normal map costs one
   material per image, and such parts can't be merged or split.
+- reference: an image to model from (photo, drawing). Give 'texture' (absolute path, PNG or JPEG) and 'height' in meters.
+  It stands upright facing +Z (rotation [0, 90, 0] for a side view), half transparent ('opacity'), and keeps the image's
+  own colors under any light. It shows in the viewport and in screenshots, so compare your model with it there, but it is
+  saved only in the scene: never in the GLB or in icons, and snapping, holes and raycast ignore it. Put it behind the model.
 - curve: a round tube along a smooth curve through 'points' (WORLD coordinates) with 'radius' (one number, or one per
   point to taper it) – branches, roots, cables, handles, tentacles, horns. Give points + radius instead of
   position/scale; get_scene returns its current world 'points' and 'radius'. Sending new points to update_objects
@@ -179,6 +184,7 @@ where one loop replaces hundreds of add_objects entries. The whole run is ONE un
 - luna.cylinder(taper=0.6, ...); luna.curve(points=[(x,y,z), ...], radius=0.1 or [r per point], color=..., folder=...)
 - luna.mesh(vertices=[...], triangles=[...], position=, rotation=, color=, vertex_colors=, smooth=, uvs=[(u, v), ...],
   texture="C:/path/color.png", normal_map="C:/path/normal.png", normal_scale=1) – custom shapes;
+  luna.reference("C:/path/front.png", height=1.78, position=(0, 0.89, -0.5), rotation=(0, 0, 0), opacity=0.6) – image to model from;
   luna.orient(forward, up) -> rotation that points the shape's +Z along forward and +Y toward up (like nodes)
 Large runs return only counts (not every id); use luna.objects(...) / get_scene to find objects afterwards.
 - luna.folder(name, parent=None) -> key (use as folder=/parent=)

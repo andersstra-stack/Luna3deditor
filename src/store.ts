@@ -22,8 +22,8 @@ import {
 import { folderChain, isInside } from "./folders";
 import { uniqueNodeName } from "./nodes";
 import { newCurveProps, placeCurve, reshapeCurve } from "./curves";
-import { meshFromVertices, singleVertexColor, type MeshInput } from "./customMesh";
-import { hasMesh } from "./meshes";
+import { meshFromVertices, singleVertexColor, storeImage, type MeshInput } from "./customMesh";
+import { hasMesh, imageSizeOf } from "./meshes";
 import { PRESETS, checkKeys, presetClips, withTrack, type Preset, type PresetOptions } from "./animation";
 import { DEFAULT_LIGHTING, changeLighting, type Lighting, type LightingChange } from "./lighting";
 
@@ -177,11 +177,34 @@ function uniqueName(base: string, taken: { name: string }[]): string {
   return `${base} ${i}`;
 }
 
+/** Standardhøyden på et referansebilde: litt over en person, så figurer kan bygges rett oppå. */
+export const REFERENCE_HEIGHT = 2;
+
+/**
+ * Bildet legges i registeret. Bredden følger av bildet, og det står på bakken med mindre noe annet er oppgitt.
+ * Kopier og innlimte objekter har `imageId` fra før og trenger ingen `texture`.
+ */
+function referenceProps(texture: MeshInput["texture"], height: number | undefined, given: Partial<SceneObject>): Partial<SceneObject> {
+  const imageId = texture ? storeImage("texture", texture) : given.imageId;
+  if (!imageId) throw new Error("Et referansebilde trenger texture (PNG eller JPEG)");
+  const size = imageSizeOf(imageId);
+  if (!size || !size.width || !size.height) throw new Error("Kunne ikke lese målene på bildet (PNG eller JPEG)");
+  if (height !== undefined && !(Number.isFinite(height) && height > 0)) throw new Error("height må være over 0");
+  const h = height ?? REFERENCE_HEIGHT;
+  const scale = given.scale ?? ([round3((h * size.width) / size.height), h, 1] as Vec3);
+  return { imageId, scale, position: given.position ?? [0, scale[1] / 2, 0], opacity: given.opacity ?? 0.6, color: given.color ?? "#ffffff" };
+}
+
+const round3 = (v: number) => Math.round(v * 1000) / 1000;
+
 function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<SceneObject> & CurveInput & MeshInput = {}): SceneObject {
-  const { id: _ignored, type: _type, name: _name, points, radius, vertices, triangles, vertex_colors, smooth, uvs, texture, normal_map, normal_scale, ...rest } = props;
+  const { id: _ignored, type: _type, name: _name, points, radius, vertices, triangles, vertex_colors, smooth, uvs, texture, normal_map, normal_scale, height, ...rest } = props;
   if ((points !== undefined || radius !== undefined) && type !== "curve") throw new Error("points og radius gjelder bare kurverør (type curve)");
   if (vertices !== undefined && type !== "mesh") throw new Error("vertices og triangles gjelder bare egne former (type mesh)");
-  if (vertices === undefined && (uvs ?? texture ?? normal_map ?? normal_scale) !== undefined) {
+  if (height !== undefined && type !== "reference") throw new Error("height gjelder bare referansebilder (type reference)");
+  if (type === "reference") {
+    Object.assign(rest, referenceProps(texture, height, rest));
+  } else if (vertices === undefined && (uvs ?? texture ?? normal_map ?? normal_scale) !== undefined) {
     throw new Error("uvs, texture og normal_map gjelder bare egne former (type mesh med vertices)");
   }
   // Egen form fra hjørner og trekanter: geometrien registreres, plassering og mål regnes ut fra hjørnene.
@@ -219,7 +242,7 @@ function assertFolder(folders: Folder[], id: string | null | undefined) {
 
 /** Ett objekt med endringene. Nye kurvepunkter (verdensrom) eller ny radius regner om posisjon og størrelse. */
 function withUpdate(o: SceneObject, update: Partial<SceneObject> & CurveInput): SceneObject {
-  if (["vertices", "triangles", "uvs", "texture", "normal_map", "normal_scale"].some((k) => k in update)) {
+  if (["vertices", "triangles", "uvs", "texture", "normal_map", "normal_scale", "height"].some((k) => k in update)) {
     throw new Error(`Formen og bildene til ${o.name} kan ikke endres – lag et nytt objekt med vertices`);
   }
   const { points, radius, ...props } = update;

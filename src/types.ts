@@ -7,16 +7,19 @@ export const EXTRA_SHAPES = ["wedge", "prism", "pyramid", "stairs", "hemisphere"
 export const LIGHTS = ["pointLight", "spotLight"] as const;
 /** Markør-noder: usynlige, navngitte punkter med retning (dokking, hardpoints, spawn …) for spillmotoren. */
 export const MARKERS = ["node"] as const;
-/** Former, lys og noder som kan legges til direkte (verktøylinja, MCP add_objects). */
-export const ADDABLE_SHAPES = [...BASIC_SHAPES, ...EXTRA_SHAPES, ...LIGHTS, ...MARKERS] as const;
+/** Bilde å modellere etter (foto, tegning): vises i scenen, men eksporteres ikke. Står oppreist i lokal XY, vender mot +Z. */
+export const REFERENCES = ["reference"] as const;
+/** Former, lys, noder og referansebilder som kan legges til direkte (verktøylinja, MCP add_objects). */
+export const ADDABLE_SHAPES = [...BASIC_SHAPES, ...EXTRA_SHAPES, ...LIGHTS, ...MARKERS, ...REFERENCES] as const;
 /** Alle objekttyper. "mesh" er en importert modell (FBX/GLB/OBJ/STL) med geometri i et modellregister. */
 export const SHAPES = [...ADDABLE_SHAPES, "mesh"] as const;
 export type ShapeType = (typeof SHAPES)[number];
 
 export const isLight = (t: ShapeType) => t === "pointLight" || t === "spotLight";
 export const isNode = (t: ShapeType) => t === "node";
-/** Lys og noder er hjelpere i editoren: ingen hull, ikke noe å lande på eller snappe mot. */
-export const isHelper = (t: ShapeType) => isLight(t) || isNode(t);
+export const isReference = (t: ShapeType) => t === "reference";
+/** Lys, noder og referansebilder er hjelpere i editoren: ingen hull, ikke noe å lande på eller snappe mot. */
+export const isHelper = (t: ShapeType) => isLight(t) || isNode(t) || isReference(t);
 
 /** Høyden en ny form settes i: lys henger i lufta, plan og noder ligger på bakken, alt annet står oppå den. */
 export function startHeight(type: ShapeType, scale: Vec3): number {
@@ -50,6 +53,7 @@ export const SHAPE_LABELS: Record<ShapeType, string> = {
   pointLight: "Punktlys",
   spotLight: "Spotlys",
   node: "Node",
+  reference: "Referansebilde",
   mesh: "Modell",
 };
 
@@ -88,6 +92,8 @@ export const SYMMETRIC_AXES: Record<ShapeType, string> = {
   spotLight: "xz",
   // Pila peker langs +Z og har «opp» langs +Y; speiles om lokal X (se placement.ts).
   node: "x",
+  // Et bilde er ikke symmetrisk: speiles med negativ størrelse, som modeller.
+  reference: "",
   mesh: "",
 };
 
@@ -132,6 +138,8 @@ export interface SceneObject {
   curve?: Curve;
   /** Kun importerte modeller: id i modellregisteret (se meshes.ts). */
   meshId?: string;
+  /** Kun referansebilder: id i teksturregisteret (se meshes.ts). */
+  imageId?: string;
   /** Skriptet (normalisert sti) som laget objektet – erstattes når skriptet kjøres igjen. */
   script?: string;
 }

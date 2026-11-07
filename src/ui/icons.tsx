@@ -62,6 +62,13 @@ export function ShapeIcon({ type, size = 18 }: { type: ShapeType; size?: number 
         </>
       )}
       {type === "spotLight" && <path d="M9 3h6l-1 6h-4zM10 9 5 20h14L14 9M8 14h8" />}
+      {type === "reference" && (
+        <>
+          <rect x="3.5" y="5" width="17" height="14" rx="1.5" />
+          <circle cx="8.5" cy="9.5" r="1.5" />
+          <path d="m3.5 16 5-4 3.5 3 3-2.5 5.5 4.5" />
+        </>
+      )}
       {type === "node" && (
         <>
           <circle cx="7" cy="16" r="2.5" />
