@@ -200,7 +200,8 @@ Large runs return only counts (not every id); use luna.objects(...) / get_scene 
 - luna.folder(name, parent=None) -> key (use as folder=/parent=)
 - luna.update(id_or_key, **props), luna.delete(*ids), luna.simplify(id_or_key, ratio=0.1 or triangles=5000) – fewer triangles
 - luna.bone(name=, head=(x,y,z), tail=(x,y,z), parent=key, roll=, folder=) -> key; luna.skin(mesh_keys..., bones=[...]) binds
-  meshes to the bones (default all) with automatic weights
+  meshes to the bones (default all) with automatic weights; luna.humanoid(mesh_keys..., folder=) builds a Mixamo-named
+  skeleton for a T/A-pose character
 - luna.scene / luna.objects(name=, type=, folder=) / luna.folders(name=) / luna.get(id): the scene at start,
   objects include "bounds" {min, max}
 print() output is returned to you; exceptions return the traceback and change nothing. Save reusable scripts with
@@ -232,7 +233,9 @@ the hierarchy and _L/_R names swap. Bones show through the mesh in the viewport.
 skin_mesh them (automatic weights; limit 'bones' for parts that must follow one bone rigidly, e.g. eyes/beard → head).
 A bone's local +Y points to its tail, so keyframe rotations are around the joint in the bone's own axes (rotation x bends
 most limbs forward/back); child bones follow their parents. Pose by setting keyframes on bones in a clip ("Idle", "Gå") and
-check with preview_animation + screenshot. Moving bones WITHOUT a clip edits the rest pose (meshes don't follow – re-run
+check with preview_animation + screenshot. For a character in T-pose or A-pose, add_humanoid_skeleton builds the whole
+skeleton with Mixamo names in one go, and import_animation puts Mixamo FBX animations (Idle, Walking, Waving …) on it –
+the fastest way to a moving character. Moving bones WITHOUT a clip edits the rest pose (meshes don't follow – re-run
 skin_mesh). export_glb writes the bones as a glTF skeleton (skin with joints and inverse bind matrices) and the clips as
 bone animations; skinned meshes are separate skinned meshes, not baked into model folders.
 
@@ -796,6 +799,38 @@ server.registerTool(
     },
   },
   ({ ids, bones }) => run("skin_mesh", { ids, bones }, SLOW_MS),
+);
+
+server.registerTool(
+  "add_humanoid_skeleton",
+  {
+    title: "Add humanoid skeleton",
+    description:
+      "Build a humanoid skeleton for a character that stands in T-pose or A-pose (Y up, facing +Z): 22 bones with Mixamo names (Hips, Spine, Spine1, Spine2, Neck, Head, Left/RightShoulder, Arm, ForeArm, Hand, Left/RightUpLeg, Leg, Foot, ToeBase), placed from the mesh itself (arms by a line fit, legs and spine by cross-sections, heights by Mixamo proportions). The names let import_animation put Mixamo animations on it and let Unity map it as a Humanoid. One undo step. Check with a screenshot, adjust single bones with update_objects head/tail if needed, then skin_mesh the meshes.",
+    inputSchema: {
+      ids: z.array(z.string()).min(1).describe("Mesh objects that make up the character"),
+      folderId: z.string().optional().describe("Folder for the bones (default: a new folder 'Skjelett' next to the meshes)."),
+    },
+  },
+  ({ ids, folderId }) => run("add_humanoid_skeleton", { ids, folderId }),
+);
+
+server.registerTool(
+  "import_animation",
+  {
+    title: "Import animation",
+    description:
+      "Put an animation from a file (Mixamo FBX – 'Without Skin' or with – or a GLB/glTF with an animated skeleton) on the bones in the scene, matched by name (Mixamo names like Hips/LeftArm, with or without 'mixamorig:'). Each bone follows its source bone's rotation from the rest pose; a T-pose source fits an A-pose character, and the hip motion is scaled to the character's size. Becomes a normal clip (replaces one with the same name) that previews in the editor and exports in the GLB. Returns which bones matched.",
+    inputSchema: {
+      path: z.string().describe("Absolute path to the .fbx/.glb/.gltf file"),
+      clip: z.string().optional().describe("Clip name (default: the file name, e.g. 'Walking')."),
+      in_place: z.boolean().optional().describe("Remove forward/sideways travel (walk on the spot); height is kept."),
+      loop: z.boolean().optional().describe("Loop in the editor preview (default true)."),
+      fps: z.number().int().min(5).max(60).optional().describe("Keyframes per second (default 30)."),
+      folderId: z.string().optional().describe("Only the bones in this folder (several characters with their own skeletons)."),
+    },
+  },
+  ({ path, clip, in_place, loop, fps, folderId }) => run("import_animation", { path, clip, in_place, loop, fps, folderId }, SLOW_MS),
 );
 
 server.registerTool(

@@ -5,7 +5,8 @@ import { useEditor } from "../store";
 import { isInside } from "../folders";
 import { PRESETS, PRESET_DEFAULTS, PRESET_LABELS, type Axis, type Preset } from "../animation";
 import { usePlayer } from "../animationPlayer";
-import type { SceneObject } from "../types";
+import { isBone, type SceneObject } from "../types";
+import { importAnimationFile } from "../animationImport";
 import { reportError } from "./StatusBar";
 import { Icon } from "./icons";
 
@@ -42,7 +43,10 @@ export function AnimationPanel({ objs }: { objs: SceneObject[] }) {
     );
   }
 
-  const mine = clips.filter((c) => c.tracks.some((t) => t.target === target.id));
+  // En modell bundet til skjelettet viser klippene som beveger beina dens.
+  const skinBones = new Set(objs.find((o) => o.id === target.id)?.skin?.bones ?? []);
+  const mine = clips.filter((c) => c.tracks.some((t) => t.target === target.id || skinBones.has(t.target)));
+  const hasBones = useEditor.getState().objects.some((o) => isBone(o.type));
   const pick = (p: Preset) => {
     setPreset(p);
     setAxis(PRESET_DEFAULTS[p].axis);
@@ -101,6 +105,24 @@ export function AnimationPanel({ objs }: { objs: SceneObject[] }) {
             <Icon name="trash" size={11} />
           </button>
         </div>
+      )}
+
+      {hasBones && (
+        <button
+          className="anim-add"
+          title="Legg en animasjon fra Mixamo (FBX) eller en GLB på skjelettet. Beina må hete som i fila (Mixamo-navn: Hips, LeftArm …)."
+          onClick={() =>
+            importAnimationFile()
+              .then((r) => {
+                if (!r) return;
+                usePlayer.getState().select(r.clipId);
+                usePlayer.getState().play();
+              })
+              .catch(reportError)
+          }
+        >
+          Importer animasjon (Mixamo FBX)…
+        </button>
       )}
 
       <div className="anim-presets">

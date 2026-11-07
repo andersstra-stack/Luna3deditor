@@ -10,6 +10,7 @@ import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../pl
 import { splitLooseParts } from "../meshSplit";
 import { mergeObjects } from "../meshMerge";
 import { simplifierReady } from "../meshSimplify";
+import { importAnimationFile } from "../animationImport";
 import { usePlayer } from "../animationPlayer";
 import type { AnimClip } from "../types";
 import {
@@ -276,6 +277,40 @@ export const handlers: Record<BridgeMethod, Handler> = {
     const result = editor().skinObjects(ids, bones);
     say(result.skinned.length ? `bandt ${result.skinned.map((s) => s.name).join(", ")} til skjelettet` : "fant ingenting å binde");
     return result;
+  },
+
+  add_humanoid_skeleton: (p) => {
+    const ids = p.ids as string[];
+    if (!Array.isArray(ids) || !ids.length) throw new Error("ids må være en ikke-tom liste (modellene som er figuren)");
+    const result = editor().applyScript([{ op: "humanoid", meshes: ids, folder: (p.folderId as string | undefined) ?? null }]);
+    const bones = editor().objects.filter((o) => result.created.includes(o.id));
+    say(`lagde et skjelett med ${bones.length} bein`);
+    return {
+      folderId: result.folders[0] ?? p.folderId ?? null,
+      bones: bones.map((b) => ({ id: b.id, name: b.name, parent: bones.find((x) => x.id === b.parentId)?.name ?? null })),
+      note: "Check with a screenshot (bones show through the mesh), adjust with update_objects head/tail if needed, then skin_mesh.",
+    };
+  },
+
+  import_animation: async (p) => {
+    const result = await importAnimationFile(requireString(p, "path"), {
+      name: p.clip as string | undefined,
+      inPlace: p.in_place === true,
+      loop: p.loop as boolean | undefined,
+      fps: p.fps as number | undefined,
+      folderId: p.folderId as string | undefined,
+    });
+    if (!result) throw new Error("Ingen fil");
+    say(`la animasjonen «${result.name}» på skjelettet`);
+    return {
+      clip: result.name,
+      duration: result.duration,
+      loop: result.loop,
+      bones: result.mapped.length,
+      keys: result.tracks.reduce((n, t) => n + t.keys.length, 0),
+      mapped: result.mapped,
+      unmapped: result.unmapped,
+    };
   },
 
   animate: (p) => {

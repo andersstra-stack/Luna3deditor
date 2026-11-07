@@ -10,6 +10,20 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Menneskeskjelett med ett klikk**: «Lag menneskeskjelett» i egenskapspanelet (MCP `add_humanoid_skeleton`, Python
+  `luna.humanoid`) plasserer 22 bein med Mixamo-navn (Hips, Spine … LeftArm, LeftForeArm …) ut fra en figur i T- eller
+  A-positur – armene langs armens midtlinje, beina symmetrisk, høydene etter Mixamo-proporsjoner. Unity kan kjenne igjen
+  skjelettet som Humanoid.
+- **Mixamo-animasjoner på egne figurer**: «Importer animasjon (Mixamo FBX)…» i animasjonspanelet (MCP `import_animation`)
+  legger en FBX- eller GLB-animasjon på beina med samme navn. En Mixamo-rigg i T-positur passer på en figur i A-positur, og
+  hoftenes bevegelse skaleres til figurens høyde. Animasjonen blir et vanlig klipp som vises i editoren og eksporteres i
+  GLB-en. Valg av en bundet modell viser klippene som beveger den. Prøvd på fem Tripo-piloter med Idle, Walking, Running,
+  Waving, Talking og Sitting.
+
+### Fixed
+- Lagring av scenen lager mappa hvis den mangler (som GLB-eksporten allerede gjorde).
+
 ## [0.20.0] — 2026-11-07
 
 ### Added

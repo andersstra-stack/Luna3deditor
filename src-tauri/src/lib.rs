@@ -6,9 +6,12 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use serde::Serialize;
 use tauri::Manager;
 
-/// Skriver tekst (f.eks. scene-JSON) til en fil valgt av brukeren eller Claude.
+/// Skriver tekst (f.eks. scene-JSON) til en fil valgt av brukeren eller Claude. Mappen lages om den mangler.
 #[tauri::command]
 fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    if let Some(dir) = std::path::Path::new(&path).parent() {
+        fs::create_dir_all(dir).map_err(|e| format!("Kunne ikke lage mappen {}: {e}", dir.display()))?;
+    }
     fs::write(&path, contents).map_err(|e| format!("Kunne ikke skrive {path}: {e}"))
 }
 

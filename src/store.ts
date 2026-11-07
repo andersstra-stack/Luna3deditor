@@ -30,6 +30,7 @@ import { DEFAULT_LIGHTING, changeLighting, type Lighting, type LightingChange } 
 import { simplifiedObject, type SimplifyResult, type SimplifyTarget } from "./meshSimplify";
 import { skinnedObject } from "./skinning";
 import { boneFromHeadTail, boneTail, makesCycle } from "./bones";
+import { humanoidSkeleton } from "./humanoid";
 
 const HISTORY_LIMIT = 100;
 
@@ -109,6 +110,8 @@ export interface EditorState extends Snapshot {
    * Modellene beholder id-en; de får en ny `meshId` med vektene og `skin`.
    */
   skinObjects: (meshIds: string[], boneIds?: string[]) => SkinResult;
+  /** Legger inn et ferdig klipp (f.eks. en importert Mixamo-animasjon); et klipp med samme navn byttes ut. Ett angre-steg. */
+  importClip: (clip: Omit<AnimClip, "id">) => AnimClip;
 
   addFolders: (items: { name?: string; parentId?: string | null; model?: boolean }[]) => Folder[];
   updateFolders: (updates: FolderUpdate[]) => void;
@@ -519,6 +522,15 @@ export const useEditor = create<EditorState>((set, get) => {
       return result;
     },
 
+    importClip: (part) => {
+      if (!part.name?.trim()) throw new Error("Klippet trenger et navn");
+      if (!(part.duration > 0)) throw new Error("Klippet må vare mer enn 0 sekunder");
+      const old = get().clips.find((c) => c.name === part.name);
+      const clip: AnimClip = { ...part, id: old?.id ?? newId("clip") };
+      commit({ clips: old ? get().clips.map((c) => (c === old ? clip : c)) : [...get().clips, clip] });
+      return clip;
+    },
+
     addFolders: (items) => {
       const all = [...get().folders];
       const created: Folder[] = [];
@@ -682,6 +694,23 @@ export const useEditor = create<EditorState>((set, get) => {
               ? presetInto(clips, target, op.preset, (op.options ?? {}) as PresetOptions)
               : keyframesInto(clips, op.clip, target, op.keys, { duration: op.duration, loop: op.loop });
           result.animated++;
+        } else if (op.op === "humanoid") {
+          // Menneskeskjelett med Mixamo-navn ut fra modellene (humanoid.ts), i mappa som er oppgitt eller en ny «Skjelett».
+          const meshes = op.meshes.map((ref) => objects.find((o) => o.id === resolve(ref, "objekt"))!);
+          let folderId = op.folder ? resolve(op.folder, "mappe") : null;
+          if (!folderId) {
+            const folder: Folder = { id: newId("fld"), name: uniqueName("Skjelett", siblings(folders, meshes[0]?.folderId ?? null)), parentId: meshes[0]?.folderId ?? null, visible: true, ...(script ? { script } : {}) };
+            folders.push(folder);
+            result.folders.push(folder.id);
+            folderId = folder.id;
+          }
+          const ids = new Map<string, string>();
+          for (const b of humanoidSkeleton(meshes)) {
+            const obj = makeObject("bone", objects, { name: b.name, head: b.head, tail: b.tail, parent: b.parent ? ids.get(b.parent) : undefined, folderId, ...(script ? { script } : {}) });
+            objects.push(obj);
+            ids.set(b.name, obj.id);
+            result.created.push(obj.id);
+          }
         } else if (op.op === "skin") {
           const bones = op.bones?.map((ref) => resolve(ref, "objekt"));
           for (const ref of op.meshes) {

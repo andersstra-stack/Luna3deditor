@@ -602,7 +602,27 @@ function BoneInfo({ obj }: { obj: SceneObject }) {
 /** Binding til skjelettet: automatiske hudvekter mot de valgte beina (eller alle), eller løsne. */
 function SkinRow({ meshes, bones }: { meshes: SceneObject[]; bones: SceneObject[] }) {
   const anyBones = useEditor((s) => s.objects.some((o) => isBone(o.type)));
-  if (!anyBones) return null;
+  if (!anyBones) {
+    // Ingen skjelett ennå: lag et menneskeskjelett ut fra modellene (figuren i T- eller A-positur).
+    return (
+      <div className="row">
+        <div className="row-title">Skjelett</div>
+        <div className="btn-row">
+          <button
+            className="small-btn"
+            title="Lager et skjelett med Mixamo-navn ut fra modellene (figuren må stå i T- eller A-positur, ansiktet mot +Z). Bind etterpå."
+            onClick={run(() => {
+              const state = useEditor.getState();
+              const r = state.applyScript([{ op: "humanoid", meshes: meshes.map((o) => o.id), folder: null }]);
+              state.setActivity(`Lagde et menneskeskjelett med ${r.created.length} bein – sjekk plasseringen og bind modellene`);
+            })}
+          >
+            <Icon name="shapes" size={14} /> Lag menneskeskjelett
+          </button>
+        </div>
+      </div>
+    );
+  }
   const skinned = meshes.filter(isSkinned);
   const bind = () => {
     const state = useEditor.getState();

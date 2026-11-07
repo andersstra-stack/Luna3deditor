@@ -20,6 +20,8 @@ export const BRIDGE_METHODS = [
   "merge_objects",
   "simplify_mesh",
   "skin_mesh",
+  "add_humanoid_skeleton",
+  "import_animation",
   "create_folders",
   "update_folders",
   "delete_folders",

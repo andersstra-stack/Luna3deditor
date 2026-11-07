@@ -75,7 +75,7 @@ __all__ = [
     "scene", "objects", "get", "folders", "folder", "add", "update", "delete",
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
     "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "curve", "point_light", "spot_light", "node", "mesh",
-    "reference", "orient", "animate", "keyframes", "simplify", "bone", "skin",
+    "reference", "orient", "animate", "keyframes", "simplify", "bone", "skin", "humanoid",
 ]
 
 SHAPES = {
@@ -349,6 +349,18 @@ def skin(*meshes, bones=None):
     if bones is not None:
         op["bones"] = [str(b) for b in bones]
     _push(op)
+
+
+def humanoid(*meshes, folder=None):
+    """Menneskeskjelett med Mixamo-navn (Hips, Spine … LeftArm, LeftForeArm …) for en figur i T- eller A-positur.
+
+    Beina plasseres ut fra modellene og legges i folder (standard: en ny mappe «Skjelett»). Bind etterpå med skin(...).
+    Mixamo-animasjoner legges på med MCP-verktøyet import_animation.
+    """
+    flat = [str(i) for item in meshes for i in (item if isinstance(item, (list, tuple)) else [item])]
+    if not flat:
+        raise ValueError("humanoid trenger minst én modell")
+    _push({"op": "humanoid", "meshes": flat, "folder": folder})
 
 
 def _shape(type):

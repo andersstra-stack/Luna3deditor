@@ -347,7 +347,8 @@ export type ScriptOp =
   | { op: "animate"; target: string; preset: string; options?: Record<string, unknown> }
   | { op: "keyframes"; target: string; clip: string; keys: unknown[]; duration?: number; loop?: boolean }
   | { op: "simplify"; ids: string[]; ratio?: number; triangles?: number; max_error?: number }
-  | { op: "skin"; meshes: string[]; bones?: string[] };
+  | { op: "skin"; meshes: string[]; bones?: string[] }
+  | { op: "humanoid"; meshes: string[]; folder?: string | null };
 
 export interface ScriptResult {
   /** Objekter fra forrige kjøring av samme skript som ble fjernet. */

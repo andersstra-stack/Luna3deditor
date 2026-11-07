@@ -81,6 +81,15 @@ MCP-verktøybeskrivelser er på engelsk.
   verdensrom med identitet som bindematrise (IBM = beinets hvile⁻¹), aldri inn i modell-mapper. Forenkling av en bundet
   modell binder den på nytt (`reskin` i store). Kopier og speilkopier tar med hierarkiet (`duplicateObjects` bytter
   `parentId`/`skin.bones` til kopiene).
+- Menneskeskjelett: `src/humanoid.ts` (`humanoidSkeleton`) plasserer 22 bein med Mixamo-navn ut fra modellenes hjørner
+  (T/A-positur, Y opp, ansiktet mot +Z): høyder fra Mixamo-proporsjonene, ryggen fra snitt midt på figuren, armene fra en
+  linje gjennom midten av snitt langs X (ikke hovedakse – skulderplater drar den skjevt), beina symmetrisk. Legges inn via
+  skript-op `humanoid` i `store.applyScript` (ett angre-steg).
+- Animasjon fra fil: `src/retarget.ts` (bare three + typer, kan kjøres i Node) overfører et klipp til Luna-bein med samme navn
+  (`boneKey` stripper «mixamorig:»; `ALIASES` for andre navn): R(t) = Q_kilde(t)·Q_kilde,hvile⁻¹·A⁻¹·Q_luna,hvile, der A dreier
+  kildebeinets hvileretning (mot barnet, målt som Luna-beinets rot→tupp) over på Luna-beinets – så T-positur passer på
+  A-positur. Rotbeinet får forflytningen skalert med høyden. `src/animationImport.ts` leser FBX/GLB og legger klippet inn
+  med `store.importClip`. Mixamo-FBX: cm, Y opp, ansiktet mot +Z, alle klipp heter «mixamo.com» (filnavnet brukes).
 - Referansebilder: `type: "reference"` (`isHelper`) med `imageId` i teksturregisteret i `meshes.ts`. Står i lokal XY og vender mot +Z,
   `meshBasicMaterial` uten tonekurve (`ReferenceImage` i `Viewport.tsx`). `referenceProps` i `store.ts` regner bredden fra bildets hode
   (`imageSizeOf`). Fra appen: `src/referenceImage.ts` (filvalg, dra-og-slipp når ingen modell følger med). Vises på skjermbilder; ikke i eksport eller ikoner.
