@@ -13,6 +13,8 @@ import {
   deserializeMesh,
   deserializeTexture,
   hasMesh,
+  normalMapFor,
+  normalScaleOf,
   registerMesh,
   registerTexture,
   serializeUsedMeshes,
@@ -188,14 +190,18 @@ export async function buildGlb(base: string) {
 
   // Delene som eksporteres (hull og lys er editor-hjelpere; hullene er allerede skåret ut av geometrien).
   const solids = objects.filter((o) => !isNode(o.type) && !isLight(o.type) && !o.hole && shown(o) && meshById.has(o.id));
-  // Importerte modeller med fotografisk tekstur beholder bildet og UV-ene sine (eget materiale per tekstur).
-  const textureOf = new Map(
+  // Deler med egne bilder (fotografisk tekstur, normalkart) beholder UV-ene sine og får eget materiale per bilde.
+  // Et normalkart uten fargebilde kan ikke bruke paletten: den trenger UV-ene selv. Da følger hjørnefargene med i stedet.
+  const imagesOf = new Map(
     solids.flatMap((o) => {
-      const t = meshById.get(o.id)!.geometry.getAttribute("uv") ? textureFor(o) : null;
-      return t ? [[o.id, t] as const] : [];
+      const geometry = meshById.get(o.id)!.geometry;
+      if (!geometry.getAttribute("uv")) return [];
+      const map = textureFor(o);
+      const normalMap = normalMapFor(o);
+      return map || normalMap ? [[o.id, { map, normalMap, colored: !!geometry.getAttribute("color") }] as const] : [];
     }),
   );
-  const paletted = solids.filter((o) => !textureOf.has(o.id));
+  const paletted = solids.filter((o) => !imagesOf.has(o.id));
   // Farge per hjørne for sammenslåtte modeller med flere farger, ellers delens egen farge.
   const hexes = new Map(paletted.map((o) => [o.id, vertexHexes(meshById.get(o.id)!.geometry)]));
   const palette = buildPalette(
@@ -207,15 +213,18 @@ export async function buildGlb(base: string) {
   const materials = new Map<string, THREE.MeshStandardMaterial>();
   const paletteNames = new Set<string>();
   const materialKey = (o: SceneObject) => {
-    const tex = textureOf.get(o.id);
-    return `${o.material ?? ""}|${round(o.metalness, 0.01)}|${round(o.roughness, 0.01)}|${round(o.opacity, 0.01)}${tex ? `|${tex.name}|${o.color}|${round(o.emissive ?? 0, 0.01)}` : ""}`;
+    const own = imagesOf.get(o.id);
+    const images = own
+      ? `|${own.map?.name ?? ""}|${own.normalMap?.name ?? ""}|${normalScaleOf(o)}|${own.colored ? "vertex-colors" : o.color}|${round(o.emissive ?? 0, 0.01)}`
+      : "";
+    return `${o.material ?? ""}|${round(o.metalness, 0.01)}|${round(o.roughness, 0.01)}|${round(o.opacity, 0.01)}${images}`;
   };
   const materialFor = (o: SceneObject) => {
     const key = materialKey(o);
-    const tex = textureOf.get(o.id);
+    const own = imagesOf.get(o.id);
     let m = materials.get(key);
     if (!m) {
-      let name = o.material ?? (tex ? `${base}_texture` : `${base}_palette`);
+      let name = o.material ?? (own ? `${base}_texture` : `${base}_palette`);
       if (!o.material) {
         const stem = name;
         for (let i = 2; paletteNames.has(name); i++) name = `${stem}_${i}`;
@@ -223,20 +232,21 @@ export async function buildGlb(base: string) {
       }
       m = new THREE.MeshStandardMaterial({
         name,
-        map: tex ?? palette.map,
-        ...(tex ? { color: o.color } : {}),
+        map: own ? own.map : palette.map,
+        ...(own ? { color: own.colored ? "#ffffff" : o.color, vertexColors: own.colored } : {}),
+        ...(own?.normalMap ? { normalMap: own.normalMap, normalScale: new THREE.Vector2(normalScaleOf(o), normalScaleOf(o)) } : {}),
         metalness: o.metalness,
         roughness: o.roughness,
         transparent: o.opacity < 1,
         opacity: o.opacity,
       });
-      if (tex && (o.emissive ?? 0) > 0) {
+      if (own && (o.emissive ?? 0) > 0) {
         m.emissive = new THREE.Color(o.color).multiplyScalar(o.emissive!);
-        m.emissiveMap = tex;
+        m.emissiveMap = own.map;
       }
       materials.set(key, m);
     }
-    if (!tex && (o.emissive ?? 0) > 0 && palette.emissive && !m.emissiveMap) {
+    if (!own && (o.emissive ?? 0) > 0 && palette.emissive && !m.emissiveMap) {
       m.emissive = new THREE.Color(1, 1, 1);
       m.emissiveMap = palette.emissive;
     }
@@ -245,13 +255,13 @@ export async function buildGlb(base: string) {
 
   /**
    * Delens geometri med UV-er som peker på fargens rute i paletten (posisjon, normal og uv – ikke hjørnefarger).
-   * Teksturerte deler beholder sine egne UV-er.
+   * Deler med egne bilder beholder sine egne UV-er og hjørnefarger.
    */
   const paletteGeometry = (o: SceneObject) => {
     const geometry = meshById.get(o.id)!.geometry.clone();
-    const keep = textureOf.has(o.id) ? ["position", "normal", "uv"] : ["position", "normal"];
+    const keep = imagesOf.has(o.id) ? ["position", "normal", "uv", "color"] : ["position", "normal"];
     for (const name of Object.keys(geometry.attributes)) if (!keep.includes(name)) geometry.deleteAttribute(name);
-    if (textureOf.has(o.id)) return geometry;
+    if (imagesOf.has(o.id)) return geometry;
     const perVertex = hexes.get(o.id);
     const uv = new Float32Array(geometry.getAttribute("position").count * 2);
     for (let i = 0; i < uv.length / 2; i++) uv.set(palette.uvOf(perVertex ? perVertex[i] : o.color, o.emissive), i * 2);
@@ -321,6 +331,16 @@ export async function buildGlb(base: string) {
       group.geos.push(geo);
     }
     const groups = [...byMaterial.values()];
+    // Alle gruppene må ha samme attributter for å slås sammen: har én hjørnefarger, får de andre hvite (samme bilde).
+    if (groups.some((g) => g.geos[0].getAttribute("color"))) {
+      for (const g of groups) {
+        for (const geo of g.geos) {
+          if (geo.getAttribute("color")) continue;
+          const count = geo.getAttribute("position").count;
+          geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(count * 3).fill(1), 3));
+        }
+      }
+    }
     const node = parts.length
       ? new THREE.Mesh(
           mergeGeometries(

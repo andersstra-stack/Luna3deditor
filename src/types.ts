@@ -168,6 +168,10 @@ export interface MeshAsset {
    */
   uvs?: Float32Array;
   textureId?: string;
+  /** Normalkart (OpenGL-retning, +Y opp) i teksturregisteret, med samme UV-er: finne detaljer uten flere trekanter. */
+  normalTextureId?: string;
+  /** Hvor sterkt normalkartet virker (1 = som i bildet). */
+  normalScale?: number;
 }
 
 /** Et bilde i teksturregisteret (`src/meshes.ts`). Id-en er en hash av bildet, så like teksturer deles. */
@@ -289,6 +293,8 @@ export interface SerializedMesh {
   colors?: string;
   uvs?: string;
   textureId?: string;
+  normalTextureId?: string;
+  normalScale?: number;
 }
 
 /**

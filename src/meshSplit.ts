@@ -121,7 +121,7 @@ export function splitLooseParts(ids: string[]): SplitResult {
       result.skipped.push({ name: obj.name, reason: "ikke en importert modell" });
       continue;
     }
-    if (asset.textureId) {
+    if (asset.textureId || asset.normalTextureId) {
       result.skipped.push({ name: obj.name, reason: "har tekstur – deles ikke opp" });
       continue;
     }

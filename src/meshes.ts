@@ -85,15 +85,19 @@ export function registerTexture(asset: TextureAsset) {
 export const hasTexture = (id: string | undefined) => !!id && textureAssets.has(id);
 
 /** three-teksturen til et bilde i registeret. Bildet lastes asynkront; teksturen oppdateres når det er klart. */
-export function textureById(id: string): THREE.Texture | null {
-  let tex = textures.get(id);
+export const textureById = (id: string) => loadTexture(id, THREE.SRGBColorSpace);
+
+/** Normalkart er data, ikke farger: samme bilde må ikke tolkes som sRGB, så de har hver sin three-tekstur. */
+function loadTexture(id: string, colorSpace: THREE.ColorSpace): THREE.Texture | null {
+  const cacheKey = `${colorSpace}:${id}`;
+  let tex = textures.get(cacheKey);
   if (!tex) {
     const asset = textureAssets.get(id);
     if (!asset) return null;
     const img = new Image();
     tex = new THREE.Texture(img);
     tex.name = id;
-    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.colorSpace = colorSpace;
     // UV-ene er lagret med v = 0 øverst (som i glTF).
     tex.flipY = false;
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -107,7 +111,7 @@ export function textureById(id: string): THREE.Texture | null {
       URL.revokeObjectURL(url);
     };
     img.src = url;
-    textures.set(id, tex);
+    textures.set(cacheKey, tex);
   }
   return tex;
 }
@@ -118,9 +122,20 @@ export function textureFor(o: Pick<SceneObject, "type" | "meshId">): THREE.Textu
   return id ? textureById(id) : null;
 }
 
-/** Har objektet en importert tekstur? */
-export const hasTextureMap = (o: Pick<SceneObject, "type" | "meshId">) =>
-  o.type === "mesh" && !!o.meshId && !!assets.get(o.meshId)?.textureId;
+/** Normalkartet et objekt vises med, eller null. */
+export function normalMapFor(o: Pick<SceneObject, "type" | "meshId">): THREE.Texture | null {
+  const id = o.type === "mesh" && o.meshId ? assets.get(o.meshId)?.normalTextureId : undefined;
+  return id ? loadTexture(id, THREE.NoColorSpace) : null;
+}
+
+/** Hvor sterkt normalkartet til objektet virker. */
+export const normalScaleOf = (o: Pick<SceneObject, "meshId">) => (o.meshId ? assets.get(o.meshId)?.normalScale : undefined) ?? 1;
+
+/** Bruker objektet bilder med egne UV-er (tekstur eller normalkart)? Da kan det ikke slås sammen eller deles opp. */
+export const hasTextureMap = (o: Pick<SceneObject, "type" | "meshId">) => {
+  const asset = o.type === "mesh" && o.meshId ? assets.get(o.meshId) : undefined;
+  return !!asset?.textureId || !!asset?.normalTextureId;
+};
 
 // ---------- Lagring (base64) ----------
 
@@ -149,6 +164,7 @@ export function serializeMesh(a: MeshAsset): SerializedMesh {
     ...(a.colors ? { colors: toBase64(a.colors) } : {}),
     ...(a.uvs ? { uvs: toBase64(a.uvs) } : {}),
     ...(a.textureId ? { textureId: a.textureId } : {}),
+    ...(a.normalTextureId ? { normalTextureId: a.normalTextureId, normalScale: a.normalScale } : {}),
   };
 }
 
@@ -161,7 +177,9 @@ export function deserializeMesh(m: SerializedMesh): MeshAsset {
     ...(m.index ? { index: new Uint32Array(fromBase64(m.index)) } : {}),
     ...(m.colors ? { colors: new Uint8Array(fromBase64(m.colors)) } : {}),
     // En modell hvis tekstur mangler (f.eks. limt inn fra en eldre versjon) vises uten tekstur.
-    ...(m.uvs && hasTexture(m.textureId) ? { uvs: new Float32Array(fromBase64(m.uvs)), textureId: m.textureId } : {}),
+    ...(m.uvs && (hasTexture(m.textureId) || hasTexture(m.normalTextureId)) ? { uvs: new Float32Array(fromBase64(m.uvs)) } : {}),
+    ...(m.uvs && hasTexture(m.textureId) ? { textureId: m.textureId } : {}),
+    ...(m.uvs && hasTexture(m.normalTextureId) ? { normalTextureId: m.normalTextureId, normalScale: m.normalScale } : {}),
   };
 }
 
@@ -181,6 +199,13 @@ export function serializeUsedMeshes(objects: SceneObject[]): SerializedMesh[] {
 
 /** Teksturene de modellene bruker. Registreres før modellene når de leses inn igjen. */
 export function serializeUsedTextures(objects: SceneObject[]): SerializedTexture[] {
-  const ids = new Set(objects.map((o) => (o.meshId ? assets.get(o.meshId)?.textureId : undefined)).filter((id): id is string => hasTexture(id)));
+  const ids = new Set(
+    objects
+      .flatMap((o) => {
+        const asset = o.meshId ? assets.get(o.meshId) : undefined;
+        return [asset?.textureId, asset?.normalTextureId];
+      })
+      .filter((id): id is string => hasTexture(id)),
+  );
   return [...ids].map((id) => serializeTexture(textureAssets.get(id)!));
 }

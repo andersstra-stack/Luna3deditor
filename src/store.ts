@@ -178,14 +178,18 @@ function uniqueName(base: string, taken: { name: string }[]): string {
 }
 
 function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<SceneObject> & CurveInput & MeshInput = {}): SceneObject {
-  const { id: _ignored, type: _type, name: _name, points, radius, vertices, triangles, vertex_colors, smooth, ...rest } = props;
+  const { id: _ignored, type: _type, name: _name, points, radius, vertices, triangles, vertex_colors, smooth, uvs, texture, normal_map, normal_scale, ...rest } = props;
   if ((points !== undefined || radius !== undefined) && type !== "curve") throw new Error("points og radius gjelder bare kurverør (type curve)");
   if (vertices !== undefined && type !== "mesh") throw new Error("vertices og triangles gjelder bare egne former (type mesh)");
+  if (vertices === undefined && (uvs ?? texture ?? normal_map ?? normal_scale) !== undefined) {
+    throw new Error("uvs, texture og normal_map gjelder bare egne former (type mesh med vertices)");
+  }
   // Egen form fra hjørner og trekanter: geometrien registreres, plassering og mål regnes ut fra hjørnene.
-  const custom = vertices !== undefined ? { vertices, triangles, vertex_colors, smooth } : undefined;
+  const custom = vertices !== undefined ? { vertices, triangles, vertex_colors, smooth, uvs, texture, normal_map, normal_scale } : undefined;
   if (custom) {
     Object.assign(rest, meshFromVertices(custom, rest.position, rest.rotation, props.name));
-    rest.color ??= singleVertexColor(custom);
+    // Objektets farge farger bildet, så en tekstur skal ikke få en tilfeldig startfarge.
+    rest.color ??= singleVertexColor(custom) ?? (texture ? "#ffffff" : undefined);
   }
   if (type === "mesh" && !hasMesh(rest.meshId)) throw new Error("En modell trenger meshId (import) eller vertices + triangles");
   const scale = DEFAULT_SCALE[type] ?? [1, 1, 1];
@@ -215,7 +219,9 @@ function assertFolder(folders: Folder[], id: string | null | undefined) {
 
 /** Ett objekt med endringene. Nye kurvepunkter (verdensrom) eller ny radius regner om posisjon og størrelse. */
 function withUpdate(o: SceneObject, update: Partial<SceneObject> & CurveInput): SceneObject {
-  if ("vertices" in update || "triangles" in update) throw new Error(`Formen til ${o.name} kan ikke endres – lag et nytt objekt med vertices`);
+  if (["vertices", "triangles", "uvs", "texture", "normal_map", "normal_scale"].some((k) => k in update)) {
+    throw new Error(`Formen og bildene til ${o.name} kan ikke endres – lag et nytt objekt med vertices`);
+  }
   const { points, radius, ...props } = update;
   const next = { ...o, ...props, id: o.id, type: o.type };
   if (points === undefined && radius === undefined) return next;

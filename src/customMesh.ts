@@ -4,8 +4,19 @@
 // Like former (samme hjørner/trekanter/farger) deler én modell i registeret – 400 like blader lagres én gang.
 
 import * as THREE from "three";
-import { hasMesh, registerMesh } from "./meshes";
+import { deserializeTexture, hasMesh, hasTexture, registerMesh, registerTexture } from "./meshes";
 import type { SceneObject, Vec3 } from "./types";
+
+/**
+ * Et bilde fra Python eller MCP-serveren, som leser fila selv (appen får ikke filstier her). Id-en er en hash av bytene.
+ * Første gang følger innholdet med; senere bruk av samme bilde sender bare id-en, så 400 like blader ikke sender bildet 400 ganger.
+ */
+export interface ImageInput {
+  id: string;
+  mime?: string;
+  /** base64 */
+  data?: string;
+}
 
 export interface MeshInput {
   vertices?: Vec3[];
@@ -14,9 +25,29 @@ export interface MeshInput {
   vertex_colors?: string[];
   /** true = myke overganger mellom trekanter som deler hjørner; ellers flate fasetter. */
   smooth?: boolean;
+  /** UV per hjørne, samme rekkefølge som `vertices`. glTF-konvensjon: v = 0 er øverst i bildet. */
+  uvs?: [number, number][];
+  /** Fargebilde. Objektets farge (hvit som standard) og eventuelle hjørnefarger farger det. */
+  texture?: ImageInput;
+  /** Normalkart (OpenGL-retning, +Y opp): finne detaljer uten flere trekanter. */
+  normal_map?: ImageInput;
+  /** Hvor sterkt normalkartet virker (1 = som i bildet). */
+  normal_scale?: number;
 }
 
 const MAX_TRIANGLES = 200_000;
+const IMAGE_TYPES = ["image/png", "image/jpeg"];
+
+/** Legger bildet i registeret om innholdet følger med, og gir id-en. */
+function storeImage(name: string, image: ImageInput): string {
+  if (typeof image?.id !== "string") throw new Error(`${name} må være et bilde (PNG eller JPEG)`);
+  if (image.data !== undefined) {
+    if (!IMAGE_TYPES.includes(image.mime ?? "")) throw new Error(`${name} må være PNG eller JPEG (fikk ${image.mime})`);
+    registerTexture(deserializeTexture({ id: image.id, mime: image.mime!, data: image.data }));
+  }
+  if (!hasTexture(image.id)) throw new Error(`${name}: bildet ${image.id} er ikke sendt inn`);
+  return image.id;
+}
 const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
 
 /** FNV-1a – kort, stabil nøkkel for like former. */
@@ -50,6 +81,19 @@ function check(input: MeshInput): Required<Pick<MeshInput, "vertices" | "triangl
       throw new Error("vertex_colors må være én hex-farge (#rrggbb) per hjørne");
     }
   }
+  const usesImage = input.texture !== undefined || input.normal_map !== undefined;
+  if (usesImage && input.uvs === undefined) throw new Error("texture og normal_map trenger uvs (én [u, v] per hjørne)");
+  if (input.uvs !== undefined) {
+    if (!usesImage) throw new Error("uvs gjør ingenting uten texture eller normal_map");
+    const uvs = input.uvs;
+    if (!Array.isArray(uvs) || uvs.length !== vertices.length || !uvs.every((u) => Array.isArray(u) && u.length === 2 && u.every(Number.isFinite))) {
+      throw new Error(`uvs må være én [u, v] per hjørne (${vertices.length} stykker)`);
+    }
+  }
+  if (input.normal_scale !== undefined) {
+    if (input.normal_map === undefined) throw new Error("normal_scale gjelder bare sammen med normal_map");
+    if (!Number.isFinite(input.normal_scale) || input.normal_scale < 0) throw new Error("normal_scale må være et tall fra 0 og oppover");
+  }
   return { vertices, triangles };
 }
 
@@ -66,28 +110,38 @@ export function meshFromVertices(
   const { vertices, triangles } = check(input);
   const smooth = input.smooth === true;
   const colors = input.vertex_colors;
+  const uvs = input.uvs;
+  const textureId = input.texture && storeImage("texture", input.texture);
+  const normalTextureId = input.normal_map && storeImage("normal_map", input.normal_map);
+  const normalScale = normalTextureId ? (input.normal_scale ?? 1) : undefined;
 
   const box = new THREE.Box3();
   for (const v of vertices) box.expandByPoint(new THREE.Vector3(...v));
   const c = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3()).toArray().map((v) => (v > 1e-5 ? v : 1)) as Vec3;
 
-  const meshId = `mesh_v${hash(JSON.stringify([vertices, triangles, colors ?? null, smooth]))}`;
+  // Uten bilder: samme nøkkel som før, så like former fortsatt deler modell med dem som allerede ligger i scenefiler.
+  const key: unknown[] = [vertices, triangles, colors ?? null, smooth];
+  if (uvs) key.push(uvs, textureId ?? null, normalTextureId ?? null, normalScale ?? null);
+  const meshId = `mesh_v${hash(JSON.stringify(key))}`;
   if (!hasMesh(meshId)) {
     // Normalisert til enhetsboksen; normalene regnes på den normaliserte formen (riktig når scale legges på igjen).
     const norm = (v: Vec3) => v.map((x, a) => (x - c.getComponent(a)) / size[a]);
     const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
     const geo = new THREE.BufferGeometry();
     let colorBytes: Uint8Array | undefined;
+    let uvArray: Float32Array | undefined;
     if (smooth) {
       geo.setAttribute("position", new THREE.Float32BufferAttribute(vertices.flatMap(norm), 3));
       geo.setIndex(triangles.flat());
       if (colors) colorBytes = new Uint8Array(colors.flatMap(rgb));
+      if (uvs) uvArray = new Float32Array(uvs.flat());
     } else {
       // Flate fasetter: hver trekant får egne hjørner.
       const corners = triangles.flat();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(corners.flatMap((i) => norm(vertices[i])), 3));
       if (colors) colorBytes = new Uint8Array(corners.flatMap((i) => rgb(colors[i])));
+      if (uvs) uvArray = new Float32Array(corners.flatMap((i) => uvs[i]));
     }
     geo.computeVertexNormals();
     // En form med bare én hjørnefarge trenger ikke farge per hjørne (objektets farge gjør jobben).
@@ -99,6 +153,9 @@ export function meshFromVertices(
       normals: geo.getAttribute("normal").array as Float32Array,
       ...(smooth ? { index: new Uint32Array(triangles.flat()) } : {}),
       ...(single ? {} : { colors: colorBytes }),
+      ...(uvArray ? { uvs: uvArray } : {}),
+      ...(textureId ? { textureId } : {}),
+      ...(normalTextureId ? { normalTextureId, normalScale } : {}),
     });
     geo.dispose();
   }

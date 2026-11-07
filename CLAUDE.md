@@ -47,6 +47,11 @@ MCP-verktøybeskrivelser er på engelsk.
   (formens eget rom; `position` = origo, `rotation` rundt det) i `src/customMesh.ts` – id-en er en hash av formen, så like
   former deles i registeret. Geometrien kan ikke oppdateres (lag nytt objekt). Skript med mer enn 25 nye objekter svarer
   Claude med antall (`compactScriptResult` i `commands.ts`), ikke id-er.
+  Egne former kan ha `uvs` (v = 0 øverst) med `texture`/`normal_map`/`normal_scale` (`MeshAsset.normalTextureId`, `normalScale`,
+  `normalMapFor(o)`). Python og `mcp-server/images.ts` leser fila og sender `{id, mime, data}` første gang, siden bare `{id}`.
+  Normalkart er OpenGL-retning; visningen bruker `normalScale` [s, -s] fordi UV-ene har v = 0 øverst uten tangenter (som
+  GLTFLoader), eksporten [s, s]. Deler med egne bilder bruker ikke paletten i eksporten: de beholder UV-ene og hjørnefargene
+  (`COLOR_0`), og i modell-mapper får de andre delene hvite hjørnefarger så alt kan slås sammen.
 - Python-skript: `scripting/luna3d.py` (API + `python -m luna3d skript.py`) samler endringer og skriver dem ut etter
   markøren `@@LUNA3D_OPS@@` når skriptet er ferdig. Kjøres av Rust (`run_python_script`, modulen pakkes som ressurs)
   eller MCP (`mcp-server/python.ts`); `src/scripting.ts` tolker utdata, `store.applyScript` gjør alt som ett angre-steg.

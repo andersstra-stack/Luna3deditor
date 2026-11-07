@@ -14,6 +14,7 @@ import { z } from "zod";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { withImages } from "./images.ts";
 import { runPythonScript } from "./python.ts";
 import { Hub, bridge, currentCall, type ToolDef } from "./hub.ts";
 import { runProxy } from "./proxy.ts";
@@ -93,6 +94,13 @@ const meshProps = {
     .describe("type 'mesh' only: triangles as vertex indices [a, b, c], counter-clockwise seen from outside."),
   vertex_colors: z.array(z.string()).optional().describe("type 'mesh' only: one hex color per vertex (optional)."),
   smooth: z.boolean().optional().describe("type 'mesh' only: true = smooth shading across shared vertices; default flat facets."),
+  uvs: z
+    .array(z.tuple([z.number(), z.number()]))
+    .optional()
+    .describe("type 'mesh' only: one [u, v] per vertex, needed for texture and normal_map. v = 0 is the TOP of the image (glTF)."),
+  texture: z.string().optional().describe("type 'mesh' only: absolute path to a PNG or JPEG color image. The object's color tints it (default white)."),
+  normal_map: z.string().optional().describe("type 'mesh' only: absolute path to a PNG or JPEG normal map (OpenGL style, +Y up): fine detail without more triangles."),
+  normal_scale: z.number().min(0).optional().describe("type 'mesh' only: strength of normal_map (default 1)."),
 };
 
 const INSTRUCTIONS = `Luna 3D is a simple 3D editor the user has open on their desktop. These tools edit its scene live.
@@ -115,7 +123,11 @@ All shapes are unit-sized and centered on their origin, so 'scale' equals the ob
   where the vertices' origin goes and 'rotation' turns it around that origin; 'scale' is then the shape's size like
   everything else. Identical shapes are stored once, so reuse one leaf for hundreds of copies. Optional
   'vertex_colors' (one hex per vertex) and 'smooth'. A thin shape seen from both sides needs both faces (top and a
-  reversed bottom). Its geometry can't be edited afterwards – make a new object.
+  reversed bottom). Its geometry can't be edited afterwards – make a new object. For detail finer than the vertices give
+  'uvs' (one [u, v] per vertex, v = 0 at the top of the image) with 'texture' and/or 'normal_map' (absolute paths to PNG
+  or JPEG, the normal map OpenGL style, +Y up) and optional 'normal_scale'. Vertex colors tint the image and still work
+  with only a normal map. The images are stored in the scene and exported in the GLB. A texture or normal map costs one
+  material per image, and such parts can't be merged or split.
 - curve: a round tube along a smooth curve through 'points' (WORLD coordinates) with 'radius' (one number, or one per
   point to taper it) – branches, roots, cables, handles, tentacles, horns. Give points + radius instead of
   position/scale; get_scene returns its current world 'points' and 'radius'. Sending new points to update_objects
@@ -165,7 +177,8 @@ where one loop replaces hundreds of add_objects entries. The whole run is ONE un
   point_light/spot_light/node(name=, position=(x,y,z), rotation=(deg,deg,deg), scale=(x,y,z), color="#rrggbb",
   metalness=, roughness=, opacity=, hole=, intensity=, emissive=, material=, props={...}, folder=) -> key; or luna.add("box", ...)
 - luna.cylinder(taper=0.6, ...); luna.curve(points=[(x,y,z), ...], radius=0.1 or [r per point], color=..., folder=...)
-- luna.mesh(vertices=[...], triangles=[...], position=, rotation=, color=, vertex_colors=, smooth=) – custom shapes;
+- luna.mesh(vertices=[...], triangles=[...], position=, rotation=, color=, vertex_colors=, smooth=, uvs=[(u, v), ...],
+  texture="C:/path/color.png", normal_map="C:/path/normal.png", normal_scale=1) – custom shapes;
   luna.orient(forward, up) -> rotation that points the shape's +Z along forward and +Y toward up (like nodes)
 Large runs return only counts (not every id); use luna.objects(...) / get_scene to find objects afterwards.
 - luna.folder(name, parent=None) -> key (use as folder=/parent=)
@@ -237,9 +250,15 @@ const server = {
 
 const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
 
-async function run(method: BridgeMethod, params: Record<string, unknown> = {}) {
+/**
+ * Filoperasjoner og store skript kan ta lang tid på tunge scener. En GLB på 60 MB ble skrevet, men Claude fikk beskjed om
+ * tidsavbrudd etter vanlig grense (20 s), og et slikt svar frister til å prøve på nytt.
+ */
+const SLOW_MS = 5 * 60_000;
+
+async function run(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs?: number) {
   try {
-    return json(await bridge.call(method, params));
+    return json(await bridge.call(method, params, timeoutMs));
   } catch (e) {
     return { content: [{ type: "text" as const, text: (e as Error).message }], isError: true };
   }
@@ -267,7 +286,13 @@ server.registerTool(
       objects: z.array(z.object({ type: z.enum([...ADDABLE_SHAPES, "mesh"]), ...objectProps, ...meshProps })).min(1),
     },
   },
-  ({ objects }) => run("add_objects", { objects }),
+  ({ objects }) => {
+    try {
+      return run("add_objects", { objects: withImages(objects) });
+    } catch (e) {
+      return { content: [{ type: "text" as const, text: (e as Error).message }], isError: true };
+    }
+  },
 );
 
 server.registerTool(
@@ -571,7 +596,7 @@ server.registerTool(
     description: "Save the scene as a Luna 3D JSON file (.luna.json) at an absolute path.",
     inputSchema: { path: z.string().describe("Absolute file path, e.g. C:\\Users\\me\\Documents\\house.luna.json") },
   },
-  ({ path }) => run("save_scene", { path }),
+  ({ path }) => run("save_scene", { path }, SLOW_MS),
 );
 
 server.registerTool(
@@ -582,7 +607,7 @@ server.registerTool(
       "Open a Luna 3D scene file (.luna.json) in this session's window, replacing its scene (undoable). To work on another file next to what is open, use open_project instead.",
     inputSchema: { path: z.string().describe("Absolute file path") },
   },
-  ({ path }) => run("load_scene", { path }),
+  ({ path }) => run("load_scene", { path }, SLOW_MS),
 );
 
 server.registerTool(
@@ -607,7 +632,7 @@ server.registerTool(
         ),
     },
   },
-  ({ path, folderId, position, keep_origin }) => run("import_model", { path, folderId, position, keep_origin }),
+  ({ path, folderId, position, keep_origin }) => run("import_model", { path, folderId, position, keep_origin }, SLOW_MS),
 );
 
 server.registerTool(
@@ -643,7 +668,7 @@ server.registerTool(
       // Kjent fil (path/save_to): forrige resultat fra samme skript erstattes. Inline-kode legger bare til.
       const scriptFile = path ?? save_to;
       const result = run.ops.length
-        ? await bridge.call("apply_script", { ops: run.ops, name, script: scriptFile })
+        ? await bridge.call("apply_script", { ops: run.ops, name, script: scriptFile }, SLOW_MS)
         : { note: "The script made no changes." };
       const saved = code && save_to ? `Saved to ${save_to}\n\n` : "";
       return json({ ...result, ...(output ? { output } : {}), ...(saved ? { saved: save_to } : {}) });
@@ -817,7 +842,7 @@ server.registerTool(
       "Export visible objects as a binary glTF (.glb) file that Blender, Roblox Studio, Unity, Godot etc. can import. Folders become named groups; parts share palette materials (colors as pixels in <name>_palette.png, glow in <name>_emission.png, both also written next to the .glb); objects with a material name get their own material; marker nodes become empty nodes with their props as extras.",
     inputSchema: { path: z.string().describe("Absolute file path ending in .glb") },
   },
-  ({ path }) => run("export_glb", { path }),
+  ({ path }) => run("export_glb", { path }, SLOW_MS),
 );
 
 // ---------- Prosjekter (kjøres i huben, ikke i appen) ----------

@@ -26,11 +26,17 @@ export function openStartupFile(): Promise<void> {
 export async function windowLabel(): Promise<string> {
   if (!hasNativeWindow) return `nettleser-${Math.random().toString(36).slice(2, 8)}`;
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  return getCurrentWindow().label;
+  return `${DEV_PREFIX}${getCurrentWindow().label}`;
 }
+
+/**
+ * Huben kjenner vinduer på etiketten og lukker den gamle koblingen når en ny kommer med samme etikett. `tauri dev` ved
+ * siden av den installerte appen har også et vindu som heter «main»: uten egen etikett sparker de hverandre ut i en løkke.
+ */
+const DEV_PREFIX = import.meta.env.DEV ? "dev-" : "";
 
 /** Åpner et nytt prosjektvindu, eventuelt med en scenefil. Gir etiketten til det nye vinduet. */
 export function openWindow(path?: string): Promise<string> {
   if (!hasNativeWindow) return Promise.reject(new Error("Nye vinduer krever Luna 3D-appen (ikke nettleseren)"));
-  return invoke<string>("open_project_window", { path: path ?? null });
+  return invoke<string>("open_project_window", { path: path ?? null }).then((label) => `${DEV_PREFIX}${label}`);
 }

@@ -34,12 +34,18 @@ overganger, vertex_colors=[...] farge per hjørne. orient(forward, up) gir rotas
     blad = dict(vertices=[(0, 0, 0), (0.06, 0, 0.15), (0, 0.01, 0.3), (-0.06, 0, 0.15)], triangles=[(0, 2, 1), (0, 3, 2)])
     luna.mesh(**blad, position=(1, 2, 0), rotation=luna.orient(forward=(1, 0.3, 0), up=(0, 1, 0)), color="#5fb84a")
 
+Detaljer finere enn hjørnene: uvs=[(u, v), ...] (én per hjørne, v = 0 øverst i bildet) med texture="farge.png" og/eller
+normal_map="normal.png" (PNG eller JPEG, full sti; normalkart i OpenGL-retning, +Y opp) og normal_scale=1. Hjørnefarger
+farger bildet og virker også med bare et normalkart. Bildene lagres i scenen og følger med i GLB-eksporten.
+
 Markør-noder (node) er usynlige punkter med navn og retning som spillmotoren leser: lokal +Z er
 forover og +Y opp. Egendefinerte egenskaper legges i props={...} (eksporteres som glTF extras):
 
     luna.node(name="hp_turret_S_01", position=(0, 2.1, 4), props={"yaw_min": -150, "yaw_max": 150})
 """
 
+import base64
+import hashlib
 import json
 import math
 import os
@@ -60,6 +66,7 @@ PROPS = {
     "name", "position", "rotation", "scale", "color", "metalness", "roughness",
     "opacity", "visible", "hole", "intensity", "emissive", "material", "props", "folder",
     "taper", "points", "radius", "vertices", "triangles", "vertex_colors", "smooth",
+    "uvs", "texture", "normal_map", "normal_scale",
 }
 MARKER = "@@LUNA3D_OPS@@"
 MAX_OPS = 20000
@@ -101,6 +108,32 @@ def _vec3(name, value):
     if len(v) != 3 or not all(math.isfinite(x) for x in v):
         raise ValueError(f"{name} må være tre endelige tall – fikk {value!r}")
     return v
+
+
+_image_ids = {}
+
+
+def _image(name, path):
+    """Bildefil til appen: innholdet første gang, deretter bare id-en, så samme bilde ikke sendes for hvert objekt."""
+    try:
+        full = os.path.abspath(os.fspath(path))
+    except TypeError:
+        raise ValueError(f"{name} må være en filsti til et PNG- eller JPEG-bilde – fikk {path!r}") from None
+    if full in _image_ids:
+        return {"id": _image_ids[full]}
+    try:
+        with open(full, "rb") as f:
+            data = f.read()
+    except OSError as e:
+        raise ValueError(f"Kunne ikke lese {name} {full}: {e.strerror}") from None
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        mime = "image/png"
+    elif data[:3] == b"\xff\xd8\xff":
+        mime = "image/jpeg"
+    else:
+        raise ValueError(f"{name} {full} er ikke PNG eller JPEG (det eneste glTF-eksporten støtter)")
+    _image_ids[full] = f"tex_{hashlib.sha1(data).hexdigest()[:20]}"
+    return {"id": _image_ids[full], "mime": mime, "data": base64.b64encode(data).decode("ascii")}
 
 
 def _clean(props):
@@ -154,6 +187,15 @@ def _clean(props):
                 raise ValueError("vertex_colors må være hex-farger som '#ff8800', én per hjørne")
         elif k == "smooth":
             v = bool(v)
+        elif k == "uvs":
+            try:
+                v = [[float(a), float(b)] for a, b in v]
+            except (TypeError, ValueError):
+                raise ValueError("uvs må være en liste med (u, v), én per hjørne") from None
+        elif k in ("texture", "normal_map"):
+            v = _image(k, v)
+        elif k == "normal_scale":
+            v = float(v)
         elif k == "taper":
             v = float(v)
             if not 0 <= v <= 1:

@@ -16,6 +16,16 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
   alle kanter, så baksiden ikke lenger blir svart, og miljølyset gir refleksjoner i blanke flater. Lyset lagres per scene
   og kan angres. Det gjelder visningen, skjermbilder og ikoner, ikke eksporten. Standard ser ut som før, så eksisterende
   scener og ikoner beholder lyset sitt. Claude kan styre det samme med det nye MCP-verktøyet `set_lighting`.
+- **Teksturer og normalkart på egne former**: `type: "mesh"` tar nå `uvs`, `texture`, `normal_map` og `normal_scale` fra
+  Python og MCP. Et normalkart gir finne detaljer som porer og strikk uten flere trekanter, også sammen med hjørnefarger.
+  Bildene lagres i scenefila, følger med ved kopiering mellom vinduer og skrives inn i GLB-en. Samme bilde deles mellom
+  objekter og sendes bare én gang.
+
+### Fixed
+- **`tauri dev` ved siden av installert app**: utviklingsvinduer kobler seg til huben med egen etikett. Før hadde begge et
+  vindu som het «main», og da sparket de hverandre ut av Claude-tilkoblingen i en løkke.
+- **Tidsavbrudd på tunge scener**: lagring, åpning, import, GLB-eksport og Python-skript via MCP får nå 5 minutter i stedet
+  for 20 sekunder. Før kunne Claude få beskjed om tidsavbrudd selv om fila ble skrevet.
 
 ## [0.17.0] — 2026-11-02
 

@@ -10,7 +10,7 @@ import { hiddenFolderIds } from "../folders";
 import { boxOf, objectBox, objectMatrix, round } from "../bounds";
 import { isHelper, isLight, isNode, type SceneObject, type Vec3 } from "../types";
 import { geometryKey, geometryOf, getGeometry } from "./geometries";
-import { textureFor } from "../meshes";
+import { normalMapFor, normalScaleOf, textureFor } from "../meshes";
 import { cutGeometry, overlappingHoles } from "./csg";
 import { snapOffset, type SnapContext } from "./snapping";
 import { setThreeGetter } from "./three-handle";
@@ -308,7 +308,11 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
   const colored = !!geometry.getAttribute("color");
   // Importerte modeller med fotografisk tekstur: bildet farges med objektets farge (hvit = som i fila).
   const texture = geometry.getAttribute("uv") ? textureFor(obj) : null;
-  const look = `${colored ? "vertex-colors" : "color"}${texture ? "+map" : ""}`;
+  const normalMap = geometry.getAttribute("uv") ? normalMapFor(obj) : null;
+  // Negativ y: UV-ene har v = 0 øverst og geometrien har ingen tangenter (samme grep som GLTFLoader).
+  const strength = normalScaleOf(obj);
+  const normalScale: [number, number] = [strength, -strength];
+  const look = `${colored ? "vertex-colors" : "color"}${texture ? "+map" : ""}${normalMap ? "+normal" : ""}`;
 
   return (
     <mesh
@@ -329,6 +333,8 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
           key={`toon-${look}`}
           vertexColors={colored}
           map={texture}
+          normalMap={normalMap}
+          normalScale={normalScale}
           color={colored ? "#ffffff" : obj.color}
           gradientMap={TOON_GRADIENT}
           emissive={obj.color}
@@ -344,6 +350,8 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
           key={look}
           vertexColors={colored}
           map={texture}
+          normalMap={normalMap}
+          normalScale={normalScale}
           color={colored ? "#ffffff" : obj.color}
           metalness={obj.metalness}
           roughness={obj.roughness}
