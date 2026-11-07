@@ -10,6 +10,13 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Lysoppsett**: ny «Lys»-knapp i verktøylinja med ferdige oppsett (Standard, Studio, Overskyet, Kveld) og glidebrytere
+  for solas retning, høyde, styrke og farge, omgivelseslys, fyll-, kant- og miljølys. Studio-oppsettet viser formen fra
+  alle kanter, så baksiden ikke lenger blir svart, og miljølyset gir refleksjoner i blanke flater. Lyset lagres per scene
+  og kan angres. Det gjelder visningen, skjermbilder og ikoner, ikke eksporten. Standard ser ut som før, så eksisterende
+  scener og ikoner beholder lyset sitt. Claude kan styre det samme med det nye MCP-verktøyet `set_lighting`.
+
 ## [0.17.0] — 2026-11-02
 
 ### Added

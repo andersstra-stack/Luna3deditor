@@ -19,6 +19,7 @@ import { viewTargetOnGround } from "../viewport/three-handle";
 import { Icon, ShapeIcon } from "./icons";
 import { reportError } from "./StatusBar";
 import { PolyCounter } from "./PolyCounter";
+import { LightingMenu } from "./LightingMenu";
 
 const BRIDGE_TEXT: Record<BridgeStatus, { label: string; title: string }> = {
   connected: { label: "Claude klar", title: "Koblet til Luna 3D-huben – Claude-økter kan velge dette vinduet" },
@@ -170,6 +171,8 @@ export function Toolbar() {
         <Icon name="toon" />
         <span>Tegneserie</span>
       </button>
+
+      <LightingMenu />
 
       <div className="spacer" />
 

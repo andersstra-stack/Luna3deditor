@@ -3,6 +3,8 @@ import * as THREE from "three";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { GizmoHelper, GizmoViewport, Grid, Html, OrbitControls, Outlines, TransformControls } from "@react-three/drei";
 import type { TransformControls as TransformControlsImpl } from "three-stdlib";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { lightDirection } from "../lighting";
 import { useEditor } from "../store";
 import { hiddenFolderIds } from "../folders";
 import { boxOf, objectBox, objectMatrix, round } from "../bounds";
@@ -504,6 +506,68 @@ function useThemeColors() {
   }, [theme]);
 }
 
+/** Så langt unna sola og de andre lysene står. Retningslys er like sterke overalt; avstanden gjelder bare skyggekameraet. */
+const LIGHT_DISTANCE = 15.62;
+/** Fyll- og kantlys står fast i forhold til sola, så hele oppsettet dreier når sola flyttes. */
+const FILL_OFFSET = { azimuth: -105, elevation: 18 };
+const RIM_OFFSET = { azimuth: 165, elevation: 35 };
+
+const lightPosition = (azimuth: number, elevation: number) =>
+  lightDirection(azimuth, elevation).map((v) => v * LIGHT_DISTANCE) as Vec3;
+
+/** Scenens lysoppsett (lighting.ts). Fyll- og kantlys kaster ikke skygger: det koster en tegning av hele scenen per lys. */
+function SceneLights() {
+  const lighting = useEditor((s) => s.lighting);
+  const { sun, sunAzimuth, sunElevation, sunColor, ambient, fill, rim, environment } = lighting;
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const environmentMap = useRef<THREE.Texture | null>(null);
+
+  // Miljølyset: et lukket rom i minnet (ingen nedlasting), laget første gang det trengs.
+  useEffect(() => {
+    if (environment > 0 && !environmentMap.current) {
+      const generator = new THREE.PMREMGenerator(gl);
+      environmentMap.current = generator.fromScene(new RoomEnvironment(), 0.04).texture;
+      generator.dispose();
+    }
+    scene.environment = environment > 0 ? environmentMap.current : null;
+    scene.environmentIntensity = environment;
+  }, [environment, gl, scene]);
+
+  useEffect(
+    () => () => {
+      environmentMap.current?.dispose();
+      environmentMap.current = null;
+      scene.environment = null;
+    },
+    [scene],
+  );
+
+  return (
+    <>
+      <hemisphereLight args={["#dfe6ff", "#3a3326"]} intensity={ambient} />
+      <directionalLight
+        position={lightPosition(sunAzimuth, sunElevation)}
+        intensity={sun}
+        color={sunColor}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-20}
+        shadow-camera-right={20}
+        shadow-camera-top={20}
+        shadow-camera-bottom={-20}
+        shadow-bias={-0.0004}
+      />
+      {fill > 0 && (
+        <directionalLight position={lightPosition(sunAzimuth + FILL_OFFSET.azimuth, FILL_OFFSET.elevation)} intensity={fill} color="#cfdcff" />
+      )}
+      {rim > 0 && (
+        <directionalLight position={lightPosition(sunAzimuth + RIM_OFFSET.azimuth, RIM_OFFSET.elevation)} intensity={rim} color="#fff8ee" />
+      )}
+    </>
+  );
+}
+
 export function Viewport() {
   const select = useEditor((s) => s.select);
   const placingNote = useEditor((s) => s.tool === "note");
@@ -523,18 +587,7 @@ export function Viewport() {
     >
       <ThreeBridge />
       <AnimationClock />
-      <hemisphereLight args={["#dfe6ff", "#3a3326", 0.9]} />
-      <directionalLight
-        position={[6, 12, 8]}
-        intensity={2.2}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
-        shadow-bias={-0.0004}
-      />
+      <SceneLights />
       {/* Usynlig bakke som bare fanger skygger */}
       <mesh rotation-x={-Math.PI / 2} position-y={-0.002} receiveShadow raycast={() => null}>
         <planeGeometry args={[200, 200]} />

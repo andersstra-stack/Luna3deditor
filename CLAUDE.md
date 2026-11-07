@@ -104,6 +104,9 @@ MCP-verktøybeskrivelser er på engelsk.
   temablokkene her; nye temaer legges inn der og kopieres. `App.css` mapper Luna-tokens (`--bg-1`, `--text` …) til
   LunaChat-variablene. Tema-tilstand i `src/ui/uiStore.ts` (`luna3d.theme` i localStorage + inline-skript i `index.html`).
 - 3D-visningen har gjennomsiktig bakgrunn (temaets gradient synes); rutenett/utvalgsfarge avledes i `useThemeColors()`.
+- Lys: `lighting` i `Snapshot` (angre-historikk) og scenefila (`src/lighting.ts`, utelates når oppsettet er `standard`), tegnes av
+  `SceneLights` i `Viewport.tsx`, menyen er `ui/LightingMenu.tsx`, MCP `set_lighting`. Bare sola kaster skygger; miljølyset er `RoomEnvironment`
+  (ingen nedlasting). Standard må holde samme bilde som før: ikoner rendres med scenens lys. Gjelder ikke eksporten.
 - Tegneserie-visning: `toonView` i `uiStore` (localStorage). `SolidMesh` bytter til `meshToonMaterial` (`TOON_GRADIENT`, tre lystrinn)
   og legger på drei `Outlines` i `INK` (ikke på hull og plan; valgte får aksentfargen). Bare visning – eksporten er uendret.
 

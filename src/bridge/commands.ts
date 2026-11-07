@@ -332,6 +332,32 @@ export const handlers: Record<BridgeMethod, Handler> = {
     return { ok: true };
   },
 
+  set_lighting: (p) => {
+    const given = <T,>(key: string, name: string) => (p[key] !== undefined ? { [name]: p[key] as T } : {});
+    const l = editor().setLighting({
+      ...given<string>("preset", "preset"),
+      ...given<number>("ambient", "ambient"),
+      ...given<number>("sun", "sun"),
+      ...given<number>("sun_azimuth", "sunAzimuth"),
+      ...given<number>("sun_elevation", "sunElevation"),
+      ...given<string>("sun_color", "sunColor"),
+      ...given<number>("fill", "fill"),
+      ...given<number>("rim", "rim"),
+      ...given<number>("environment", "environment"),
+    });
+    return {
+      preset: l.preset,
+      ambient: l.ambient,
+      sun: l.sun,
+      sun_azimuth: l.sunAzimuth,
+      sun_elevation: l.sunElevation,
+      sun_color: l.sunColor,
+      fill: l.fill,
+      rim: l.rim,
+      environment: l.environment,
+    };
+  },
+
   screenshot: async (p) => {
     // Eget kamera eller fokus: brukerens kamera settes tilbake etterpå (med mindre keep_view).
     const saved = cameraState();

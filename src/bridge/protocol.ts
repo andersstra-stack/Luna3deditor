@@ -26,6 +26,7 @@ export const BRIDGE_METHODS = [
   "undo",
   "redo",
   "set_view",
+  "set_lighting",
   "screenshot",
   "render_icon",
   "save_scene",

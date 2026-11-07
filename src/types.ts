@@ -276,6 +276,8 @@ export interface SceneFile {
   notes?: Note[];
   /** Animasjonsklipp. */
   clips?: AnimClip[];
+  /** Lysoppsett (se lighting.ts); mangler når scenen bruker standardlyset. */
+  lighting?: unknown;
 }
 
 export interface SerializedMesh {

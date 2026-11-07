@@ -133,6 +133,11 @@ pixel in <name>_palette.png (also embedded in the GLB) and each part's UVs point
 part glow and goes into <name>_emission.png. Set material: 'nova_glass' on glass so Unity swaps in its glass shader;
 imported models keep their material names from the file.
 
+Lighting: set_lighting changes the scene's own light setup (presets standard, studio, overcast, evening, or individual
+values). It affects the viewport, screenshots and render_icon but never the export, and it is saved with the scene.
+Use 'studio' to judge organic forms or anything seen from behind; keep 'standard' in scenes that make icons, so they
+stay consistent with earlier icons. pointLight/spotLight objects are for light that belongs to the scene itself (a lamp).
+
 Holes (CSG): set hole: true on an object to cut it out of every other (non-hole) object in the SAME folder it overlaps —
 e.g. windows and doors in a wall: put the wall and box-shaped holes in one folder. Holes are live and stay editable.
 
@@ -445,6 +450,27 @@ server.registerTool(
     },
   },
   (p) => run("set_view", p),
+);
+
+server.registerTool(
+  "set_lighting",
+  {
+    title: "Set scene lighting",
+    description:
+      "Set how the scene is lit in the viewport, screenshots and render_icon (not in the exported GLB). Stored in the scene file, undoable, and separate per project. 'preset' picks a ready-made setup; any other value is applied on top of it (or on top of the current setup) and makes it 'custom'. Call with no arguments to read the current values. See 'Lighting' in the instructions.",
+    inputSchema: {
+      preset: z.enum(["standard", "studio", "overcast", "evening"]).optional().describe("standard = Luna's normal light; studio = three-point light that shows form from every side; overcast = soft, no hard shadows; evening = low warm sun."),
+      ambient: z.number().min(0).max(2).optional().describe("Even light from sky and ground (standard 0.9)."),
+      sun: z.number().min(0).max(6).optional().describe("Main light, the only one casting shadows (standard 2.2)."),
+      sun_azimuth: z.number().optional().describe("Sun direction in degrees around the scene: 0 = from the front (+Z), 90 = from +X, 180 = from behind. Fill and rim follow it."),
+      sun_elevation: z.number().min(5).max(90).optional().describe("Sun height in degrees above the horizon."),
+      sun_color: z.string().optional().describe("Hex color of the sun, e.g. '#ffb877'."),
+      fill: z.number().min(0).max(3).optional().describe("Soft light from the opposite side of the sun, lifts the shadow side (no shadows)."),
+      rim: z.number().min(0).max(4).optional().describe("Light from behind that draws the outline (no shadows)."),
+      environment: z.number().min(0).max(2).optional().describe("Light from all around, with reflections in glossy surfaces."),
+    },
+  },
+  (p) => run("set_lighting", p),
 );
 
 server.registerTool(

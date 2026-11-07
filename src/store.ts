@@ -25,6 +25,7 @@ import { newCurveProps, placeCurve, reshapeCurve } from "./curves";
 import { meshFromVertices, singleVertexColor, type MeshInput } from "./customMesh";
 import { hasMesh } from "./meshes";
 import { PRESETS, checkKeys, presetClips, withTrack, type Preset, type PresetOptions } from "./animation";
+import { DEFAULT_LIGHTING, changeLighting, type Lighting, type LightingChange } from "./lighting";
 
 const HISTORY_LIMIT = 100;
 
@@ -37,6 +38,8 @@ export interface Snapshot {
   notes: Note[];
   /** Animasjonsklipp (se animation.ts). */
   clips: AnimClip[];
+  /** Scenens lysoppsett (se lighting.ts). */
+  lighting: Lighting;
 }
 
 export type Tool = "select" | "note";
@@ -119,6 +122,10 @@ export interface EditorState extends Snapshot {
   setClipsLive: (clips: AnimClip[]) => void;
   /** Fjerner all animasjon fra et mål (tomme klipp slettes). */
   removeAnimations: (target: string) => void;
+  /** Endrer lysoppsettet (ett angre-steg). Se `changeLighting` for hvordan `preset` og enkeltverdier virker sammen. */
+  setLighting: (change: LightingChange) => Lighting;
+  /** Samme uten angre-steg – brukes mens en glidebryter dras (med `pushHistory()` ved start). */
+  setLightingLive: (change: LightingChange) => void;
   setScene: (scene: Partial<Snapshot> & Pick<Snapshot, "objects" | "folders">) => void;
   clearScene: () => void;
   select: (id: string | null, mode?: SelectMode) => void;
@@ -148,7 +155,11 @@ export const newId = (prefix = "obj") => `${prefix}_${Date.now().toString(36)}_$
  */
 export function hasUnsavedChanges(s: Pick<EditorState, keyof Snapshot | "saved" | "filePath">): boolean {
   const changed =
-    s.objects !== s.saved.objects || s.folders !== s.saved.folders || s.notes !== s.saved.notes || s.clips !== s.saved.clips;
+    s.objects !== s.saved.objects ||
+    s.folders !== s.saved.folders ||
+    s.notes !== s.saved.notes ||
+    s.clips !== s.saved.clips ||
+    s.lighting !== s.saved.lighting;
   return changed && !(s.filePath === null && !s.objects.length && !s.folders.length && !s.notes.length && !s.clips.length);
 }
 
@@ -218,8 +229,14 @@ const applyUpdates = (objects: SceneObject[], updates: ObjectUpdate[]) => {
 };
 
 export const useEditor = create<EditorState>((set, get) => {
-  const empty: Snapshot = { objects: [], folders: [], notes: [], clips: [] };
-  const snapshot = (): Snapshot => ({ objects: get().objects, folders: get().folders, notes: get().notes, clips: get().clips });
+  const empty: Snapshot = { objects: [], folders: [], notes: [], clips: [], lighting: DEFAULT_LIGHTING };
+  const snapshot = (): Snapshot => ({
+    objects: get().objects,
+    folders: get().folders,
+    notes: get().notes,
+    clips: get().clips,
+    lighting: get().lighting,
+  });
 
   /** Målet (objekt eller mappe) må finnes. */
   const assertTarget = (target: string, objects = get().objects, folders = get().folders) => {
@@ -256,6 +273,7 @@ export const useEditor = create<EditorState>((set, get) => {
       ...snap,
       notes: snap.notes ?? [],
       clips: snap.clips ?? [],
+      lighting: snap.lighting ?? DEFAULT_LIGHTING,
       activeNoteId: (snap.notes ?? []).some((n) => n.id === get().activeNoteId) ? get().activeNoteId : null,
       selectedIds: keepSelection(snap.objects),
       activeFolderId: snap.folders.some((f) => f.id === activeFolderId) ? activeFolderId : null,
@@ -605,10 +623,17 @@ export const useEditor = create<EditorState>((set, get) => {
     setShowNotes: (showNotes) => set({ showNotes }),
     setShowResolvedNotes: (showResolvedNotes) => set({ showResolvedNotes }),
 
-    setScene: ({ objects, folders, notes = [], clips = [] }) =>
-      commit({ objects, folders, notes, clips }, { selectedIds: [], activeFolderId: null, activeNoteId: null }),
+    setLighting: (change) => {
+      const lighting = changeLighting(get().lighting, change);
+      if (lighting !== get().lighting) commit({ lighting });
+      return lighting;
+    },
+    setLightingLive: (change) => set({ lighting: changeLighting(get().lighting, change) }),
+
+    setScene: ({ objects, folders, notes = [], clips = [], lighting = DEFAULT_LIGHTING }) =>
+      commit({ objects, folders, notes, clips, lighting }, { selectedIds: [], activeFolderId: null, activeNoteId: null }),
     clearScene: () =>
-      commit({ objects: [], folders: [], notes: [], clips: [] }, { selectedIds: [], activeFolderId: null, activeNoteId: null }),
+      commit({ objects: [], folders: [], notes: [], clips: [], lighting: DEFAULT_LIGHTING }, { selectedIds: [], activeFolderId: null, activeNoteId: null }),
 
     select: (id, mode = "replace") => {
       if (!id) return set({ selectedIds: [] });

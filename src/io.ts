@@ -21,6 +21,7 @@ import {
   vertexHexes,
 } from "./meshes";
 import { isPivotNode, makeAnimator } from "./animation";
+import { lightingFromFile } from "./lighting";
 
 type Animator = ReturnType<typeof makeAnimator>;
 /** Bilder per sekund når animasjonene samples til glTF-spor. */
@@ -29,7 +30,7 @@ const ANIMATION_FPS = 30;
 const SCENE_FILTER = { name: "Luna 3D-scene", extensions: ["luna.json", "json"] };
 
 export function serializeScene(): SceneFile {
-  const { objects, folders, notes, clips } = useEditor.getState();
+  const { objects, folders, notes, clips, lighting } = useEditor.getState();
   const textures = serializeUsedTextures(objects);
   return {
     format: "luna3d",
@@ -38,6 +39,7 @@ export function serializeScene(): SceneFile {
     folders,
     notes,
     ...(clips.length ? { clips } : {}),
+    ...(lighting.preset !== "standard" ? { lighting } : {}),
     meshes: serializeUsedMeshes(objects),
     ...(textures.length ? { textures } : {}),
   };
@@ -59,7 +61,7 @@ function parseScene(text: string): Snapshot {
     .map((o) => ({ ...o, folderId: o.folderId && folderIds.has(o.folderId) ? o.folderId : null }));
   const notes = Array.isArray(data.notes) ? data.notes : [];
   const clips = Array.isArray(data.clips) ? data.clips : [];
-  return { objects, folders, notes, clips };
+  return { objects, folders, notes, clips, lighting: lightingFromFile(data.lighting) };
 }
 
 /** Lagrer scenen. Uten sti spørres brukeren (eller forrige sti brukes). */
