@@ -1,14 +1,16 @@
-import { useEditor, type BridgeStatus } from "../store";
+import { primaryId, useEditor, type BridgeStatus } from "../store";
 import { useEffect, useRef, useState } from "react";
 import {
   BASIC_SHAPES,
   DEFAULT_SCALE,
   EXTRA_SHAPES,
+  BONES,
   LIGHTS,
   MARKERS,
   SHAPE_LABELS,
   startHeight,
   type ShapeType,
+  type Vec3,
 } from "../types";
 import { exportGlb, newScene, openScene, saveScene, saveSceneAs, type GlbExport } from "../io";
 import { importModelFile } from "../importer";
@@ -17,6 +19,7 @@ import { openWindow } from "../windows";
 import { runPythonScriptFile } from "../scripting";
 import { useUi } from "./uiStore";
 import { viewTargetOnGround } from "../viewport/three-handle";
+import { boneTail } from "../bones";
 import { Icon, ShapeIcon } from "./icons";
 import { reportError } from "./StatusBar";
 import { PolyCounter } from "./PolyCounter";
@@ -48,6 +51,7 @@ function reportExport(r: GlbExport | null) {
       `Eksporterte ${file(r.path)}: ${r.colors} farger i ${file(r.palette)}${r.emission ? ` + ${file(r.emission)}` : ""}` +
         (r.models ? `, ${r.models} modell${r.models === 1 ? "" : "er"}` : "") +
         (r.nodes ? `, ${r.nodes} noder` : "") +
+        (r.bones ? `, skjelett med ${r.bones} bein (${r.skinned} bundne modeller)` : "") +
         (r.animations.length ? `, ${r.animations.length} animasjon${r.animations.length === 1 ? "" : "er"}` : "") +
         (r.warnings.length ? ` – ${r.warnings[0]}` : ""),
     );
@@ -75,9 +79,26 @@ export function Toolbar() {
   }, [moreOpen]);
 
   const add = (type: ShapeType) => {
+    if (type === "bone") return addBone();
     const [x, z] = viewTargetOnGround();
     const y = startHeight(type, DEFAULT_SCALE[type] ?? [1, 1, 1]);
     addObject(type, { position: [x, y, z], folderId: useEditor.getState().activeFolderId });
+    setMoreOpen(false);
+  };
+
+  /** Nytt bein: fortsetter fra tuppen av det valgte beinet (som barn), ellers et rotbein som står opp fra bakken. */
+  const addBone = () => {
+    const state = useEditor.getState();
+    const pid = primaryId(state);
+    const parent = state.objects.find((o) => o.id === pid && o.type === "bone");
+    if (parent) {
+      const head = boneTail(parent);
+      const tail = head.map((v, i) => v + (head[i] - parent.position[i]) * 0.8) as Vec3;
+      addObject("bone", { head, tail, parent: parent.id, folderId: parent.folderId });
+    } else {
+      const [x, z] = viewTargetOnGround();
+      addObject("bone", { head: [x, 0, z], tail: [x, 0.5, z], folderId: state.activeFolderId });
+    }
     setMoreOpen(false);
   };
 
@@ -150,7 +171,10 @@ export function Toolbar() {
             <div className="more-title">Lys</div>
             <div className="more-grid">{LIGHTS.map(shapeButton)}</div>
             <div className="more-title">Markører</div>
-            <div className="more-grid">{MARKERS.map(shapeButton)}</div>
+            <div className="more-grid">
+              {MARKERS.map(shapeButton)}
+              {BONES.map(shapeButton)}
+            </div>
             <div className="more-title">Referanse</div>
             <div className="more-grid">
               <button

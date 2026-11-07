@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { useEditor, type ObjectUpdate } from "./store";
 import { hiddenFolderIds } from "./folders";
 import { AXES, axisIndex, boxOf, objectBox, objectQuaternion, round, type Axis } from "./bounds";
-import { SYMMETRIC_AXES, isHelper, isNode, type SceneObject, type Vec3 } from "./types";
+import { SYMMETRIC_AXES, isBone, isHelper, isNode, type SceneObject, type Vec3 } from "./types";
+import { mirrorBoneName } from "./bones";
 
 const DEG = Math.PI / 180;
 
@@ -84,8 +85,8 @@ function mirrored(o: SceneObject, axis: Axis, plane: number): Pick<SceneObject, 
   if (o.type === "mesh" || o.type === "curve") {
     // Importerte modeller og kurverør kan ha hvilken som helst form: speil selve geometrien med negativ størrelse.
     scale[i] = -scale[i];
-  } else if (isNode(o.type)) {
-    // M·R·Lx: forover (+Z) og opp (+Y) speiles som punktene rundt, uten negativ skala i eksporten.
+  } else if (isNode(o.type) || isBone(o.type)) {
+    // M·R·Lx: forover (+Z) og opp (+Y) – for bein tuppen – speiles som punktene rundt, uten negativ skala i eksporten.
     result.copy(m.clone().multiply(r).multiply(new THREE.Matrix4().makeScale(-1, 1, 1)));
   } else if (!(o.type === "cylinder" && (o.taper ?? 1) !== 1 ? "xz" : SYMMETRIC_AXES[o.type]).includes(axis)) {
     // (En avsmalnet sylinder er ikke lenger symmetrisk opp/ned.)
@@ -108,7 +109,10 @@ export function mirrorObjects(ids: string[], axis: Axis, copy: boolean, plane?: 
   if (copy) {
     const copies = state.duplicateObjects(ids, [0, 0, 0]);
     // duplicateObjects la allerede kopiene i historikken; speilingen skal ikke bli et eget angre-steg.
-    state.updateObjectsLive(copies.map((c, k) => ({ id: c.id, ...mirrored(sel[k], axis, p) })));
+    // Bein bytter side i navnet (arm_L → arm_R), så skjelettet blir lesbart i spillmotoren.
+    state.updateObjectsLive(
+      copies.map((c, k) => ({ id: c.id, ...mirrored(sel[k], axis, p), ...(isBone(c.type) ? { name: mirrorBoneName(sel[k].name) } : {}) })),
+    );
     return copies.map((c) => c.id);
   }
   state.updateObjects(sel.map((o) => ({ id: o.id, ...mirrored(o, axis, p) })));

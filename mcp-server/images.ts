@@ -1,4 +1,4 @@
-// Leser bildefiler for add_objects (texture, normal_map). Appen får innholdet, ikke filstien.
+// Leser bildefiler for add_objects (texture, normal_map, roughness_map). Appen får innholdet, ikke filstien.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -15,7 +15,9 @@ function mimeOf(bytes: Buffer, path: string): string {
 }
 
 /** Bytt ut filstier med bildeinnhold. Samme fil i flere objekter sendes bare én gang; senere bruk har bare id-en. */
-export function withImages<T extends { texture?: string; normal_map?: string }>(objects: T[]): (Omit<T, "texture" | "normal_map"> & { texture?: ImageInput; normal_map?: ImageInput })[] {
+export function withImages<T extends { texture?: string; normal_map?: string; roughness_map?: string }>(
+  objects: T[],
+): (Omit<T, "texture" | "normal_map" | "roughness_map"> & { texture?: ImageInput; normal_map?: ImageInput; roughness_map?: ImageInput })[] {
   const ids = new Map<string, string>();
   const image = (path: string): ImageInput => {
     const seen = ids.get(path);
@@ -25,9 +27,10 @@ export function withImages<T extends { texture?: string; normal_map?: string }>(
     ids.set(path, id);
     return { id, mime: mimeOf(bytes, path), data: bytes.toString("base64") };
   };
-  return objects.map(({ texture, normal_map, ...rest }) => ({
+  return objects.map(({ texture, normal_map, roughness_map, ...rest }) => ({
     ...rest,
     ...(texture !== undefined ? { texture: image(texture) } : {}),
     ...(normal_map !== undefined ? { normal_map: image(normal_map) } : {}),
+    ...(roughness_map !== undefined ? { roughness_map: image(roughness_map) } : {}),
   }));
 }

@@ -4,7 +4,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { message, open, save } from "@tauri-apps/plugin-dialog";
 import { hasUnsavedChanges, useEditor, type Snapshot } from "./store";
 import { hiddenFolderIds } from "./folders";
-import { SHAPES, isHelper, isNode, type Folder, type SceneFile, type SceneObject } from "./types";
+import { SHAPES, isBone, isHelper, isNode, type Folder, type SceneFile, type SceneObject } from "./types";
+import { boneRest, bonesInOrder, parentBone } from "./bones";
+import { isSkinned } from "./skinning";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { boxOf, objectMatrix, objectQuaternion, round } from "./bounds";
 import { sceneMeshes } from "./viewport/three-handle";
@@ -15,6 +17,7 @@ import {
   hasMesh,
   normalMapFor,
   normalScaleOf,
+  roughnessMapFor,
   registerMesh,
   registerTexture,
   serializeUsedMeshes,
@@ -30,6 +33,14 @@ type Animator = ReturnType<typeof makeAnimator>;
 const ANIMATION_FPS = 30;
 
 const SCENE_FILTER = { name: "Luna 3D-scene", extensions: ["luna.json", "json"] };
+
+/**
+ * Skriver bytes til en fil (mappen lages om den mangler). Bytene går som rå body i IPC-en, stien URI-kodet i en header –
+ * som JSON-tall (`Array.from`) ble en GLB på 60 MB hundrevis av MB tekst, og overføringen ble aldri ferdig i debug-bygget.
+ */
+export async function writeBinaryFile(path: string, bytes: Uint8Array): Promise<void> {
+  await invoke("write_binary_file", bytes, { headers: { path: encodeURIComponent(path) } });
+}
 
 export function serializeScene(): SceneFile {
   const { objects, folders, notes, clips, lighting } = useEditor.getState();
@@ -129,6 +140,9 @@ export interface GlbExport {
   path: string;
   /** Antall markør-noder i fila. */
   nodes: number;
+  /** Bein i skjelettet og modeller bundet til det (glTF skin). */
+  bones: number;
+  skinned: number;
   /** Mapper som ble eksportert som én modell. */
   models: number;
   /** Animasjonsklippene i fila (navn og antall spor). */
@@ -140,6 +154,10 @@ export interface GlbExport {
   emission?: string;
   colors: number;
   materials: string[];
+  /** Tidsbruk i millisekunder: bygge GLB-en i minnet og skrive filene. */
+  ms: { build: number; write: number };
+  /** Størrelsen på GLB-fila i byte. */
+  bytes: number;
 }
 
 const fileBase = (path: string) => path.split(/[\\/]/).pop()!.replace(/\.glb$/i, "");
@@ -155,20 +173,24 @@ export async function exportGlb(path?: string): Promise<GlbExport | null> {
   let target = path ?? null;
   if (!target) target = await save({ filters: [{ name: "glTF binær", extensions: ["glb"] }], defaultPath: "scene.glb" });
   if (!target) return null;
+  const t0 = performance.now();
   const built = await buildGlb(fileBase(target));
-  await invoke("write_binary_file", { path: target, contents: Array.from(built.glb) });
+  const t1 = performance.now();
+  await writeBinaryFile(target, built.glb);
   const dir = target.replace(/[\\/][^\\/]*$/, "");
   const sep = target.includes("\\") ? "\\" : "/";
   const palette = `${dir}${sep}${fileBase(target)}_palette.png`;
-  await invoke("write_binary_file", { path: palette, contents: Array.from(built.palettePng) });
+  await writeBinaryFile(palette, built.palettePng);
   let emission: string | undefined;
   if (built.emissionPng) {
     emission = `${dir}${sep}${fileBase(target)}_emission.png`;
-    await invoke("write_binary_file", { path: emission, contents: Array.from(built.emissionPng) });
+    await writeBinaryFile(emission, built.emissionPng);
   }
   return {
     path: target,
     nodes: built.nodes,
+    bones: built.bones,
+    skinned: built.skinned,
     models: built.models,
     animations: built.animations,
     warnings: built.warnings,
@@ -176,7 +198,22 @@ export async function exportGlb(path?: string): Promise<GlbExport | null> {
     emission,
     colors: built.colors,
     materials: built.materials,
+    ms: { build: Math.round(t1 - t0), write: Math.round(performance.now() - t1) },
+    bytes: built.glb.length,
   };
+}
+
+/** Snur trekantene i en uindeksert geometri (speilede deler), ellers vender flatene innover. */
+function flipTriangles(geo: THREE.BufferGeometry) {
+  for (const attr of Object.values(geo.attributes) as THREE.BufferAttribute[]) {
+    for (let t = 0; t < attr.count; t += 3) {
+      for (let k = 0; k < attr.itemSize; k++) {
+        const a = attr.getComponent(t + 1, k);
+        attr.setComponent(t + 1, k, attr.getComponent(t + 2, k));
+        attr.setComponent(t + 2, k, a);
+      }
+    }
+  }
 }
 
 /** Bygger GLB-en i minnet (uten å skrive filer) – også brukt til testing. */
@@ -190,6 +227,24 @@ export async function buildGlb(base: string) {
 
   // Delene som eksporteres (hull og lys er editor-hjelpere; hullene er allerede skåret ut av geometrien).
   const solids = objects.filter((o) => !isHelper(o.type) && !o.hole && shown(o) && meshById.has(o.id));
+  const objectById = new Map(objects.map((o) => [o.id, o]));
+  // Modeller bundet til skjelett blir egne SkinnedMesh-er (bakes aldri inn i en modell-mappe). Mangler et bein, eksporteres
+  // modellen i hvile uten skin.
+  const warnings: string[] = [];
+  const skinnedSet = new Set(
+    solids
+      .filter((o) => {
+        if (!isSkinned(o)) return false;
+        const ok = o.skin!.bones.every((id) => objectById.get(id) && isBone(objectById.get(id)!.type));
+        if (!ok) warnings.push(`«${o.name}» er bundet til bein som er slettet – eksportert uten skjelett. Bind den på nytt.`);
+        return ok;
+      })
+      .map((o) => o.id),
+  );
+  // Beina som eksporteres: de synlige, og alle som en eksportert modell er bundet til.
+  const exportedBones = bonesInOrder(
+    objects.filter((o) => isBone(o.type) && (shown(o) || solids.some((s) => skinnedSet.has(s.id) && s.skin!.bones.includes(o.id)))),
+  );
   // Deler med egne bilder (fotografisk tekstur, normalkart) beholder UV-ene sine og får eget materiale per bilde.
   // Et normalkart uten fargebilde kan ikke bruke paletten: den trenger UV-ene selv. Da følger hjørnefargene med i stedet.
   const imagesOf = new Map(
@@ -198,7 +253,8 @@ export async function buildGlb(base: string) {
       if (!geometry.getAttribute("uv")) return [];
       const map = textureFor(o);
       const normalMap = normalMapFor(o);
-      return map || normalMap ? [[o.id, { map, normalMap, colored: !!geometry.getAttribute("color") }] as const] : [];
+      const roughnessMap = roughnessMapFor(o);
+      return map || normalMap || roughnessMap ? [[o.id, { map, normalMap, roughnessMap, colored: !!geometry.getAttribute("color") }] as const] : [];
     }),
   );
   const paletted = solids.filter((o) => !imagesOf.has(o.id));
@@ -215,7 +271,7 @@ export async function buildGlb(base: string) {
   const materialKey = (o: SceneObject) => {
     const own = imagesOf.get(o.id);
     const images = own
-      ? `|${own.map?.name ?? ""}|${own.normalMap?.name ?? ""}|${normalScaleOf(o)}|${own.colored ? "vertex-colors" : o.color}|${round(o.emissive ?? 0, 0.01)}`
+      ? `|${own.map?.name ?? ""}|${own.normalMap?.name ?? ""}|${normalScaleOf(o)}|${own.roughnessMap?.name ?? ""}|${own.colored ? "vertex-colors" : o.color}|${round(o.emissive ?? 0, 0.01)}`
       : "";
     return `${o.material ?? ""}|${round(o.metalness, 0.01)}|${round(o.roughness, 0.01)}|${round(o.opacity, 0.01)}${images}`;
   };
@@ -235,6 +291,8 @@ export async function buildGlb(base: string) {
         map: own ? own.map : palette.map,
         ...(own ? { color: own.colored ? "#ffffff" : o.color, vertexColors: own.colored } : {}),
         ...(own?.normalMap ? { normalMap: own.normalMap, normalScale: new THREE.Vector2(normalScaleOf(o), normalScaleOf(o)) } : {}),
+        // Blir glTF metallicRoughnessTexture (ruhet i G, metall i B = 1, så metalness gjelder som før).
+        ...(own?.roughnessMap ? { roughnessMap: own.roughnessMap } : {}),
         metalness: o.metalness,
         roughness: o.roughness,
         transparent: o.opacity < 1,
@@ -260,6 +318,7 @@ export async function buildGlb(base: string) {
   const paletteGeometry = (o: SceneObject) => {
     const geometry = meshById.get(o.id)!.geometry.clone();
     const keep = imagesOf.has(o.id) ? ["position", "normal", "uv", "color"] : ["position", "normal"];
+    if (skinnedSet.has(o.id)) keep.push("skinIndex", "skinWeight");
     for (const name of Object.keys(geometry.attributes)) if (!keep.includes(name)) geometry.deleteAttribute(name);
     if (imagesOf.has(o.id)) return geometry;
     const perVertex = hexes.get(o.id);
@@ -302,7 +361,7 @@ export async function buildGlb(base: string) {
 
   /** Delene i en modell bakt inn i modellens rom, én gruppe per materiale (blir delmesher/primitives i GLB-en). */
   const modelMesh = (model: Folder): THREE.Object3D => {
-    const parts = solids.filter((o) => modelOf(o.folderId) === model);
+    const parts = solids.filter((o) => modelOf(o.folderId) === model && !skinnedSet.has(o.id));
     const toModel = modelFrame(model).clone().invert();
     const byMaterial = new Map<string, { material: THREE.Material; geos: THREE.BufferGeometry[] }>();
     for (const o of parts) {
@@ -311,17 +370,7 @@ export async function buildGlb(base: string) {
       const m = toModel.clone().multiply(objectMatrix(o));
       geo.applyMatrix4(m);
       // Speilet del (negativ størrelse): snu trekantene, ellers vender flatene innover.
-      if (m.determinant() < 0) {
-        for (const attr of Object.values(geo.attributes) as THREE.BufferAttribute[]) {
-          for (let t = 0; t < attr.count; t += 3) {
-            for (let k = 0; k < attr.itemSize; k++) {
-              const a = attr.getComponent(t + 1, k);
-              attr.setComponent(t + 1, k, attr.getComponent(t + 2, k));
-              attr.setComponent(t + 2, k, a);
-            }
-          }
-        }
-      }
+      if (m.determinant() < 0) flipTriangles(geo);
       const key = materialKey(o);
       // materialFor for hver del, ikke bare den første i gruppa: en glødende del lenger ut kobler glødkartet på
       // det delte materialet (ellers mister modellen gløden når første del ikke gløder).
@@ -417,8 +466,48 @@ export async function buildGlb(base: string) {
     nodes++;
     count++;
   }
+  // ---------- Skjelett ----------
+  // Beina blir THREE.Bone i et hierarki (barn under forelderbeinet, rotbein under mappa si), uten størrelse.
+  const boneNodes = new Map<string, THREE.Bone>();
+  for (const b of exportedBones) {
+    const bone = new THREE.Bone();
+    bone.name = b.name;
+    const rest = boneRest(b);
+    const parent = parentBone(b, objectById);
+    const parentNode = parent ? boneNodes.get(parent.id) : undefined;
+    if (parent && parentNode) {
+      boneRest(parent).invert().multiply(rest).decompose(bone.position, bone.quaternion, bone.scale);
+      parentNode.add(bone);
+      worldFns.set(bone, { target: b.id, world: (a, t) => a.parentMotion(b, t).multiply(a.motion(b.id, t)).multiply(rest) });
+    } else {
+      attach(bone, rest, b.folderId, b.id);
+    }
+    boneNodes.set(b.id, bone);
+    count++;
+  }
+
+  let skinned = 0;
   for (const obj of solids) {
     count++;
+    if (skinnedSet.has(obj.id)) {
+      // Bakt i verdensrommet med identitet som bindematrise: de inverse bindematrisene er bare beinas hvile, og
+      // meshens egen node har ingen betydning (som glTF sier om skinnede mesher).
+      const indexed = paletteGeometry(obj);
+      const geo = indexed.index ? indexed.toNonIndexed() : indexed;
+      const m = objectMatrix(obj);
+      geo.applyMatrix4(m);
+      if (m.determinant() < 0) flipTriangles(geo);
+      const mesh = new THREE.SkinnedMesh(geo, materialFor(obj));
+      mesh.name = obj.name;
+      const bones = obj.skin!.bones.map((id) => boneNodes.get(id)!);
+      const inverses = obj.skin!.bones.map((id) => boneRest(objectById.get(id)!).invert());
+      attach(mesh, new THREE.Matrix4(), obj.folderId, obj.id);
+      // Noden selv animeres ikke (beina gjør jobben).
+      worldFns.delete(mesh);
+      mesh.bind(new THREE.Skeleton(bones, inverses), new THREE.Matrix4());
+      skinned++;
+      continue;
+    }
     // Deler i en modell slås inn i den (nodeFor bygger modellen første gang).
     if (modelOf(obj.folderId)) {
       nodeFor(obj.folderId);
@@ -435,7 +524,6 @@ export async function buildGlb(base: string) {
   const scene = new THREE.Scene();
   for (const r of roots) scene.add(r);
   const { clips } = useEditor.getState();
-  const warnings: string[] = [];
   const animations: THREE.AnimationClip[] = [];
   for (const clip of clips) {
     const animator = makeAnimator(clip, objects, folders);
@@ -443,7 +531,7 @@ export async function buildGlb(base: string) {
     for (const track of clip.tracks) {
       const obj = objects.find((o) => o.id === track.target);
       const owner = obj ? modelOf(obj.folderId) : modelOf(track.target);
-      const baked = obj ? !isNode(obj.type) && !!owner : !!owner && owner.id !== track.target;
+      const baked = obj ? !isNode(obj.type) && !isBone(obj.type) && !skinnedSet.has(obj.id) && !!owner : !!owner && owner.id !== track.target;
       if (baked) {
         warnings.push(
           `«${obj?.name ?? folderById.get(track.target)?.name}» i «${clip.name}» er bakt inn i modellen «${owner!.name}» – gi den en egen mappe med «Én modell» for å animere den.`,
@@ -487,6 +575,8 @@ export async function buildGlb(base: string) {
     palettePng: pngs.palette,
     emissionPng: pngs.emission,
     nodes,
+    bones: boneNodes.size,
+    skinned,
     models,
     animations: animations.map((a) => ({ name: a.name, channels: a.tracks.length })),
     warnings,

@@ -33,6 +33,8 @@ export interface MeshInput {
   normal_map?: ImageInput;
   /** Hvor sterkt normalkartet virker (1 = som i bildet). */
   normal_scale?: number;
+  /** Ruhetskart (gråtoner: svart = blank, hvit = matt), ganges med objektets roughness. */
+  roughness_map?: ImageInput;
   /** Kun referansebilder: høyden i meter (bredden følger av bildet). */
   height?: number;
 }
@@ -83,10 +85,10 @@ function check(input: MeshInput): Required<Pick<MeshInput, "vertices" | "triangl
       throw new Error("vertex_colors må være én hex-farge (#rrggbb) per hjørne");
     }
   }
-  const usesImage = input.texture !== undefined || input.normal_map !== undefined;
-  if (usesImage && input.uvs === undefined) throw new Error("texture og normal_map trenger uvs (én [u, v] per hjørne)");
+  const usesImage = input.texture !== undefined || input.normal_map !== undefined || input.roughness_map !== undefined;
+  if (usesImage && input.uvs === undefined) throw new Error("texture, normal_map og roughness_map trenger uvs (én [u, v] per hjørne)");
   if (input.uvs !== undefined) {
-    if (!usesImage) throw new Error("uvs gjør ingenting uten texture eller normal_map");
+    if (!usesImage) throw new Error("uvs gjør ingenting uten texture, normal_map eller roughness_map");
     const uvs = input.uvs;
     if (!Array.isArray(uvs) || uvs.length !== vertices.length || !uvs.every((u) => Array.isArray(u) && u.length === 2 && u.every(Number.isFinite))) {
       throw new Error(`uvs må være én [u, v] per hjørne (${vertices.length} stykker)`);
@@ -116,6 +118,7 @@ export function meshFromVertices(
   const textureId = input.texture && storeImage("texture", input.texture);
   const normalTextureId = input.normal_map && storeImage("normal_map", input.normal_map);
   const normalScale = normalTextureId ? (input.normal_scale ?? 1) : undefined;
+  const roughnessTextureId = input.roughness_map && storeImage("roughness_map", input.roughness_map);
 
   const box = new THREE.Box3();
   for (const v of vertices) box.expandByPoint(new THREE.Vector3(...v));
@@ -125,6 +128,8 @@ export function meshFromVertices(
   // Uten bilder: samme nøkkel som før, så like former fortsatt deler modell med dem som allerede ligger i scenefiler.
   const key: unknown[] = [vertices, triangles, colors ?? null, smooth];
   if (uvs) key.push(uvs, textureId ?? null, normalTextureId ?? null, normalScale ?? null);
+  // Ruhetskartet kom etter de andre bildene: bare med i nøkkelen når det brukes, så eldre former beholder id-en.
+  if (roughnessTextureId) key.push(roughnessTextureId);
   const meshId = `mesh_v${hash(JSON.stringify(key))}`;
   if (!hasMesh(meshId)) {
     // Normalisert til enhetsboksen; normalene regnes på den normaliserte formen (riktig når scale legges på igjen).
@@ -158,6 +163,7 @@ export function meshFromVertices(
       ...(uvArray ? { uvs: uvArray } : {}),
       ...(textureId ? { textureId } : {}),
       ...(normalTextureId ? { normalTextureId, normalScale } : {}),
+      ...(roughnessTextureId ? { roughnessTextureId } : {}),
     });
     geo.dispose();
   }

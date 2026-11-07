@@ -102,6 +102,23 @@ function build(type: ShapeType, detail: GeometryDetail): THREE.BufferGeometry {
       const up = new THREE.CylinderGeometry(0.022, 0.022, 0.3, 6).translate(0, 0.15, 0);
       return mergeGeometries([ball, shaft, tip, up])!;
     }
+    case "bone": {
+      // Blender-aktig bein: åttekant fra roten (y = 0) til tuppen (y = 1), bredest litt opp. scale = [bredde, lengde, bredde].
+      const w = 0.5;
+      const pts = [
+        [0, 0, 0],
+        [w, 0.12, 0],
+        [0, 0.12, w],
+        [-w, 0.12, 0],
+        [0, 0.12, -w],
+        [0, 1, 0],
+      ];
+      const tris = [0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1, 5, 2, 1, 5, 3, 2, 5, 4, 3, 5, 1, 4];
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(tris.flatMap((i) => pts[i]), 3));
+      geo.computeVertexNormals();
+      return geo;
+    }
     case "reference": {
       // Står oppreist og vender mot +Z. Teksturregisteret bruker v = 0 øverst, så UV-ene snus.
       const geo = new THREE.PlaneGeometry(1, 1);

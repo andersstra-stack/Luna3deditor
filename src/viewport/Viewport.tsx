@@ -8,9 +8,11 @@ import { lightDirection } from "../lighting";
 import { useEditor } from "../store";
 import { hiddenFolderIds } from "../folders";
 import { boxOf, objectBox, objectMatrix, round } from "../bounds";
-import { isHelper, isLight, isNode, isReference, type SceneObject, type Vec3 } from "../types";
+import { isBone, isHelper, isLight, isNode, isReference, type SceneObject, type Vec3 } from "../types";
+import { boneRest, descendantBones } from "../bones";
+import { isSkinned } from "../skinning";
 import { geometryKey, geometryOf, getGeometry } from "./geometries";
-import { normalMapFor, normalScaleOf, textureById, textureFor } from "../meshes";
+import { normalMapFor, normalScaleOf, roughnessMapFor, textureById, textureFor } from "../meshes";
 import { cutGeometry, overlappingHoles } from "./csg";
 import { snapOffset, type SnapContext } from "./snapping";
 import { setThreeGetter } from "./three-handle";
@@ -150,9 +152,11 @@ function SelectionGizmo({ visible }: { visible: SceneObject[] }) {
     return ids.flatMap((id) => {
       const F = a.frameOf(id);
       if (!F) return [];
-      const parent = folders.find((f) => f.id === id)?.parentId ?? objects.find((o) => o.id === id)?.folderId ?? null;
       const keys = c.tracks.find((tr) => tr.target === id)?.keys ?? [];
-      return [{ id, F, P: a.folderMotion(parent, time), D: deltaMatrix(keys, time), keys }];
+      const obj = objects.find((o) => o.id === id);
+      // Et bein arver bevegelsen fra forelderbeina, alt annet fra mappene over.
+      const P = obj ? a.parentMotion(obj, time) : a.folderMotion(folders.find((f) => f.id === id)?.parentId ?? null, time);
+      return [{ id, F, P, D: deltaMatrix(keys, time), keys }];
     });
   };
 
@@ -172,10 +176,15 @@ function SelectionGizmo({ visible }: { visible: SceneObject[] }) {
           pushHistory();
           proxy.updateMatrixWorld();
           const ids = new Set(selected.map((o) => o.id));
+          // Bein tar med seg barna sine (hele armen følger skulderen), også når de ikke er valgt.
+          const all = useEditor.getState().objects;
+          const children = descendantBones(all, selected.filter((o) => isBone(o.type)).map((o) => o.id))
+            .filter((id) => !ids.has(id))
+            .map((id) => all.find((o) => o.id === id)!);
           drag.current = {
             proxyInverse: proxy.matrixWorld.clone().invert(),
             startPos: proxy.position.clone(),
-            items: selected.map((o) => ({ id: o.id, matrix: objectMatrix(o) })),
+            items: [...selected, ...children].map((o) => ({ id: o.id, matrix: objectMatrix(o) })),
             snap: {
               startBox: boxOf(selected),
               others: visible.filter((o) => !ids.has(o.id) && !isHelper(o.type)).map(objectBox),
@@ -263,6 +272,55 @@ function useAnimatedPose(id: string, withoutScale = false) {
   return ref;
 }
 
+const IDENTITY = new THREE.Matrix4();
+
+/**
+ * Skjelettet til en modell som er bundet (null ellers). Beina er THREE.Bone utenfor scenen: hvert bilde får de
+ * verdensmatrisen fra klippets positur (eller hvilen), og de inverse bindematrisene regnes fra beinas hvile slik den er nå.
+ */
+function useSkeleton(obj: SceneObject): THREE.Skeleton | null {
+  const objects = useEditor((s) => s.objects);
+  const skinned = isSkinned(obj);
+  const ids = obj.skin?.bones;
+  const idsKey = skinned && ids ? ids.join() : "";
+  const skeleton = useMemo(() => {
+    if (!idsKey) return null;
+    const bones = idsKey.split(",").map(() => {
+      const b = new THREE.Bone();
+      b.matrixAutoUpdate = false;
+      b.matrixWorldAutoUpdate = false;
+      return b;
+    });
+    return new THREE.Skeleton(
+      bones,
+      bones.map(() => new THREE.Matrix4()),
+    );
+  }, [idsKey]);
+  useEffect(() => () => skeleton?.dispose(), [skeleton]);
+  const bones = useMemo(() => {
+    const byId = new Map(objects.map((o) => [o.id, o]));
+    return (ids ?? []).map((id) => {
+      const b = byId.get(id);
+      return b && isBone(b.type) ? b : undefined;
+    });
+  }, [objects, ids]);
+  const bonesRef = useRef(bones);
+  bonesRef.current = bones;
+  useFrame(() => {
+    if (!skeleton) return;
+    const pose = currentPose();
+    bonesRef.current.forEach((b, i) => {
+      const rest = b ? boneRest(b) : IDENTITY;
+      skeleton.boneInverses[i].copy(rest).invert();
+      const m = b && pose?.get(b.id);
+      // Posituren har beinets størrelse med (markøren); skjelettet skal bare ha plassering og retning.
+      if (m) skeleton.bones[i].matrixWorld.copy(m).multiply(new THREE.Matrix4().makeScale(...(b.scale.map((v) => 1 / (v || 1)) as Vec3)));
+      else skeleton.bones[i].matrixWorld.copy(rest);
+    });
+  });
+  return skeleton;
+}
+
 /** Driver animasjonsklokka. */
 function AnimationClock() {
   useFrame((_, dt) => advancePlayer(Math.min(dt, 0.1)));
@@ -280,11 +338,18 @@ const TOON_GRADIENT = (() => {
 /** Konturfargen i tegneserie-visningen. */
 const INK = "#121218";
 
-function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selected: boolean; holes: SceneObject[]; accent: string }) {
+function SolidMesh({ obj, selected, holes: givenHoles, accent }: { obj: SceneObject; selected: boolean; holes: SceneObject[]; accent: string }) {
+  let holes = givenHoles;
   const onClick = useSelectHandler(obj.id);
   const toon = useUi((s) => s.toonView);
   const poseRef = useAnimatedPose(obj.id);
   const transparent = obj.opacity < 1 || !!obj.hole;
+  const skeleton = useSkeleton(obj);
+  // Bundne modeller skjæres ikke (hullene ville mistet vektene).
+  if (skeleton) holes = [];
+  // Bindematrisen er objektets plassering i hvile (geometrien er enhetsstor, beina i verdensrommet).
+  const bindMatrix = useMemo(() => objectMatrix(obj), [obj.position, obj.rotation, obj.scale]); // eslint-disable-line react-hooks/exhaustive-deps
+  const bindMatrixInverse = useMemo(() => bindMatrix.clone().invert(), [bindMatrix]);
 
   // Hull i samme mappe skjæres bort live (CSG). Uten hull brukes den delte geometrien.
   const holesKey = holes.map((h) => `${h.id}:${geometryKey(h)}:${h.position}:${h.rotation}:${h.scale}`).join("|");
@@ -309,24 +374,26 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
   // Importerte modeller med fotografisk tekstur: bildet farges med objektets farge (hvit = som i fila).
   const texture = geometry.getAttribute("uv") ? textureFor(obj) : null;
   const normalMap = geometry.getAttribute("uv") ? normalMapFor(obj) : null;
+  // Ruhetskart: gråtoner ganget med objektets ruhet (three leser grønnkanalen, som glTF).
+  const roughnessMap = geometry.getAttribute("uv") ? roughnessMapFor(obj) : null;
   // Negativ y: UV-ene har v = 0 øverst og geometrien har ingen tangenter (samme grep som GLTFLoader).
   const strength = normalScaleOf(obj);
   const normalScale: [number, number] = [strength, -strength];
-  const look = `${colored ? "vertex-colors" : "color"}${texture ? "+map" : ""}${normalMap ? "+normal" : ""}`;
+  const look = `${colored ? "vertex-colors" : "color"}${texture ? "+map" : ""}${normalMap ? "+normal" : ""}${roughnessMap ? "+rough" : ""}`;
 
-  return (
-    <mesh
-      ref={poseRef as React.RefObject<THREE.Mesh>}
-      name={obj.name}
-      userData={{ lunaId: obj.id }}
-      geometry={geometry}
-      position={obj.position}
-      rotation={obj.rotation.map((d) => d * DEG) as Vec3}
-      scale={obj.scale}
-      castShadow={!obj.hole}
-      receiveShadow={!obj.hole}
-      onClick={onClick}
-    >
+  const common = {
+    name: obj.name,
+    userData: { lunaId: obj.id },
+    geometry,
+    position: obj.position,
+    rotation: obj.rotation.map((d) => d * DEG) as Vec3,
+    scale: obj.scale,
+    castShadow: !obj.hole,
+    receiveShadow: !obj.hole,
+    onClick,
+  };
+  const body = (
+    <>
       {toon && !obj.hole ? (
         // Tegneserie: flate lystrinn (metall/ruhet brukes ikke).
         <meshToonMaterial
@@ -352,6 +419,7 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
           map={texture}
           normalMap={normalMap}
           normalScale={normalScale}
+          roughnessMap={roughnessMap}
           color={colored ? "#ffffff" : obj.color}
           metalness={obj.metalness}
           roughness={obj.roughness}
@@ -372,6 +440,19 @@ function SolidMesh({ obj, selected, holes, accent }: { obj: SceneObject; selecte
         // Tegneserie: mørk kontur rundt alt som har volum.
         toon && obj.type !== "plane" && <Outlines thickness={1.6} color={INK} />
       )}
+    </>
+  );
+  if (skeleton) {
+    // Skjelettet settes som egenskap (før barna monteres), så konturen (Outlines) også blir bundet til det.
+    return (
+      <skinnedMesh {...common} skeleton={skeleton} bindMatrix={bindMatrix} bindMatrixInverse={bindMatrixInverse} frustumCulled={false}>
+        {body}
+      </skinnedMesh>
+    );
+  }
+  return (
+    <mesh ref={poseRef as React.RefObject<THREE.Mesh>} {...common}>
+      {body}
     </mesh>
   );
 }
@@ -461,6 +542,33 @@ function NodeMarker({ obj, selected, accent }: { obj: SceneObject; selected: boo
   );
 }
 
+/** Bein: åttekant fra roten til tuppen, tegnet oppå alt (som røntgen i Blender), så skjelettet synes inni modellen. */
+function BoneMarker({ obj, selected, accent }: { obj: SceneObject; selected: boolean; accent: string }) {
+  const onClick = useSelectHandler(obj.id);
+  const poseRef = useAnimatedPose(obj.id);
+  return (
+    <mesh
+      ref={poseRef as React.RefObject<THREE.Mesh>}
+      name={obj.name}
+      userData={{ lunaId: obj.id }}
+      geometry={getGeometry("bone")}
+      position={obj.position}
+      rotation={obj.rotation.map((d) => d * DEG) as Vec3}
+      scale={obj.scale}
+      renderOrder={10}
+      onClick={onClick}
+    >
+      <meshBasicMaterial color={selected ? accent : obj.color} transparent opacity={selected ? 0.95 : 0.7} depthTest={false} depthWrite={false} toneMapped={false} />
+      <Edges color={selected ? "#ffffff" : "#1d2030"} renderOrder={11} depthTest={false} />
+      {selected && (
+        <Html center className="node-label" pointerEvents="none" position={[0, 0.5, 0]}>
+          {obj.name}
+        </Html>
+      )}
+    </mesh>
+  );
+}
+
 /**
  * Nær- og fjernplanet følger avstanden til det kameraet ser på, så både små ting og
  * stasjoner på flere kilometer vises uten å bli klippet eller flimre. Dybdepresisjonen styres
@@ -508,6 +616,8 @@ function Scene({ accent }: { accent: string }) {
       {visible.map((o) =>
         isNode(o.type) ? (
           <NodeMarker key={`${o.id}:${detail}`} obj={o} selected={selected.has(o.id)} accent={accent} />
+        ) : isBone(o.type) ? (
+          <BoneMarker key={o.id} obj={o} selected={selected.has(o.id)} accent={accent} />
         ) : isLight(o.type) ? (
           <LightObject key={`${o.id}:${detail}`} obj={o} selected={selected.has(o.id)} accent={accent} />
         ) : isReference(o.type) ? (

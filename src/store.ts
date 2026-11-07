@@ -5,6 +5,7 @@ import {
   DEFAULT_INTENSITY,
   DEFAULT_SCALE,
   SHAPE_LABELS,
+  isBone,
   isLight,
   isNode,
   startHeight,
@@ -26,6 +27,9 @@ import { meshFromVertices, singleVertexColor, storeImage, type MeshInput } from 
 import { hasMesh, imageSizeOf } from "./meshes";
 import { PRESETS, checkKeys, presetClips, withTrack, type Preset, type PresetOptions } from "./animation";
 import { DEFAULT_LIGHTING, changeLighting, type Lighting, type LightingChange } from "./lighting";
+import { simplifiedObject, type SimplifyResult, type SimplifyTarget } from "./meshSimplify";
+import { skinnedObject } from "./skinning";
+import { boneFromHeadTail, boneTail, makesCycle } from "./bones";
 
 const HISTORY_LIMIT = 100;
 
@@ -46,8 +50,14 @@ export type Tool = "select" | "note";
 
 /** Kun kurverør: punktene i verdensrommet og radius (ett tall eller ett per punkt) – se curves.ts. */
 export type CurveInput = { points?: Vec3[]; radius?: number | number[] };
-export type NewObject = Partial<SceneObject> & CurveInput & MeshInput & { type: ShapeType };
-export type ObjectUpdate = Partial<SceneObject> & CurveInput & { id: string };
+/** Kun bein: rot og tupp i verdensrommet, dreining om egen akse (grader) og forelderbeinet. */
+export type BoneInput = { head?: Vec3; tail?: Vec3; roll?: number; parent?: string | null };
+export type NewObject = Partial<SceneObject> & CurveInput & MeshInput & BoneInput & { type: ShapeType };
+export type ObjectUpdate = Partial<SceneObject> & CurveInput & BoneInput & { id: string };
+export interface SkinResult {
+  skinned: { id: string; name: string; bones: number }[];
+  skipped: { id: string; name: string; reason: string }[];
+}
 export type FolderUpdate = Partial<Omit<Folder, "id">> & { id: string };
 export type SelectMode = "replace" | "toggle" | "add";
 
@@ -81,9 +91,9 @@ export interface EditorState extends Snapshot {
   /** Scenen slik den var sist den ble lagret eller åpnet – sammenlignes med referanser, se `hasUnsavedChanges`. */
   saved: Snapshot;
 
-  addObject: (type: ShapeType, props?: Partial<SceneObject>) => SceneObject;
+  addObject: (type: ShapeType, props?: Partial<SceneObject> & BoneInput) => SceneObject;
   addObjects: (items: NewObject[]) => SceneObject[];
-  updateObject: (id: string, props: Partial<SceneObject> & CurveInput) => void;
+  updateObject: (id: string, props: Partial<SceneObject> & CurveInput & BoneInput) => void;
   updateObjects: (updates: ObjectUpdate[]) => void;
   /** Oppdatering uten historikk – brukes mens gizmoen dras. */
   updateObjectLive: (id: string, props: Partial<SceneObject> & CurveInput) => void;
@@ -92,6 +102,13 @@ export interface EditorState extends Snapshot {
   duplicateObjects: (ids: string[], offset?: Vec3) => SceneObject[];
   /** Fjerner `ids` og legger til `items` som ett angre-steg (f.eks. en modell delt i biter). De nye velges. */
   replaceObjects: (ids: string[], items: NewObject[]) => SceneObject[];
+  /** Færre trekanter på modellene (ett angre-steg). Objektene beholder id-en; formen byttes mot en forenklet kopi. */
+  simplifyObjects: (ids: string[], target: SimplifyTarget) => SimplifyResult;
+  /**
+   * Binder modellene til skjelettet med automatiske hudvekter (ett angre-steg). Uten `boneIds` brukes alle beina i scenen.
+   * Modellene beholder id-en; de får en ny `meshId` med vektene og `skin`.
+   */
+  skinObjects: (meshIds: string[], boneIds?: string[]) => SkinResult;
 
   addFolders: (items: { name?: string; parentId?: string | null; model?: boolean }[]) => Folder[];
   updateFolders: (updates: FolderUpdate[]) => void;
@@ -197,18 +214,46 @@ function referenceProps(texture: MeshInput["texture"], height: number | undefine
 
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
 
-function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<SceneObject> & CurveInput & MeshInput = {}): SceneObject {
-  const { id: _ignored, type: _type, name: _name, points, radius, vertices, triangles, vertex_colors, smooth, uvs, texture, normal_map, normal_scale, height, ...rest } = props;
+/** Forelderbeinet må finnes og være et bein. */
+function checkParent(parent: string | null | undefined, objects: SceneObject[]): string | undefined {
+  if (parent === null || parent === undefined || parent === "") return undefined;
+  const p = objects.find((o) => o.id === parent);
+  if (!p) throw new Error(`Fant ikke forelderbeinet ${parent}`);
+  if (!isBone(p.type)) throw new Error(`${p.name} er ikke et bein – parent må være et bein`);
+  return p.id;
+}
+
+/** Plassering for et nytt bein fra head/tail (verdensrom). Uten head starter det i tuppen av forelderen. */
+function bonePlacement(input: BoneInput, given: Partial<SceneObject>, parentId: string | undefined, objects: SceneObject[]): Partial<SceneObject> {
+  if (input.head === undefined && input.tail === undefined) return {};
+  if (!input.tail) throw new Error("Et bein trenger tail (tuppen) sammen med head");
+  const parent = parentId ? objects.find((o) => o.id === parentId) : undefined;
+  const head = input.head ?? (parent ? boneTail(parent) : (given.position ?? [0, 0, 0]));
+  const width = given.scale ? Math.abs(given.scale[0]) : undefined;
+  return boneFromHeadTail(head, input.tail, input.roll ?? 0, width);
+}
+
+function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<SceneObject> & CurveInput & MeshInput & BoneInput = {}): SceneObject {
+  const { id: _ignored, type: _type, name: _name, points, radius, vertices, triangles, vertex_colors, smooth, uvs, texture, normal_map, normal_scale, roughness_map, height, head, tail, roll, parent, ...rest } = props;
+  if ((head ?? tail ?? roll ?? parent) !== undefined && type !== "bone") throw new Error("head, tail, roll og parent gjelder bare bein (type bone)");
+  if (type === "bone") {
+    const parentId = checkParent(parent !== undefined ? parent : rest.parentId, existing);
+    Object.assign(rest, bonePlacement({ head, tail, roll }, rest, parentId, existing));
+    if (parentId) rest.parentId = parentId;
+    else delete rest.parentId;
+  } else {
+    delete rest.parentId;
+  }
   if ((points !== undefined || radius !== undefined) && type !== "curve") throw new Error("points og radius gjelder bare kurverør (type curve)");
   if (vertices !== undefined && type !== "mesh") throw new Error("vertices og triangles gjelder bare egne former (type mesh)");
   if (height !== undefined && type !== "reference") throw new Error("height gjelder bare referansebilder (type reference)");
   if (type === "reference") {
     Object.assign(rest, referenceProps(texture, height, rest));
-  } else if (vertices === undefined && (uvs ?? texture ?? normal_map ?? normal_scale) !== undefined) {
-    throw new Error("uvs, texture og normal_map gjelder bare egne former (type mesh med vertices)");
+  } else if (vertices === undefined && (uvs ?? texture ?? normal_map ?? normal_scale ?? roughness_map) !== undefined) {
+    throw new Error("uvs, texture, normal_map og roughness_map gjelder bare egne former (type mesh med vertices)");
   }
   // Egen form fra hjørner og trekanter: geometrien registreres, plassering og mål regnes ut fra hjørnene.
-  const custom = vertices !== undefined ? { vertices, triangles, vertex_colors, smooth, uvs, texture, normal_map, normal_scale } : undefined;
+  const custom = vertices !== undefined ? { vertices, triangles, vertex_colors, smooth, uvs, texture, normal_map, normal_scale, roughness_map } : undefined;
   if (custom) {
     Object.assign(rest, meshFromVertices(custom, rest.position, rest.rotation, props.name));
     // Objektets farge farger bildet, så en tekstur skal ikke få en tilfeldig startfarge.
@@ -223,7 +268,7 @@ function makeObject(type: ShapeType, existing: SceneObject[], props: Partial<Sce
     position: [0, y, 0],
     rotation: [0, 0, 0],
     scale: [...scale],
-    color: isLight(type) ? "#fff2d6" : isNode(type) ? "#ff9e64" : DEFAULT_COLORS[existing.length % DEFAULT_COLORS.length],
+    color: isLight(type) ? "#fff2d6" : isNode(type) ? "#ff9e64" : isBone(type) ? "#9ad0ff" : DEFAULT_COLORS[existing.length % DEFAULT_COLORS.length],
     metalness: 0,
     roughness: 0.5,
     opacity: 1,
@@ -241,21 +286,48 @@ function assertFolder(folders: Folder[], id: string | null | undefined) {
 }
 
 /** Ett objekt med endringene. Nye kurvepunkter (verdensrom) eller ny radius regner om posisjon og størrelse. */
-function withUpdate(o: SceneObject, update: Partial<SceneObject> & CurveInput): SceneObject {
-  if (["vertices", "triangles", "uvs", "texture", "normal_map", "normal_scale", "height"].some((k) => k in update)) {
+function withUpdate(o: SceneObject, update: Partial<SceneObject> & CurveInput & BoneInput): SceneObject {
+  if (["vertices", "triangles", "uvs", "texture", "normal_map", "normal_scale", "roughness_map", "height"].some((k) => k in update)) {
     throw new Error(`Formen og bildene til ${o.name} kan ikke endres – lag et nytt objekt med vertices`);
   }
-  const { points, radius, ...props } = update;
+  const { points, radius, head, tail, roll, parent, ...props } = update;
+  const boneChange = head !== undefined || tail !== undefined || roll !== undefined || "parent" in update || "parentId" in update;
+  if (boneChange && o.type !== "bone") throw new Error(`head, tail, roll og parent gjelder bare bein – ${o.name} er ${o.type}`);
+  if ("parent" in update) props.parentId = parent || undefined;
+  if (head !== undefined || tail !== undefined || roll !== undefined) {
+    Object.assign(props, boneFromHeadTail(head ?? o.position, tail ?? boneTail(o), roll ?? 0, Math.abs((props.scale ?? o.scale)[0])));
+  }
   const next = { ...o, ...props, id: o.id, type: o.type };
+  if ("parentId" in next && !next.parentId) delete next.parentId;
   if (points === undefined && radius === undefined) return next;
   if (o.type !== "curve") throw new Error(`points og radius gjelder bare kurverør – ${o.name} er ${o.type}`);
   return { ...next, ...(points !== undefined ? placeCurve(points, radius ?? o.curve?.radius ?? 0.1) : reshapeCurve(next, radius)) };
+}
+
+/** Nye forelderbein må finnes, være bein og ikke gi ringer. */
+function checkBoneParents(objects: SceneObject[], updates: { id: string; parent?: string | null; parentId?: string }[]) {
+  for (const u of updates) {
+    if (!("parent" in u || "parentId" in u)) continue;
+    const o = objects.find((x) => x.id === u.id);
+    if (!o?.parentId) continue;
+    checkParent(o.parentId, objects);
+    if (makesCycle(objects, o.id, o.parentId)) throw new Error(`${o.name} kan ikke henge under seg selv eller et av sine barn`);
+  }
 }
 
 const applyUpdates = (objects: SceneObject[], updates: ObjectUpdate[]) => {
   const byId = new Map(updates.map((u) => [u.id, u]));
   return objects.map((o) => (byId.has(o.id) ? withUpdate(o, byId.get(o.id)!) : o));
 };
+
+/** En forenklet modell som var bundet til skjelettet, får nye vekter mot de samme beina. */
+function reskin(obj: SceneObject, objects: SceneObject[]): Partial<SceneObject> {
+  if (!obj.skin) return {};
+  const alive = obj.skin.bones.filter((b) => objects.some((o) => o.id === b && isBone(o.type)));
+  if (!alive.length) return { skin: undefined };
+  const r = skinnedObject(obj, objects, alive);
+  return "skip" in r ? { skin: undefined } : r.update;
+}
 
 export const useEditor = create<EditorState>((set, get) => {
   const empty: Snapshot = { objects: [], folders: [], notes: [], clips: [], lighting: DEFAULT_LIGHTING };
@@ -354,7 +426,9 @@ export const useEditor = create<EditorState>((set, get) => {
       const missing = updates.filter((u) => !objects.some((o) => o.id === u.id));
       if (missing.length) throw new Error(`Fant ikke objekt(er): ${missing.map((m) => m.id).join(", ")}`);
       for (const u of updates) assertFolder(folders, u.folderId);
-      commit({ objects: applyUpdates(objects, updates) });
+      const next = applyUpdates(objects, updates);
+      checkBoneParents(next, updates);
+      commit({ objects: next });
     },
 
     updateObjectLive: (id, props) => get().updateObjectsLive([{ ...props, id }]),
@@ -384,6 +458,13 @@ export const useEditor = create<EditorState>((set, get) => {
         all.push(copy);
         copies.push(copy);
       }
+      // Bein som kopieres sammen med forelderen henger i kopien av den; bundne modeller bindes til kopiene av beina.
+      const copyOf = new Map<string, string>();
+      ids.forEach((id, i) => copies[i] && copyOf.set(id, copies[i].id));
+      for (const c of copies) {
+        if (c.parentId && copyOf.has(c.parentId)) c.parentId = copyOf.get(c.parentId);
+        if (c.skin) c.skin = { bones: c.skin.bones.map((b) => copyOf.get(b) ?? b) };
+      }
       if (copies.length) commit({ objects: all }, { selectedIds: copies.map((c) => c.id) });
       return copies;
     },
@@ -399,6 +480,43 @@ export const useEditor = create<EditorState>((set, get) => {
       }
       commit({ objects: all }, { selectedIds: created.map((o) => o.id) });
       return created;
+    },
+
+    simplifyObjects: (ids, target) => {
+      const { objects } = get();
+      const result: SimplifyResult = { simplified: [], skipped: [] };
+      const updates = new Map<string, Partial<SceneObject>>();
+      const cache = new Map();
+      for (const id of ids) {
+        const obj = objects.find((o) => o.id === id);
+        if (!obj) throw new Error(`Fant ikke objekt ${id}`);
+        const r = simplifiedObject(obj, target, cache);
+        if ("skip" in r) result.skipped.push({ id, name: obj.name, reason: r.skip });
+        else {
+          updates.set(id, { ...r.update, ...reskin({ ...obj, ...r.update }, objects) });
+          result.simplified.push(r.info);
+        }
+      }
+      if (updates.size) commit({ objects: objects.map((o) => (updates.has(o.id) ? { ...o, ...updates.get(o.id) } : o)) });
+      return result;
+    },
+
+    skinObjects: (meshIds, boneIds) => {
+      const { objects } = get();
+      const result: SkinResult = { skinned: [], skipped: [] };
+      const updates = new Map<string, Partial<SceneObject>>();
+      for (const id of meshIds) {
+        const obj = objects.find((o) => o.id === id);
+        if (!obj) throw new Error(`Fant ikke objekt ${id}`);
+        const r = skinnedObject(obj, objects, boneIds);
+        if ("skip" in r) result.skipped.push({ id, name: obj.name, reason: r.skip });
+        else {
+          updates.set(id, r.update);
+          result.skinned.push({ id, name: obj.name, bones: r.bones });
+        }
+      }
+      if (updates.size) commit({ objects: objects.map((o) => (updates.has(o.id) ? { ...o, ...updates.get(o.id) } : o)) });
+      return result;
     },
 
     addFolders: (items) => {
@@ -494,6 +612,7 @@ export const useEditor = create<EditorState>((set, get) => {
       const keys = new Map<string, string>();
       const result: ScriptResult = { replaced: previous, created: [], folders: [], updated: 0, deleted: 0, animated: 0, keys: {} };
       let clips = get().clips;
+      const simplifyCache = new Map();
 
       // "@…" er nøkler fra skriptet; ellers id-er som må finnes i scenen.
       const resolve = (ref: string, kind: "objekt" | "mappe") => {
@@ -506,11 +625,12 @@ export const useEditor = create<EditorState>((set, get) => {
         if (!exists) throw new Error(`Fant ikke ${kind} ${ref}`);
         return ref;
       };
-      const toProps = (props: Record<string, unknown>): Partial<SceneObject> & CurveInput & MeshInput => {
-        const { folder, ...rest } = props;
+      const toProps = (props: Record<string, unknown>): Partial<SceneObject> & CurveInput & MeshInput & BoneInput => {
+        const { folder, parent, ...rest } = props;
         return {
           ...(rest as Partial<SceneObject> & CurveInput & MeshInput),
           ...(folder !== undefined ? { folderId: folder === null ? null : resolve(String(folder), "mappe") } : {}),
+          ...(parent !== undefined ? { parent: parent === null ? null : resolve(String(parent), "objekt") } : {}),
         };
       };
 
@@ -547,6 +667,7 @@ export const useEditor = create<EditorState>((set, get) => {
           const id = resolve(op.id, "objekt");
           const props = toProps(op.props);
           objects = objects.map((o) => (o.id === id ? withUpdate(o, props) : o));
+          checkBoneParents(objects, [{ id, ...props }]);
           result.updated++;
         } else if (op.op === "delete") {
           const ids = new Set(op.ids.map((ref) => resolve(ref, "objekt")));
@@ -561,6 +682,30 @@ export const useEditor = create<EditorState>((set, get) => {
               ? presetInto(clips, target, op.preset, (op.options ?? {}) as PresetOptions)
               : keyframesInto(clips, op.clip, target, op.keys, { duration: op.duration, loop: op.loop });
           result.animated++;
+        } else if (op.op === "skin") {
+          const bones = op.bones?.map((ref) => resolve(ref, "objekt"));
+          for (const ref of op.meshes) {
+            const id = resolve(ref, "objekt");
+            const obj = objects.find((o) => o.id === id)!;
+            const r = skinnedObject(obj, objects, bones);
+            if ("skip" in r) throw new Error(`Kunne ikke binde ${obj.name}: ${r.skip}`);
+            objects = objects.map((o) => (o.id === id ? { ...o, ...r.update } : o));
+            result.skinned = (result.skinned ?? 0) + 1;
+          }
+        } else if (op.op === "simplify") {
+          const target: SimplifyTarget = { ratio: op.ratio, triangles: op.triangles, maxError: op.max_error };
+          for (const ref of op.ids) {
+            const id = resolve(ref, "objekt");
+            const obj = objects.find((o) => o.id === id)!;
+            const r = simplifiedObject(obj, target, simplifyCache);
+            // En modell som allerede har færre trekanter enn målet, får være som den er.
+            if ("skip" in r) {
+              if (obj.type !== "mesh") throw new Error(`Kan ikke forenkle ${obj.name}: ${r.skip}`);
+              continue;
+            }
+            objects = objects.map((o) => (o.id === id ? { ...o, ...r.update, ...reskin({ ...o, ...r.update }, objects) } : o));
+            (result.simplified ??= []).push({ name: obj.name, before: r.info.before, after: r.info.after });
+          }
         }
       }
 

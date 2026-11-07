@@ -75,6 +75,12 @@ export function ShapeIcon({ type, size = 18 }: { type: ShapeType; size?: number 
           <path d="M9 14 19 6M14.5 6H19v4.5M7 13.5V5" />
         </>
       )}
+      {type === "bone" && (
+        <>
+          <path d="M6 18 9 9l9-3-3 9z" />
+          <circle cx="6" cy="18" r="2" />
+        </>
+      )}
       {type === "mesh" && <path d="M12 2.5 20.5 8l-2 10-6.5 3.5L5 18 3.5 8.5zM12 2.5l.5 9.5 8-4M12.5 12 5 18M12.5 12l-.5 9.5M3.5 8.5l9 3.5" />}
     </svg>
   );

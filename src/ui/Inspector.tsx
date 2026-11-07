@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { primaryId, useEditor } from "../store";
 import { folderPath } from "../folders";
-import { SHAPE_LABELS, isHelper, isLight, isNode, isReference, type NodeProps, type SceneObject, type Vec3 } from "../types";
+import { SHAPE_LABELS, isBone, isHelper, isLight, isNode, isReference, type NodeProps, type SceneObject, type Vec3 } from "../types";
+import { boneTail, makesCycle } from "../bones";
+import { isSkinned } from "../skinning";
 import { AXES, type Axis } from "../bounds";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { nodeAxes, nodeNameProblem } from "../nodes";
 import { splitLooseParts } from "../meshSplit";
 import { mergeObjects } from "../meshMerge";
+import { simplifierReady, trianglesOf } from "../meshSimplify";
 import { maxRadius, scaledRadius } from "../curves";
 import { hasVertexColors } from "../meshes";
 import { AnimationPanel } from "./AnimationPanel";
@@ -491,6 +494,155 @@ function Placement({ objs }: { objs: SceneObject[] }) {
   );
 }
 
+/** Tall med mellomrom som tusenskille (158 379). */
+const fmtCount = (n: number) => n.toLocaleString("nb-NO");
+
+/** Færre trekanter på de valgte modellene (Decimate i Blender): andelen som skal bli igjen, i prosent. */
+function SimplifyRow({ meshes }: { meshes: SceneObject[] }) {
+  const [percent, setPercent] = useState(25);
+  const [busy, setBusy] = useState(false);
+  const total = meshes.reduce((n, o) => n + trianglesOf(o), 0);
+  const go = async () => {
+    setBusy(true);
+    try {
+      await simplifierReady;
+      // La knappen tegnes som opptatt før det tunge arbeidet starter.
+      await new Promise((r) => setTimeout(r, 30));
+      const state = useEditor.getState();
+      const result = state.simplifyObjects(meshes.map((o) => o.id), { ratio: percent / 100 });
+      const after = result.simplified.reduce((n, s) => n + s.after, 0);
+      const before = result.simplified.reduce((n, s) => n + s.before, 0);
+      state.setActivity(
+        result.simplified.length
+          ? `Forenklet ${result.simplified.length === 1 ? result.simplified[0].name : `${result.simplified.length} modeller`}: ${fmtCount(before)} → ${fmtCount(after)} trekanter`
+          : `Ingenting å forenkle${result.skipped.length ? `: ${result.skipped.map((s) => `${s.name} ${s.reason}`).join(", ")}` : ""}`,
+      );
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="row">
+      <div className="row-title">
+        Trekanter <span className="value">{fmtCount(total)}</span>
+      </div>
+      <div className="btn-row simplify-row">
+        <span className="label">Behold</span>
+        <input
+          className="text"
+          type="number"
+          min={1}
+          max={100}
+          value={percent}
+          onChange={(e) => setPercent(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
+        />
+        <span className="label">%</span>
+        <button
+          className="small-btn"
+          disabled={busy || percent >= 100}
+          title={`Færre trekanter (ca. ${fmtCount(Math.round((total * percent) / 100))}). UV-er, farger og bilder beholdes. Kan angres.`}
+          onClick={go}
+        >
+          <Icon name="shapes" size={14} /> {busy ? "Forenkler …" : "Forenkle"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Bein: forelderen, lengden og et nytt bein som fortsetter fra tuppen. */
+function BoneInfo({ obj }: { obj: SceneObject }) {
+  const objects = useEditor((s) => s.objects);
+  const options = objects.filter((o) => isBone(o.type) && o.id !== obj.id && !makesCycle(objects, obj.id, o.id));
+  const bound = objects.filter((o) => o.skin?.bones.includes(obj.id)).length;
+  const addChild = () => {
+    const state = useEditor.getState();
+    const head = boneTail(obj);
+    const dir = head.map((v, i) => v - obj.position[i]);
+    const tail = head.map((v, i) => v + dir[i] * 0.8) as Vec3;
+    state.addObject("bone", { head, tail, parent: obj.id, folderId: obj.folderId, scale: [obj.scale[0] * 0.8, 1, obj.scale[2] * 0.8] });
+  };
+  return (
+    <>
+      <div className="row">
+        <div className="row-title">Forelderbein</div>
+        <select
+          className="text"
+          value={obj.parentId ?? ""}
+          onChange={(e) => run(() => useEditor.getState().updateObject(obj.id, { parent: e.target.value || null }))()}
+        >
+          <option value="">— Ingen (rotbein) —</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="node-axes">
+        Lengde <b>{obj.scale[1].toFixed(3)} m</b> (størrelse Y). Tuppen: <b>{boneTail(obj).map((v) => v.toFixed(2)).join(", ")}</b>
+        {bound > 0 && (
+          <>
+            <br />
+            Driver {bound} modell{bound === 1 ? "" : "er"}. Flytter du beinet uten klipp valgt, endres hvileposituren – bind på nytt etterpå.
+          </>
+        )}
+      </p>
+      <div className="btn-row">
+        <button className="small-btn" title="Nytt bein som starter i tuppen av dette og peker samme vei" onClick={run(addChild)}>
+          <Icon name="shapes" size={14} /> Nytt bein fra tuppen
+        </button>
+      </div>
+    </>
+  );
+}
+
+/** Binding til skjelettet: automatiske hudvekter mot de valgte beina (eller alle), eller løsne. */
+function SkinRow({ meshes, bones }: { meshes: SceneObject[]; bones: SceneObject[] }) {
+  const anyBones = useEditor((s) => s.objects.some((o) => isBone(o.type)));
+  if (!anyBones) return null;
+  const skinned = meshes.filter(isSkinned);
+  const bind = () => {
+    const state = useEditor.getState();
+    const result = state.skinObjects(
+      meshes.map((o) => o.id),
+      bones.length ? bones.map((b) => b.id) : undefined,
+    );
+    state.setActivity(
+      result.skinned.length
+        ? `Bandt ${result.skinned.length === 1 ? result.skinned[0].name : `${result.skinned.length} modeller`} til ${result.skinned[0].bones} bein`
+        : `Ingenting å binde${result.skipped.length ? `: ${result.skipped.map((s) => `${s.name} ${s.reason}`).join(", ")}` : ""}`,
+    );
+  };
+  return (
+    <div className="row">
+      <div className="row-title">
+        Skjelett <span className="value">{skinned.length ? `bundet (${skinned.length}/${meshes.length})` : "ikke bundet"}</span>
+      </div>
+      <div className="btn-row">
+        <button
+          className="small-btn"
+          title={`Automatiske hudvekter mot ${bones.length ? "de valgte beina" : "alle beina i scenen"}. Beina og modellen slik de står nå er hvileposituren.`}
+          onClick={run(bind)}
+        >
+          <Icon name="shapes" size={14} /> {skinned.length ? "Bind på nytt" : "Bind til skjelett"}
+        </button>
+        {skinned.length > 0 && (
+          <button
+            className="small-btn"
+            title="Modellen følger ikke beina lenger"
+            onClick={run(() => useEditor.getState().updateObjects(skinned.map((o) => ({ id: o.id, skin: undefined }))))}
+          >
+            Løsne
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Modeller: del i bitene som ikke henger sammen (som «By Loose Parts» i Blender),
  * eller slå flere valgte deler sammen til én modell (som Ctrl+J).
@@ -500,26 +652,30 @@ function ModelTools({ objs }: { objs: SceneObject[] }) {
   const mergeable = objs.filter((o) => !isHelper(o.type) && !o.hole);
   if (!meshes.length && mergeable.length < 2) return null;
   return (
-    <div className="btn-row">
-      {meshes.length > 0 && (
-        <button
-          className="small-btn"
-          title="Del modellen i bitene som ikke henger sammen – hver bit blir et eget objekt"
-          onClick={run(() => splitLooseParts(meshes.map((o) => o.id)))}
-        >
-          <Icon name="shapes" size={14} /> Del opp i løse deler
-        </button>
-      )}
-      {mergeable.length > 1 && (
-        <button
-          className="small-btn"
-          title="Gjør de valgte delene til én modell. Den får fargen til hovedvalget (sist valgte)."
-          onClick={run(() => mergeObjects(mergeable.map((o) => o.id)))}
-        >
-          <Icon name="copy" size={14} /> Slå sammen
-        </button>
-      )}
-    </div>
+    <>
+      {meshes.length > 0 && <SimplifyRow meshes={meshes} />}
+      {meshes.length > 0 && <SkinRow meshes={meshes} bones={objs.filter((o) => isBone(o.type))} />}
+      <div className="btn-row">
+        {meshes.length > 0 && (
+          <button
+            className="small-btn"
+            title="Del modellen i bitene som ikke henger sammen – hver bit blir et eget objekt"
+            onClick={run(() => splitLooseParts(meshes.map((o) => o.id)))}
+          >
+            <Icon name="shapes" size={14} /> Del opp i løse deler
+          </button>
+        )}
+        {mergeable.length > 1 && (
+          <button
+            className="small-btn"
+            title="Gjør de valgte delene til én modell. Den får fargen til hovedvalget (sist valgte)."
+            onClick={run(() => mergeObjects(mergeable.map((o) => o.id)))}
+          >
+            <Icon name="copy" size={14} /> Slå sammen
+          </button>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -670,6 +826,7 @@ export function Inspector() {
         />
       </div>
       {node && <NodeInfo obj={obj} />}
+      {isBone(obj.type) && <BoneInfo obj={obj} />}
 
       <FolderSelect objs={objs} />
       <ScriptSource objs={objs} />
@@ -683,7 +840,7 @@ export function Inspector() {
 
       {!reference && <ColorRow objs={objs} />}
 
-      {reference ? (
+      {isBone(obj.type) ? null : reference ? (
         <Slider title="Synlighet" objs={objs} field="opacity" />
       ) : node ? (
         <NodePropsEditor obj={obj} />

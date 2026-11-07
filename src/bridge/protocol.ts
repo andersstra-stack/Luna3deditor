@@ -18,6 +18,8 @@ export const BRIDGE_METHODS = [
   "mirror_objects",
   "split_loose_parts",
   "merge_objects",
+  "simplify_mesh",
+  "skin_mesh",
   "create_folders",
   "update_folders",
   "delete_folders",

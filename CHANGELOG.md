@@ -10,6 +10,28 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Forenkle modeller**: «Forenkle» i egenskapspanelet (ved «Del opp» og «Slå sammen») gir modeller færre trekanter –
+  velg hvor mange prosent som skal bli igjen. Panelet viser antall trekanter i utvalget. UV-er, hjørnefarger, tekstur og
+  normalkart beholdes, og sømmer og harde kanter holdes på plass. Objektet beholder plass, størrelse, pinner og
+  animasjoner, og alt kan angres i ett steg. Fiskerens hode gikk fra 158 379 til 15 837 trekanter på under ett sekund
+  uten synlig forskjell. Claude kan gjøre det samme med det nye MCP-verktøyet `simplify_mesh` og `luna.simplify` i Python.
+- **Skjelett og rigg for figurer**: «Legg til → Bein» lager bein som henger i hverandre (med et bein valgt fortsetter det nye
+  fra tuppen). Beina vises gjennom modellen, kan flyttes og speiles (speilkopi bytter _L/_R i navnet og beholder hierarkiet),
+  og panelet har forelderbein og «Nytt bein fra tuppen». «Bind til skjelett» gir modellene automatiske hudvekter – bein som
+  ligger utenfor en modell (låret ved siden av hånden) får ikke dra i den. Etterpå animeres beina i de vanlige klippene, og
+  modellene bøyer seg med. GLB-eksporten skriver skjelettet som glTF skin med vekter og animasjonene på beina, så figuren
+  kan spilles av i Unity. Claude kan bygge det samme med `add_objects` (type `bone` med `head`, `tail` og `parent`), det
+  nye verktøyet `skin_mesh` og `luna.bone`/`luna.skin` i Python. En forenklet modell som er bundet, får nye vekter automatisk.
+- **Ruhetskart på egne former**: `roughness_map` (gråtoner: svart = blankt, hvitt = matt, ganget med ruheten) fra Python og
+  MCP, ved siden av tekstur og normalkart. Det vises i 3D-visningen, lagres i scenen og blir glTF
+  `metallicRoughnessTexture` i eksporten – våte lepper, slitt lær og blank hud uten flere trekanter.
+
+### Changed
+- **Mye raskere skriving av GLB og ikoner**: bytene sendes rett til fila i stedet for som en lang liste med tall. Fiskeren
+  (GLB på 60 MB) ble ikke ferdig på fem minutter i utviklingsbygget og tettet igjen vinduet; nå tar hele eksporten 2,3
+  sekunder. Hodet alene (23 MB) gikk fra 10,3 til 0,5 sekunder å skrive.
+
 ## [0.19.0] — 2026-11-07
 
 ### Added

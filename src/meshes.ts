@@ -28,6 +28,11 @@ export function meshGeometry(id: string): THREE.BufferGeometry {
     if (asset.index) geo.setIndex(new THREE.BufferAttribute(asset.index, 1));
     if (asset.colors) geo.setAttribute("color", new THREE.BufferAttribute(linearColors(asset.colors), 3));
     if (asset.uvs) geo.setAttribute("uv", new THREE.BufferAttribute(asset.uvs, 2));
+    // Hudvekter (bundet til skjelett): brukes av SkinnedMesh i visningen og blir JOINTS_0/WEIGHTS_0 i eksporten.
+    if (asset.joints && asset.weights) {
+      geo.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(asset.joints, 4));
+      geo.setAttribute("skinWeight", new THREE.BufferAttribute(asset.weights, 4));
+    }
     geo.computeBoundingBox();
     geo.computeBoundingSphere();
     geometries.set(id, geo);
@@ -157,13 +162,19 @@ export function normalMapFor(o: Pick<SceneObject, "type" | "meshId">): THREE.Tex
   return id ? loadTexture(id, THREE.NoColorSpace) : null;
 }
 
+/** Ruhetskartet et objekt vises med, eller null. Data, ikke farger (som normalkart); ruheten leses fra grønnkanalen. */
+export function roughnessMapFor(o: Pick<SceneObject, "type" | "meshId">): THREE.Texture | null {
+  const id = o.type === "mesh" && o.meshId ? assets.get(o.meshId)?.roughnessTextureId : undefined;
+  return id ? loadTexture(id, THREE.NoColorSpace) : null;
+}
+
 /** Hvor sterkt normalkartet til objektet virker. */
 export const normalScaleOf = (o: Pick<SceneObject, "meshId">) => (o.meshId ? assets.get(o.meshId)?.normalScale : undefined) ?? 1;
 
 /** Bruker objektet bilder med egne UV-er (tekstur eller normalkart)? Da kan det ikke slås sammen eller deles opp. */
 export const hasTextureMap = (o: Pick<SceneObject, "type" | "meshId">) => {
   const asset = o.type === "mesh" && o.meshId ? assets.get(o.meshId) : undefined;
-  return !!asset?.textureId || !!asset?.normalTextureId;
+  return !!asset?.textureId || !!asset?.normalTextureId || !!asset?.roughnessTextureId;
 };
 
 // ---------- Lagring (base64) ----------
@@ -194,6 +205,8 @@ export function serializeMesh(a: MeshAsset): SerializedMesh {
     ...(a.uvs ? { uvs: toBase64(a.uvs) } : {}),
     ...(a.textureId ? { textureId: a.textureId } : {}),
     ...(a.normalTextureId ? { normalTextureId: a.normalTextureId, normalScale: a.normalScale } : {}),
+    ...(a.roughnessTextureId ? { roughnessTextureId: a.roughnessTextureId } : {}),
+    ...(a.joints && a.weights ? { joints: toBase64(a.joints), weights: toBase64(a.weights) } : {}),
   };
 }
 
@@ -206,9 +219,13 @@ export function deserializeMesh(m: SerializedMesh): MeshAsset {
     ...(m.index ? { index: new Uint32Array(fromBase64(m.index)) } : {}),
     ...(m.colors ? { colors: new Uint8Array(fromBase64(m.colors)) } : {}),
     // En modell hvis tekstur mangler (f.eks. limt inn fra en eldre versjon) vises uten tekstur.
-    ...(m.uvs && (hasTexture(m.textureId) || hasTexture(m.normalTextureId)) ? { uvs: new Float32Array(fromBase64(m.uvs)) } : {}),
+    ...(m.uvs && (hasTexture(m.textureId) || hasTexture(m.normalTextureId) || hasTexture(m.roughnessTextureId))
+      ? { uvs: new Float32Array(fromBase64(m.uvs)) }
+      : {}),
     ...(m.uvs && hasTexture(m.textureId) ? { textureId: m.textureId } : {}),
     ...(m.uvs && hasTexture(m.normalTextureId) ? { normalTextureId: m.normalTextureId, normalScale: m.normalScale } : {}),
+    ...(m.uvs && hasTexture(m.roughnessTextureId) ? { roughnessTextureId: m.roughnessTextureId } : {}),
+    ...(m.joints && m.weights ? { joints: new Uint16Array(fromBase64(m.joints)), weights: new Float32Array(fromBase64(m.weights)) } : {}),
   };
 }
 
@@ -232,7 +249,7 @@ export function serializeUsedTextures(objects: SceneObject[]): SerializedTexture
     objects
       .flatMap((o) => {
         const asset = o.meshId ? assets.get(o.meshId) : undefined;
-        return [asset?.textureId, asset?.normalTextureId, o.imageId];
+        return [asset?.textureId, asset?.normalTextureId, asset?.roughnessTextureId, o.imageId];
       })
       .filter((id): id is string => hasTexture(id)),
   );

@@ -79,6 +79,10 @@ const objectProps = {
     .union([z.number().min(0), z.array(z.number().min(0))])
     .optional()
     .describe("Curve only: tube radius in meters – one number, or one per point for a tapering tube (e.g. [0.12, 0.07, 0.02]). Default 0.1."),
+  head: vec3.optional().describe("Bone only: WORLD point of the joint (root). Default for a new bone: the parent's tail."),
+  tail: vec3.optional().describe("Bone only: WORLD point of the tip. head/tail replace position/rotation/scale."),
+  roll: z.number().optional().describe("Bone only: twist around its own axis in degrees (default 0)."),
+  parent: z.string().nullable().optional().describe("Bone only: id of the parent bone (null = root bone)."),
 };
 
 /** Kun add_objects: egne former fra hjørner og trekanter (type "mesh"). */
@@ -102,6 +106,10 @@ const meshProps = {
   height: z.number().positive().optional().describe("type 'reference' only: height of the image in meters (default 2); the width follows from the image."),
   normal_map: z.string().optional().describe("type 'mesh' only: absolute path to a PNG or JPEG normal map (OpenGL style, +Y up): fine detail without more triangles."),
   normal_scale: z.number().min(0).optional().describe("type 'mesh' only: strength of normal_map (default 1)."),
+  roughness_map: z
+    .string()
+    .optional()
+    .describe("type 'mesh' only: absolute path to a PNG or JPEG roughness map (grayscale: black = glossy, white = matte; the green channel is read), multiplied by 'roughness'."),
 };
 
 const INSTRUCTIONS = `Luna 3D is a simple 3D editor the user has open on their desktop. These tools edit its scene live.
@@ -125,9 +133,10 @@ All shapes are unit-sized and centered on their origin, so 'scale' equals the ob
   everything else. Identical shapes are stored once, so reuse one leaf for hundreds of copies. Optional
   'vertex_colors' (one hex per vertex) and 'smooth'. A thin shape seen from both sides needs both faces (top and a
   reversed bottom). Its geometry can't be edited afterwards – make a new object. For detail finer than the vertices give
-  'uvs' (one [u, v] per vertex, v = 0 at the top of the image) with 'texture' and/or 'normal_map' (absolute paths to PNG
-  or JPEG, the normal map OpenGL style, +Y up) and optional 'normal_scale'. Vertex colors tint the image and still work
-  with only a normal map. The images are stored in the scene and exported in the GLB. A texture or normal map costs one
+  'uvs' (one [u, v] per vertex, v = 0 at the top of the image) with 'texture', 'normal_map' and/or 'roughness_map'
+  (absolute paths to PNG or JPEG, the normal map OpenGL style, +Y up; the roughness map grayscale, black = glossy, white =
+  matte, multiplied by 'roughness' – wet lips, worn leather, oily skin) and optional 'normal_scale'. Vertex colors tint the
+  image and still work with only a normal or roughness map. The images are stored in the scene and exported in the GLB. A texture or normal map costs one
   material per image, and such parts can't be merged or split.
 - reference: an image to model from (photo, drawing). Give 'texture' (absolute path, PNG or JPEG) and 'height' in meters.
   It stands upright facing +Z (rotation [0, 90, 0] for a side view), half transparent ('opacity'), and keeps the image's
@@ -140,6 +149,7 @@ All shapes are unit-sized and centered on their origin, so 'scale' equals the ob
   so the joint looks grown, not glued on.
 - pointLight / spotLight: light sources (spotLight shines along its local -Y; rotate it to aim). Use 'intensity' and 'color'.
 - node: an invisible marker point for game engines (see "Marker nodes" below). 'scale' is only its size in the editor.
+- bone: one bone of a skeleton (see "Skeletons" below). Give 'head' and 'tail' (WORLD points) and 'parent' (bone id).
 To rest an object on the ground, set position.y = scale.y / 2 (planes: y = 0) — or call drop_to_ground.
 
 get_scene returns each object's exact world-space bounding box ('bounds' min/max), which makes it easy to place
@@ -183,12 +193,14 @@ where one loop replaces hundreds of add_objects entries. The whole run is ONE un
   metalness=, roughness=, opacity=, hole=, intensity=, emissive=, material=, props={...}, folder=) -> key; or luna.add("box", ...)
 - luna.cylinder(taper=0.6, ...); luna.curve(points=[(x,y,z), ...], radius=0.1 or [r per point], color=..., folder=...)
 - luna.mesh(vertices=[...], triangles=[...], position=, rotation=, color=, vertex_colors=, smooth=, uvs=[(u, v), ...],
-  texture="C:/path/color.png", normal_map="C:/path/normal.png", normal_scale=1) – custom shapes;
+  texture="C:/path/color.png", normal_map="C:/path/normal.png", normal_scale=1, roughness_map="C:/path/rough.png") – custom shapes;
   luna.reference("C:/path/front.png", height=1.78, position=(0, 0.89, -0.5), rotation=(0, 0, 0), opacity=0.6) – image to model from;
   luna.orient(forward, up) -> rotation that points the shape's +Z along forward and +Y toward up (like nodes)
 Large runs return only counts (not every id); use luna.objects(...) / get_scene to find objects afterwards.
 - luna.folder(name, parent=None) -> key (use as folder=/parent=)
-- luna.update(id_or_key, **props), luna.delete(*ids)
+- luna.update(id_or_key, **props), luna.delete(*ids), luna.simplify(id_or_key, ratio=0.1 or triangles=5000) – fewer triangles
+- luna.bone(name=, head=(x,y,z), tail=(x,y,z), parent=key, roll=, folder=) -> key; luna.skin(mesh_keys..., bones=[...]) binds
+  meshes to the bones (default all) with automatic weights
 - luna.scene / luna.objects(name=, type=, folder=) / luna.folders(name=) / luna.get(id): the scene at start,
   objects include "bounds" {min, max}
 print() output is returned to you; exceptions return the traceback and change nothing. Save reusable scripts with
@@ -209,8 +221,20 @@ metalness/roughness differ); colors stay as palette UVs. Marker nodes in it beco
 origin is a marker node named "pivot" in the folder (its position and rotation; the pivot itself is not exported), or
 else the bottom center of its parts. For ANIMATION keep moving parts separate: a door, wheel, turret or lid gets its
 own subfolder with model: true and a "pivot" node on its hinge/axle – it becomes a child mesh of the outer model that the
-game can rotate. Skeletal rigs (characters) are done in Blender/Mixamo on the exported mesh. Keep parts as separate
-shapes in Luna while working (easy to edit) – merging happens at export.
+game can rotate. Characters get a skeleton instead (see "Skeletons"). Keep parts as separate shapes in Luna while working
+(easy to edit) – merging happens at export.
+
+Skeletons (characters, creatures): add bones with add_objects type "bone", head = joint, tail = tip (WORLD points), parent =
+the parent bone id; a child usually starts at its parent's tail. Typical humanoid (Y up, character facing +Z): hips (root,
+at the pelvis, pointing up) > spine > chest > neck > head; upper_arm_L/R > lower_arm > hand from the shoulders; upper_leg_L/R >
+lower_leg > foot from the hips (pointing down). Build one side and mirror_objects copy: true across x = 0 – the copies keep
+the hierarchy and _L/_R names swap. Bones show through the mesh in the viewport. Then simplify_mesh the heavy meshes and
+skin_mesh them (automatic weights; limit 'bones' for parts that must follow one bone rigidly, e.g. eyes/beard → head).
+A bone's local +Y points to its tail, so keyframe rotations are around the joint in the bone's own axes (rotation x bends
+most limbs forward/back); child bones follow their parents. Pose by setting keyframes on bones in a clip ("Idle", "Gå") and
+check with preview_animation + screenshot. Moving bones WITHOUT a clip edits the rest pose (meshes don't follow – re-run
+skin_mesh). export_glb writes the bones as a glTF skeleton (skin with joints and inverse bind matrices) and the clips as
+bone animations; skinned meshes are separate skinned meshes, not baked into model folders.
 
 Animation: named clips ("Åpne", "Snurr" …) with keyframes on objects or folders, exported as glTF animations that
 the game plays by name (Unity/glTFast imports them as clips). Keys are OFFSETS from the rest pose, around the
@@ -231,7 +255,9 @@ Helpers: duplicate_objects (repeat parts with an offset), mirror_objects (symmet
 across x = 0), align_objects, drop_to_ground. split_loose_parts splits imported meshes into their unconnected pieces
 (like Blender's "Separate by Loose Parts") so single pieces can be moved, recolored or deleted; merge_objects joins
 several shapes/meshes into one mesh inside Luna (like Ctrl+J; every part keeps its color, the rest of the look comes from
-the primary). Prefer model folders for export – merged meshes can't be edited part by part.
+the primary). Prefer model folders for export – merged meshes can't be edited part by part. simplify_mesh lowers the
+triangle count of meshes (ratio or triangles) and keeps UVs, colors and maps – do it before export for game models
+(characters: roughly 10–40k triangles in total); in Python luna.simplify(key, ratio=0.1).
 
 Seeing and placing precisely: screenshot with focus=[ids] (and zoom) or camera={position, target} gives close-ups
 without disturbing the user's view. raycast finds surfaces: to put something ON a surface, shoot a ray toward it
@@ -756,6 +782,40 @@ server.registerTool(
     inputSchema: { ids: z.array(z.string()).min(2).describe("Ids of the objects to merge; the last one is the primary") },
   },
   ({ ids }) => run("merge_objects", { ids }),
+);
+
+server.registerTool(
+  "skin_mesh",
+  {
+    title: "Skin mesh to skeleton",
+    description:
+      "Bind mesh objects (type 'mesh') to the skeleton with automatic weights (each vertex follows its nearest bones, max 4, smoothed across the surface), like Blender's 'With Automatic Weights'. Afterwards keyframes on the bones (set_keyframes, animate, preview_animation) deform the meshes, and export_glb writes a glTF skin. The current bones and mesh positions are the rest pose. Default: all bones in the scene; pass 'bones' to limit (e.g. only the head bone for a beard). Run it again after moving bones or changing the mesh. Simplify first – simplify_mesh on a skinned mesh re-skins it. One undo step.",
+    inputSchema: {
+      ids: z.array(z.string()).min(1).describe("Ids of the mesh objects to bind"),
+      bones: z.array(z.string()).optional().describe("Bone ids to bind to (default: every bone in the scene)."),
+    },
+  },
+  ({ ids, bones }) => run("skin_mesh", { ids, bones }, SLOW_MS),
+);
+
+server.registerTool(
+  "simplify_mesh",
+  {
+    title: "Simplify mesh",
+    description:
+      "Reduce the triangle count of mesh objects (type 'mesh': imported models and custom shapes), like Blender's Decimate – e.g. a sculpted character of a million triangles down to a game budget. UVs, vertex colors, texture, normal map and roughness map are kept, UV seams and hard edges are preserved, and small loose bits (single hair strands) may vanish. The object keeps its id, place, size, pins and animations; one undo step. Give ratio OR triangles. Returns before/after per object and the largest deviation from the original shape in millimeters – check with a screenshot (focus) afterwards. Objects that share one shape are simplified once.",
+    inputSchema: {
+      ids: z.array(z.string()).min(1).describe("Ids of the mesh objects to simplify"),
+      ratio: z.number().gt(0).max(1).optional().describe("Share of the triangles to keep, e.g. 0.1 = 10 %."),
+      triangles: z.number().int().min(1).optional().describe("Number of triangles to keep (per object) instead of ratio."),
+      max_error: z
+        .number()
+        .positive()
+        .optional()
+        .describe("Stop before the shape deviates more than this share of the object's size (default 0.05 = 5 %), even if the target is not reached. Lower it to protect details."),
+    },
+  },
+  ({ ids, ratio, triangles, max_error }) => run("simplify_mesh", { ids, ratio, triangles, max_error }, SLOW_MS),
 );
 
 const axisEnum = z.enum(["x", "y", "z"]);

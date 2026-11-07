@@ -25,9 +25,37 @@ fn read_binary_file(path: String) -> Result<tauri::ipc::Response, String> {
         .map_err(|e| format!("Kunne ikke lese {path}: {e}"))
 }
 
-/// Brukes til GLB-eksport og ikoner. Mappen lages om den mangler (f.eks. `icons/`).
+/// Dekoder %XX i en URI-kodet tekst (stien sendes som header, og headere kan bare være ASCII).
+fn percent_decode(text: &str) -> Result<String, String> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).map_err(|e| e.to_string())?;
+            out.push(u8::from_str_radix(hex, 16).map_err(|_| format!("Ugyldig %-koding i stien: {text}"))?);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).map_err(|e| e.to_string())
+}
+
+/// Brukes til GLB-eksport og ikoner. Bytene kommer som rå body (ikke som JSON-tall – en GLB på 60 MB ble ellers
+/// hundrevis av MB tekst), og stien i headeren `path` (URI-kodet). Mappen lages om den mangler (f.eks. `icons/`).
 #[tauri::command]
-fn write_binary_file(path: String, contents: Vec<u8>) -> Result<(), String> {
+fn write_binary_file(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let encoded = request
+        .headers()
+        .get("path")
+        .and_then(|v| v.to_str().ok())
+        .ok_or("Mangler headeren path")?;
+    let path = percent_decode(encoded)?;
+    let tauri::ipc::InvokeBody::Raw(contents) = request.body() else {
+        return Err("write_binary_file venter rå bytes (Uint8Array) som body".into());
+    };
     if let Some(dir) = std::path::Path::new(&path).parent() {
         fs::create_dir_all(dir).map_err(|e| format!("Kunne ikke lage mappen {}: {e}", dir.display()))?;
     }

@@ -1,6 +1,5 @@
 import { useEditor, type FolderUpdate, type NewObject } from "../store";
-import { invoke } from "@tauri-apps/api/core";
-import { exportGlb, openScene, saveScene } from "../io";
+import { exportGlb, openScene, saveScene, writeBinaryFile } from "../io";
 import { importModelFile } from "../importer";
 import { ADDABLE_SHAPES, type SceneObject, type ScriptOp, type ScriptResult, type ShapeType, type Vec3 } from "../types";
 import * as THREE from "three";
@@ -10,6 +9,7 @@ import { applyScriptOps, sceneForScripts } from "../scripting";
 import { alignObjects, dropToGround, mirrorObjects, type AlignMode } from "../placement";
 import { splitLooseParts } from "../meshSplit";
 import { mergeObjects } from "../meshMerge";
+import { simplifierReady } from "../meshSimplify";
 import { usePlayer } from "../animationPlayer";
 import type { AnimClip } from "../types";
 import {
@@ -143,9 +143,10 @@ export const handlers: Record<BridgeMethod, Handler> = {
     return { deleted: ids.length };
   },
 
-  apply_script: (p) => {
+  apply_script: async (p) => {
     const ops = p.ops as ScriptOp[];
     if (!Array.isArray(ops)) throw new Error("ops må være en liste");
+    if (ops.some((op) => op.op === "simplify")) await simplifierReady;
     return compactScriptResult(applyScriptOps(ops, (p.name as string | undefined) ?? "Claude-skript", p.script as string | undefined));
   },
 
@@ -254,6 +255,26 @@ export const handlers: Record<BridgeMethod, Handler> = {
     if (!Array.isArray(ids) || ids.length < 2) throw new Error("ids må ha minst to objekter");
     const result = mergeObjects(ids);
     say(`slo sammen ${result.merged} deler til ${result.name}`);
+    return result;
+  },
+
+  simplify_mesh: async (p) => {
+    const ids = p.ids as string[];
+    if (!Array.isArray(ids) || !ids.length) throw new Error("ids må være en ikke-tom liste");
+    if (p.ratio === undefined && p.triangles === undefined) throw new Error("Oppgi ratio (andel som blir igjen) eller triangles (antall)");
+    await simplifierReady;
+    const result = editor().simplifyObjects(ids, { ratio: p.ratio, triangles: p.triangles, maxError: p.max_error });
+    const n = result.simplified.reduce((sum, s) => sum + s.before - s.after, 0);
+    say(result.simplified.length ? `forenklet ${result.simplified.map((s) => s.name).join(", ")} (${n} færre trekanter)` : "fant ingenting å forenkle");
+    return result;
+  },
+
+  skin_mesh: (p) => {
+    const ids = p.ids as string[];
+    if (!Array.isArray(ids) || !ids.length) throw new Error("ids må være en ikke-tom liste");
+    const bones = Array.isArray(p.bones) && p.bones.length ? (p.bones as string[]) : undefined;
+    const result = editor().skinObjects(ids, bones);
+    say(result.skinned.length ? `bandt ${result.skinned.map((s) => s.name).join(", ")} til skjelettet` : "fant ingenting å binde");
     return result;
   },
 
@@ -391,7 +412,7 @@ export const handlers: Record<BridgeMethod, Handler> = {
     if (path) {
       if (!/\.png$/i.test(path)) throw new Error("path må slutte på .png");
       const bytes = Uint8Array.from(atob(icon.base64), (c) => c.charCodeAt(0));
-      await invoke("write_binary_file", { path, contents: Array.from(bytes) });
+      await writeBinaryFile(path, bytes);
       say(`lagret ikon ${path.split(/[\\/]/).pop()}`);
     }
     return { ...icon, path };

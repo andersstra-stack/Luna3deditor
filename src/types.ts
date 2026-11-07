@@ -7,10 +7,15 @@ export const EXTRA_SHAPES = ["wedge", "prism", "pyramid", "stairs", "hemisphere"
 export const LIGHTS = ["pointLight", "spotLight"] as const;
 /** Markør-noder: usynlige, navngitte punkter med retning (dokking, hardpoints, spawn …) for spillmotoren. */
 export const MARKERS = ["node"] as const;
+/**
+ * Bein i et skjelett (rigg): roten (`position`) er leddet, lokal +Y peker mot tuppen og `scale[1]` er lengden. Bein henger
+ * i et forelderbein (`parentId`) og driver bundne modeller (`skin`). Hjelpere: ingen hull, snapping eller underlag.
+ */
+export const BONES = ["bone"] as const;
 /** Bilde å modellere etter (foto, tegning): vises i scenen, men eksporteres ikke. Står oppreist i lokal XY, vender mot +Z. */
 export const REFERENCES = ["reference"] as const;
 /** Former, lys, noder og referansebilder som kan legges til direkte (verktøylinja, MCP add_objects). */
-export const ADDABLE_SHAPES = [...BASIC_SHAPES, ...EXTRA_SHAPES, ...LIGHTS, ...MARKERS, ...REFERENCES] as const;
+export const ADDABLE_SHAPES = [...BASIC_SHAPES, ...EXTRA_SHAPES, ...LIGHTS, ...MARKERS, ...BONES, ...REFERENCES] as const;
 /** Alle objekttyper. "mesh" er en importert modell (FBX/GLB/OBJ/STL) med geometri i et modellregister. */
 export const SHAPES = [...ADDABLE_SHAPES, "mesh"] as const;
 export type ShapeType = (typeof SHAPES)[number];
@@ -18,13 +23,14 @@ export type ShapeType = (typeof SHAPES)[number];
 export const isLight = (t: ShapeType) => t === "pointLight" || t === "spotLight";
 export const isNode = (t: ShapeType) => t === "node";
 export const isReference = (t: ShapeType) => t === "reference";
-/** Lys, noder og referansebilder er hjelpere i editoren: ingen hull, ikke noe å lande på eller snappe mot. */
-export const isHelper = (t: ShapeType) => isLight(t) || isNode(t) || isReference(t);
+export const isBone = (t: ShapeType) => t === "bone";
+/** Lys, noder, bein og referansebilder er hjelpere i editoren: ingen hull, ikke noe å lande på eller snappe mot. */
+export const isHelper = (t: ShapeType) => isLight(t) || isNode(t) || isBone(t) || isReference(t);
 
 /** Høyden en ny form settes i: lys henger i lufta, plan og noder ligger på bakken, alt annet står oppå den. */
 export function startHeight(type: ShapeType, scale: Vec3): number {
   if (isLight(type)) return 2.5;
-  if (type === "plane" || isNode(type)) return 0;
+  if (type === "plane" || isNode(type) || isBone(type)) return 0;
   return scale[1] / 2;
 }
 
@@ -53,6 +59,7 @@ export const SHAPE_LABELS: Record<ShapeType, string> = {
   pointLight: "Punktlys",
   spotLight: "Spotlys",
   node: "Node",
+  bone: "Bein",
   reference: "Referansebilde",
   mesh: "Modell",
 };
@@ -63,6 +70,7 @@ export const DEFAULT_SCALE: Partial<Record<ShapeType, Vec3>> = {
   pointLight: [0.25, 0.25, 0.25],
   spotLight: [0.3, 0.3, 0.3],
   node: [0.6, 0.6, 0.6],
+  bone: [0.06, 0.5, 0.06],
 };
 
 export const DEFAULT_INTENSITY: Partial<Record<ShapeType, number>> = { pointLight: 20, spotLight: 60 };
@@ -92,6 +100,8 @@ export const SYMMETRIC_AXES: Record<ShapeType, string> = {
   spotLight: "xz",
   // Pila peker langs +Z og har «opp» langs +Y; speiles om lokal X (se placement.ts).
   node: "x",
+  // Som noder: tuppen (+Y) speiles som punktene rundt (se placement.ts).
+  bone: "x",
   // Et bilde er ikke symmetrisk: speiles med negativ størrelse, som modeller.
   reference: "",
   mesh: "",
@@ -140,8 +150,20 @@ export interface SceneObject {
   meshId?: string;
   /** Kun referansebilder: id i teksturregisteret (se meshes.ts). */
   imageId?: string;
+  /** Kun bein: forelderbeinet. Mangler det (eller er slettet), er beinet en rot i skjelettet. */
+  parentId?: string;
+  /** Kun modeller: bundet til et skjelett. Hjørnenes vekter ligger i modellen (`MeshAsset.joints/weights`). */
+  skin?: Skin;
   /** Skriptet (normalisert sti) som laget objektet – erstattes når skriptet kjøres igjen. */
   script?: string;
+}
+
+/**
+ * Binding til skjelett. `bones[i]` er beinet som `joints`-indeks i i modellen peker på. Hvileposituren er beinas og
+ * objektets data slik de er nå, så bein kan flyttes i hvile uten å dra modellen med (som Edit Mode i Blender).
+ */
+export interface Skin {
+  bones: string[];
 }
 
 /**
@@ -180,6 +202,11 @@ export interface MeshAsset {
   normalTextureId?: string;
   /** Hvor sterkt normalkartet virker (1 = som i bildet). */
   normalScale?: number;
+  /** Hudvekter: fire bein per hjørne (indekser i objektets `skin.bones`) og vektene deres (summerer til 1). */
+  joints?: Uint16Array;
+  weights?: Float32Array;
+  /** Ruhetskart (gråtoner: svart = blank, hvit = matt) i teksturregisteret, med samme UV-er. Ganges med objektets `roughness`. */
+  roughnessTextureId?: string;
 }
 
 /** Et bilde i teksturregisteret (`src/meshes.ts`). Id-en er en hash av bildet, så like teksturer deles. */
@@ -303,6 +330,9 @@ export interface SerializedMesh {
   textureId?: string;
   normalTextureId?: string;
   normalScale?: number;
+  roughnessTextureId?: string;
+  joints?: string;
+  weights?: string;
 }
 
 /**
@@ -315,7 +345,9 @@ export type ScriptOp =
   | { op: "update"; id: string; props: Record<string, unknown> }
   | { op: "delete"; ids: string[] }
   | { op: "animate"; target: string; preset: string; options?: Record<string, unknown> }
-  | { op: "keyframes"; target: string; clip: string; keys: unknown[]; duration?: number; loop?: boolean };
+  | { op: "keyframes"; target: string; clip: string; keys: unknown[]; duration?: number; loop?: boolean }
+  | { op: "simplify"; ids: string[]; ratio?: number; triangles?: number; max_error?: number }
+  | { op: "skin"; meshes: string[]; bones?: string[] };
 
 export interface ScriptResult {
   /** Objekter fra forrige kjøring av samme skript som ble fjernet. */
@@ -326,6 +358,10 @@ export interface ScriptResult {
   deleted: number;
   /** Animasjonsspor som ble lagt til eller byttet ut. */
   animated: number;
+  /** Modeller som ble forenklet (færre trekanter). */
+  simplified?: { name: string; before: number; after: number }[];
+  /** Modeller som ble bundet til skjelettet. */
+  skinned?: number;
   /** Skriptets nøkler (@o1, @f1 …) → id-er i scenen. */
   keys: Record<string, string>;
 }

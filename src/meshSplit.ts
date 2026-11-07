@@ -85,7 +85,7 @@ function pieceObject(obj: SceneObject, asset: MeshAsset, tris: number[], n: numb
 
   // Bitens midtpunkt i verdensrommet: objektets posisjon + rotasjon·(størrelse ⊙ lokalt midtpunkt).
   const offset = new THREE.Vector3(c.x * obj.scale[0], c.y * obj.scale[1], c.z * obj.scale[2]).applyQuaternion(objectQuaternion(obj));
-  const { id: _id, script: _script, ...rest } = obj;
+  const { id: _id, script: _script, skin: _skin, ...rest } = obj;
   return {
     ...rest,
     type: "mesh",
@@ -121,7 +121,7 @@ export function splitLooseParts(ids: string[]): SplitResult {
       result.skipped.push({ name: obj.name, reason: "ikke en importert modell" });
       continue;
     }
-    if (asset.textureId || asset.normalTextureId) {
+    if (asset.textureId || asset.normalTextureId || asset.roughnessTextureId) {
       result.skipped.push({ name: obj.name, reason: "har tekstur – deles ikke opp" });
       continue;
     }

@@ -40,6 +40,11 @@ MCP-verktøybeskrivelser er på engelsk.
   trekantene for speilede objekter, normaliserer igjen). Hver del beholder fargen: `MeshAsset.colors` (sRGB-byte per hjørne,
   lineært `color`-attributt i geometrien, også gjennom CSG); «Del opp» gjør ensfargede biter til vanlige modeller igjen.
   Modeller speiles med negativ størrelse (de er ikke symmetriske).
+  «Forenkle»: matten i `src/simplifyCore.ts` (meshoptimizer `simplifyWithUpdate`, uten three – kan kjøres rett i Node),
+  koblingen i `src/meshSimplify.ts` og `store.simplifyObjects`/skript-op `simplify`. Hjørnene sveises først (med normal i
+  nøkkelen; fasetterte modeller uten og får flate normaler igjen), posisjonene ganges med objektets størrelse så feilen er i
+  meter, og formen normaliseres igjen. Objektet beholder id-en og får en ny `meshId`. WebAssembly-modulen må være klar
+  (`await simplifierReady`) før kallet.
   Fotografiske teksturer (mer enn 24 farger, ett bilde per mesh, med UV) beholdes i stedet: `MeshAsset.uvs` (v = 0 øverst,
   teksturens forskyvning bakt inn) + `textureId` i teksturregisteret i `meshes.ts` (bildet som JPEG/PNG, id = hash av
   bytene, `textures` i scenefila og utklippstavla). `textureFor(o)` gir three-teksturen til visning og eksport (eget
@@ -47,8 +52,10 @@ MCP-verktøybeskrivelser er på engelsk.
   (formens eget rom; `position` = origo, `rotation` rundt det) i `src/customMesh.ts` – id-en er en hash av formen, så like
   former deles i registeret. Geometrien kan ikke oppdateres (lag nytt objekt). Skript med mer enn 25 nye objekter svarer
   Claude med antall (`compactScriptResult` i `commands.ts`), ikke id-er.
-  Egne former kan ha `uvs` (v = 0 øverst) med `texture`/`normal_map`/`normal_scale` (`MeshAsset.normalTextureId`, `normalScale`,
-  `normalMapFor(o)`). Python og `mcp-server/images.ts` leser fila og sender `{id, mime, data}` første gang, siden bare `{id}`.
+  Egne former kan ha `uvs` (v = 0 øverst) med `texture`/`normal_map`/`normal_scale`/`roughness_map` (`MeshAsset.normalTextureId`,
+  `normalScale`, `roughnessTextureId`, `normalMapFor(o)`/`roughnessMapFor(o)`). Ruhetskartet er data (NoColorSpace), three og
+  glTF leser grønnkanalen; eksporten setter `roughnessMap`, og GLTFExporter lager `metallicRoughnessTexture` (B = 1, så
+  `metalness` gjelder). Nye bildetyper må inn i `serializeUsedTextures`, `hasTextureMap`, `materialKey` og nøkkelen i `customMesh.ts`. Python og `mcp-server/images.ts` leser fila og sender `{id, mime, data}` første gang, siden bare `{id}`.
   Normalkart er OpenGL-retning; visningen bruker `normalScale` [s, -s] fordi UV-ene har v = 0 øverst uten tangenter (som
   GLTFLoader), eksporten [s, s]. Deler med egne bilder bruker ikke paletten i eksporten: de beholder UV-ene og hjørnefargene
   (`COLOR_0`), og i modell-mapper får de andre delene hvite hjørnefarger så alt kan slås sammen.
@@ -62,6 +69,18 @@ MCP-verktøybeskrivelser er på engelsk.
   +Z forover / +Y opp, egenskaper i `props` (glTF `extras`). Lys og noder er «hjelpere» (`isHelper`): ingen hull, snapping
   eller underlag. `scale` er bare markørstørrelsen; eksporten skriver noden uten skala. `extras` i GLB er eneste kilde
   (Unity/glTFast leser dem selv) – egenskapene er flate tall eller tekst, ingen sannhetsverdier.
+- Skjelett: `type: "bone"` (`BONES`, hjelpere i `src/bones.ts`). Roten er `position`, lokal +Y peker mot tuppen,
+  `scale[1]` er lengden; forelder i `parentId` (slettet forelder = rotbein). `boneFromHeadTail` lager plasseringen fra
+  head/tail i verdensrom (MCP/Python, `get_scene` gir `head`/`tail`/`parent`). Animatoren (`animation.ts`) har beinkjeder:
+  `parentMotion` = forelderbeinets `chainMotion`, ellers mappa; gizmo-opptaket bruker den som P, og hvile-dra tar med barna.
+  Binding: `src/skinning.ts` (`autoWeights`: avstand til beinsegmentene med 1/d⁴, bein utenfor flaten straffes, bein som
+  ikke går gjennom modellen (`bonesInside`) er utelukket, glattet over naboene, fire per hjørne) gir en ny `MeshAsset` med
+  `joints`/`weights` og `skin.bones` på objektet. Hvilen er dataene slik de er; `useSkeleton` i `Viewport.tsx` lager
+  THREE.Bone utenfor scenen og setter `matrixWorld` per bilde (skjelettet settes som prop på `skinnedMesh`, så drei
+  `Outlines` blir bundet). Eksporten (`io.ts`): bein som THREE.Bone-hierarki, bundne mesher som SkinnedMesh bakt i
+  verdensrom med identitet som bindematrise (IBM = beinets hvile⁻¹), aldri inn i modell-mapper. Forenkling av en bundet
+  modell binder den på nytt (`reskin` i store). Kopier og speilkopier tar med hierarkiet (`duplicateObjects` bytter
+  `parentId`/`skin.bones` til kopiene).
 - Referansebilder: `type: "reference"` (`isHelper`) med `imageId` i teksturregisteret i `meshes.ts`. Står i lokal XY og vender mot +Z,
   `meshBasicMaterial` uten tonekurve (`ReferenceImage` i `Viewport.tsx`). `referenceProps` i `store.ts` regner bredden fra bildets hode
   (`imageSizeOf`). Fra appen: `src/referenceImage.ts` (filvalg, dra-og-slipp når ingen modell følger med). Vises på skjermbilder; ikke i eksport eller ikoner.
@@ -96,6 +115,9 @@ MCP-verktøybeskrivelser er på engelsk.
   `keyFromDelta` velger den av de to XYZ-Euler-løsningene (og ±360) som ligger nærmest dagens verdi. Eksporten sampler 30 bilder/s til glTF-spor på nodenes `uuid` (alt samles
   under én `THREE.Scene`, ellers finner eksportøren bare nodene under første rot).
 - `src-tauri/src/lib.rs` – filkommandoer (`write_text_file`, `read_text_file`, `write_binary_file`) + dialog-plugin.
+  `write_binary_file` tar rå body (`tauri::ipc::Request`) med stien URI-kodet i headeren `path`; bruk `writeBinaryFile` i
+  `io.ts`, aldri `Array.from(bytes)` (60 MB som JSON-tall ble aldri ferdig og blokkerte IPC-en). `exportGlb` gir `ms`
+  (bygge/skrive) og `bytes`.
 
 ## Versjon og endringslogg
 - Versjonen har én kilde: `package.json` (`tauri.conf.json` peker dit, Vite gir `__APP_VERSION__`, MCP-serveren leser den).
@@ -127,6 +149,10 @@ MCP-verktøybeskrivelser er på engelsk.
 ## Sjekk
 - `npx tsc --noEmit` (frontend), `cargo build` i `src-tauri`.
 - `node mcp-server/hub-test.mjs` – huben med falske vinduer og flere økter (egne testporter, trenger ikke appen).
+- Ny MCP-kode ende-til-ende uten å røre brukerens hub: start en testhub (`LUNA_BRIDGE_PORT=47417 LUNA_HUB_PORT=47418 node
+  mcp-server/index.ts --hub`), åpne appen med `?bridge=47417` i adressen (nettleserpanelet: `http://localhost:1420/?bridge=47417`)
+  og kall verktøyene med en MCP-klient mot `http://127.0.0.1:47418/mcp`. Stopp testhuben etterpå. `tauri dev` mot testhuben:
+  launch-oppsettet `tauri-test` (`VITE_LUNA_BRIDGE_PORT=47417`), så dev-vinduet ikke blandes med brukerens installerte app.
 - `npm run tauri dev`, så `node mcp-server/smoke-test.mjs <prosjekt> <utmappe>` for ende-til-ende via MCP.
 
 ## Fallgruve

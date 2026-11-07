@@ -6,9 +6,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEditor } from "./store";
 import { objectBox, round } from "./bounds";
-import { isNode, type ScriptOp, type ScriptResult } from "./types";
+import { isBone, isNode, type ScriptOp, type ScriptResult } from "./types";
+import { boneTail } from "./bones";
 import { nodeAxes } from "./nodes";
 import { curveWorldPoints } from "./curves";
+import { simplifierReady } from "./meshSimplify";
 
 export const SCRIPT_MARKER = "@@LUNA3D_OPS@@";
 
@@ -20,6 +22,11 @@ export function sceneForScripts() {
     const bounds = { min: b.min.toArray().map((v) => round(v)), max: b.max.toArray().map((v) => round(v)) };
     // Noder: retningene i verdensrommet (lokal +Z forover, +Y opp), så Claude slipper å regne på Euler-vinkler.
     if (isNode(o.type)) return { ...o, bounds, ...nodeAxes(o) };
+    // Bein: roten og tuppen i verdensrommet (samme form som de oppgis i) og forelderen som «parent».
+    if (isBone(o.type)) {
+      const { parentId, ...rest } = o;
+      return { ...rest, head: o.position, tail: boneTail(o), parent: parentId ?? null, bounds };
+    }
     // Kurverør: punktene i verdensrommet (samme form som de oppgis i), ikke de lokale.
     if (o.type === "curve" && o.curve) {
       const { curve, ...rest } = o;
@@ -52,6 +59,8 @@ export function describeResult(r: ScriptResult): string {
     r.updated && `endret ${r.updated}`,
     r.deleted && `slettet ${r.deleted}`,
     r.animated && `${plural(r.animated, "animasjon", "animasjoner")}`,
+    r.simplified?.length && `forenklet ${plural(r.simplified.length, "modell", "modeller")}`,
+    r.skinned && `bandt ${plural(r.skinned, "modell", "modeller")} til skjelettet`,
   ].filter(Boolean);
   return parts.length ? parts.join(", ") : "ingen endringer";
 }
@@ -82,6 +91,8 @@ export async function runPythonScriptFile(path?: string) {
   if (!target) return null;
   const name = target.split(/[\\/]/).pop()!;
 
+  // Forenkling (luna.simplify) trenger WebAssembly-modulen klar før endringene brukes.
+  await simplifierReady;
   const out = await invoke<ScriptOutput>("run_python_script", { path: target, sceneJson: JSON.stringify(sceneForScripts()) });
   const { ops, printed } = parseScriptOutput(out.stdout);
   if (printed) console.info(`[${name}]`, printed);

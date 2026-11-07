@@ -34,9 +34,23 @@ overganger, vertex_colors=[...] farge per hjørne. orient(forward, up) gir rotas
     blad = dict(vertices=[(0, 0, 0), (0.06, 0, 0.15), (0, 0.01, 0.3), (-0.06, 0, 0.15)], triangles=[(0, 2, 1), (0, 3, 2)])
     luna.mesh(**blad, position=(1, 2, 0), rotation=luna.orient(forward=(1, 0.3, 0), up=(0, 1, 0)), color="#5fb84a")
 
-Detaljer finere enn hjørnene: uvs=[(u, v), ...] (én per hjørne, v = 0 øverst i bildet) med texture="farge.png" og/eller
-normal_map="normal.png" (PNG eller JPEG, full sti; normalkart i OpenGL-retning, +Y opp) og normal_scale=1. Hjørnefarger
-farger bildet og virker også med bare et normalkart. Bildene lagres i scenen og følger med i GLB-eksporten.
+Detaljer finere enn hjørnene: uvs=[(u, v), ...] (én per hjørne, v = 0 øverst i bildet) med texture="farge.png",
+normal_map="normal.png" (PNG eller JPEG, full sti; normalkart i OpenGL-retning, +Y opp) og normal_scale=1, og/eller
+roughness_map="ruhet.png" (gråtoner: svart = blankt, hvitt = matt; ganges med roughness). Hjørnefarger farger bildet og
+virker også med bare et normal- eller ruhetskart. Bildene lagres i scenen og følger med i GLB-eksporten.
+
+Færre trekanter (til spill): simplify(nøkkel, ratio=0.1) eller simplify(nøkkel, triangles=8000) – UV-er, farger og
+bilder beholdes:
+
+    hode = luna.mesh(vertices=..., triangles=..., uvs=..., texture="farge.png", smooth=True)
+    luna.simplify(hode, ratio=0.1)
+
+Skjelett (figurer): bone(head=, tail=, parent=) gir bein i verdensrommet, skin(...) binder modeller til dem, og
+keyframes(bein, "Vink", [...]) animerer – rotasjonene er rundt leddet i beinets akser, og barna følger med:
+
+    hofte = luna.bone(name="hips", head=(0, 0.95, 0), tail=(0, 1.15, 0))
+    rygg = luna.bone(name="spine", tail=(0, 1.4, 0), parent=hofte)
+    luna.skin(kropp, bones=None)
 
 Referansebilder å modellere etter (vises i scenen og på skjermbilder, ikke i eksport eller ikoner). Bildet står på
 bakken, vender mot +Z og er halvgjennomsiktig; height er høyden i meter, og bredden følger av bildet:
@@ -61,18 +75,19 @@ __all__ = [
     "scene", "objects", "get", "folders", "folder", "add", "update", "delete",
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
     "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "curve", "point_light", "spot_light", "node", "mesh",
-    "reference", "orient", "animate", "keyframes",
+    "reference", "orient", "animate", "keyframes", "simplify", "bone", "skin",
 ]
 
 SHAPES = {
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
     "pyramid", "stairs", "hemisphere", "tube", "roundedBox", "curve", "pointLight", "spotLight", "node", "mesh", "reference",
+    "bone",
 }
 PROPS = {
     "name", "position", "rotation", "scale", "color", "metalness", "roughness",
     "opacity", "visible", "hole", "intensity", "emissive", "material", "props", "folder",
     "taper", "points", "radius", "vertices", "triangles", "vertex_colors", "smooth",
-    "uvs", "texture", "normal_map", "normal_scale", "height",
+    "uvs", "texture", "normal_map", "normal_scale", "roughness_map", "height", "head", "tail", "roll", "parent",
 }
 MARKER = "@@LUNA3D_OPS@@"
 MAX_OPS = 20000
@@ -148,10 +163,14 @@ def _clean(props):
         raise ValueError(f"Ukjente egenskaper: {', '.join(sorted(unknown))}. Gyldige: {', '.join(sorted(PROPS))}")
     out = {}
     for k, v in props.items():
-        if v is None and k != "folder":
+        if v is None and k not in ("folder", "parent"):
             continue
-        if k in ("position", "rotation", "scale"):
+        if k in ("position", "rotation", "scale", "head", "tail"):
             v = _vec3(k, v)
+        elif k == "roll":
+            v = float(v)
+        elif k == "parent":
+            v = None if v is None else str(v)
         elif k == "props":
             if not isinstance(v, dict):
                 raise ValueError(f"props må være en dict, f.eks. {{'type': 'pirate_grunt'}} – fikk {v!r}")
@@ -198,7 +217,7 @@ def _clean(props):
                 v = [[float(a), float(b)] for a, b in v]
             except (TypeError, ValueError):
                 raise ValueError("uvs må være en liste med (u, v), én per hjørne") from None
-        elif k in ("texture", "normal_map"):
+        elif k in ("texture", "normal_map", "roughness_map"):
             v = _image(k, v)
         elif k in ("normal_scale", "height"):
             v = float(v)
@@ -278,6 +297,58 @@ def delete(*ids):
     flat = [i for item in ids for i in (item if isinstance(item, (list, tuple)) else [item])]
     if flat:
         _push({"op": "delete", "ids": flat})
+
+
+def simplify(*ids, ratio=None, triangles=None, max_error=None):
+    """Færre trekanter på modeller (type mesh): ratio = andelen som blir igjen (0.1 = 10 %) eller triangles = antall.
+
+    UV-er, hjørnefarger og bildene beholdes, og objektet beholder plass og størrelse. max_error (andel av størrelsen,
+    f.eks. 0.005) stopper før formen endres mer enn det. En modell med færre trekanter enn målet får være.
+    """
+    flat = [str(i) for item in ids for i in (item if isinstance(item, (list, tuple)) else [item])]
+    if not flat:
+        raise ValueError("simplify trenger minst ett objekt")
+    if (ratio is None) == (triangles is None):
+        raise ValueError("Oppgi enten ratio (andel, 0–1) eller triangles (antall)")
+    op = {"op": "simplify", "ids": flat}
+    if ratio is not None:
+        ratio = float(ratio)
+        if not 0 < ratio <= 1:
+            raise ValueError(f"ratio må være over 0 og høyst 1 – fikk {ratio!r}")
+        op["ratio"] = ratio
+    if triangles is not None:
+        triangles = int(triangles)
+        if triangles < 1:
+            raise ValueError("triangles må være minst 1")
+        op["triangles"] = triangles
+    if max_error is not None:
+        op["max_error"] = float(max_error)
+    _push(op)
+
+
+def bone(name=None, head=None, tail=None, parent=None, **props):
+    """Et bein i skjelettet: head er leddet og tail tuppen (verdensrom), parent forelderbeinet (nøkkel eller id).
+
+    Uten head starter beinet i tuppen av forelderen. Lokal +Y peker mot tuppen, så rotasjoner i nøkkelrammer er rundt
+    leddet i beinets egne akser. Bygg den ene siden og speil med mirror_objects (copy) – navn med _L/_R byttes.
+    """
+    if tail is None:
+        raise ValueError("bone trenger tail (tuppen), f.eks. tail=(0, 1.3, 0)")
+    return add("bone", name=name, head=head, tail=tail, parent=parent, **props)
+
+
+def skin(*meshes, bones=None):
+    """Binder modeller (type mesh) til skjelettet med automatiske hudvekter. bones = bare disse beina (standard: alle).
+
+    Hvileposituren er beina og modellene slik de står nå. Forenkle tunge modeller først (simplify).
+    """
+    flat = [str(i) for item in meshes for i in (item if isinstance(item, (list, tuple)) else [item])]
+    if not flat:
+        raise ValueError("skin trenger minst én modell")
+    op = {"op": "skin", "meshes": flat}
+    if bones is not None:
+        op["bones"] = [str(b) for b in bones]
+    _push(op)
 
 
 def _shape(type):

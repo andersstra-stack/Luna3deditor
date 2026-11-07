@@ -980,6 +980,20 @@ select.text option {
   background: var(--bg-3);
 }
 
+.small-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.simplify-row .text {
+  width: 56px;
+  flex: none;
+}
+
+.simplify-row .label {
+  width: auto;
+}
+
 /* Animasjon i egenskapspanelet */
 .anim-panel .hint {
   margin: 0 0 8px;

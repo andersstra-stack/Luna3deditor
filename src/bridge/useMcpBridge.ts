@@ -19,6 +19,15 @@ const BUSY_RETRY_MS = 5000;
  * Kobler vinduet til MCP-huben (som Claude Code starter). Huben eier WebSocket-porten; vinduet prøver å koble til
  * på nytt helt til det lykkes. Hvert vindu kobler til for seg selv og forteller hvilken fil det har åpen.
  */
+/**
+ * `?bridge=47417` i adressen (nettleser) eller `VITE_LUNA_BRIDGE_PORT=47417` når `tauri dev` startes, kobler vinduet til en
+ * testhub (se «Sjekk» i CLAUDE.md) i stedet for den vanlige.
+ */
+function bridgePort(): number {
+  const custom = Number(new URLSearchParams(window.location.search).get("bridge") ?? import.meta.env.VITE_LUNA_BRIDGE_PORT);
+  return Number.isInteger(custom) && custom > 0 ? custom : BRIDGE_PORT;
+}
+
 export function useMcpBridge() {
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -33,7 +42,7 @@ export function useMcpBridge() {
 
     const connect = () => {
       if (disposed) return;
-      socket = new WebSocket(`ws://127.0.0.1:${BRIDGE_PORT}`);
+      socket = new WebSocket(`ws://127.0.0.1:${bridgePort()}`);
 
       socket.onopen = () => {
         setBridgeStatus("connected");

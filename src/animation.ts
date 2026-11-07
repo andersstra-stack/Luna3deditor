@@ -6,7 +6,8 @@
 import * as THREE from "three";
 import { boxOf, objectMatrix, objectQuaternion } from "./bounds";
 import { isInside } from "./folders";
-import { isHelper, isNode, type AnimClip, type AnimKey, type Folder, type SceneObject, type Vec3 } from "./types";
+import { parentBone } from "./bones";
+import { isBone, isHelper, isNode, type AnimClip, type AnimKey, type Folder, type SceneObject, type Vec3 } from "./types";
 
 const DEG = Math.PI / 180;
 
@@ -262,6 +263,22 @@ export function makeAnimator(clip: AnimClip, objects: SceneObject[], folders: Fo
     return F.clone().multiply(deltaMatrix(tr.keys, t)).multiply(F.clone().invert());
   };
 
+  /** Forelderbeinet (bare bein; et bein uten forelder følger mappa si). */
+  const parentOf = (o: SceneObject) => (isBone(o.type) ? parentBone(o, objectById) : undefined);
+
+  // Beveger objektet seg (selv, via et forelderbein eller via mappa)? «false» settes først, så en ring i beina stopper.
+  const movingMemo = new Map<string, boolean>();
+  const objectMoves = (o: SceneObject): boolean => {
+    let v = movingMemo.get(o.id);
+    if (v === undefined) {
+      movingMemo.set(o.id, false);
+      const p = parentOf(o);
+      v = animates(o.id) || (p ? objectMoves(p) : folderMoves(o.folderId));
+      movingMemo.set(o.id, v);
+    }
+    return v;
+  };
+
   /** Summen av bevegelsene til mappa og alle mappene over den (identitet hvis ingen beveger seg). */
   const folderMotion = (id: string | null, t: number): THREE.Matrix4 => {
     at(t);
@@ -275,17 +292,38 @@ export function makeAnimator(clip: AnimClip, objects: SceneObject[], folders: Fo
     return m.clone();
   };
 
-  /** Objektets verdensmatrise ved tid t (hvile + egne og mappenes bevegelser). */
-  const objectWorld = (o: SceneObject, t: number): THREE.Matrix4 =>
-    folderMotion(o.folderId, t).multiply(motion(o.id, t)).multiply(objectMatrix(o));
+  /**
+   * Bevegelsen objektet arver: et bein følger hele kjeden av forelderbein (og rotbeinets mappe), alt annet mappa si.
+   */
+  const parentMotion = (o: SceneObject, t: number, depth = 0): THREE.Matrix4 => {
+    const p = parentOf(o);
+    if (!p || depth > objects.length) return folderMotion(o.folderId, t);
+    return chainMotion(p, t, depth + 1);
+  };
 
-  /** Objekter som beveger seg i klippet (selv eller via en mappe). */
-  const moving = objects.filter((o) => animates(o.id) || folderMoves(o.folderId));
+  /** Verdensendringen et bein står for sammen med alle forelderbeina sine (det barna arver). */
+  const chainMotion = (o: SceneObject, t: number, depth = 0): THREE.Matrix4 => {
+    at(t);
+    if (!objectMoves(o)) return new THREE.Matrix4();
+    const key = `b:${o.id}`;
+    let m = memo.get(key);
+    if (!m) {
+      m = parentMotion(o, t, depth).multiply(motion(o.id, t));
+      memo.set(key, m);
+    }
+    return m.clone();
+  };
+
+  /** Objektets verdensmatrise ved tid t (hvile + egne, forelderbeinas og mappenes bevegelser). */
+  const objectWorld = (o: SceneObject, t: number): THREE.Matrix4 => parentMotion(o, t).multiply(motion(o.id, t)).multiply(objectMatrix(o));
+
+  /** Objekter som beveger seg i klippet (selv, via et forelderbein eller en mappe). */
+  const moving = objects.filter(objectMoves);
 
   /** Verdensmatrisene til alt som beveger seg, ved tid t. */
   const poseAt = (t: number) => new Map(moving.map((o) => [o.id, objectWorld(o, t)]));
 
-  return { clip, animates, folderMoves, motion, folderMotion, objectWorld, poseAt, moving, objectById, frameOf, tracks };
+  return { clip, animates, folderMoves, motion, folderMotion, parentMotion, chainMotion, objectWorld, poseAt, moving, objectById, frameOf, tracks };
 }
 
 // ---------- Redigering: opptak med gizmoen og nøkkelrammer i tidslinja ----------
