@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-11-07
+
 ### Added
 - **Referansebilder**: legg inn et foto eller en tegning å modellere etter, med «Legg til → Bilde…» eller ved å dra PNG/JPEG
   inn i vinduet. Bildet vender mot kameraet, er halvgjennomsiktig og beholder fargene sine uansett lys. Det lagres i scenen,
