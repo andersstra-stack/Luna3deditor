@@ -14,7 +14,7 @@ import {
 } from "../types";
 import { exportGlb, newScene, openScene, saveScene, saveSceneAs, type GlbExport } from "../io";
 import { importModelFile } from "../importer";
-import { pickReferenceImage } from "../referenceImage";
+import { pickReferenceImage, pickReferenceVideo } from "../referenceImage";
 import { openWindow } from "../windows";
 import { runPythonScriptFile } from "../scripting";
 import { useUi } from "./uiStore";
@@ -187,6 +187,17 @@ export function Toolbar() {
               >
                 <ShapeIcon type="reference" />
                 <span>Bilde…</span>
+              </button>
+              <button
+                className="shape-btn"
+                title="Legg inn en filmsnutt å animere etter (MP4 eller WebM). Den følger tidslinja: velg et klipp og dra i tiden, så viser videoen samme øyeblikk. Videoen lenkes – bare stien lagres i scenen."
+                onClick={() => {
+                  setMoreOpen(false);
+                  pickReferenceVideo().catch(reportError);
+                }}
+              >
+                <ShapeIcon type="reference" />
+                <span>Video…</span>
               </button>
             </div>
           </div>

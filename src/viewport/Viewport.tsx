@@ -11,6 +11,7 @@ import { boxOf, objectBox, objectMatrix, round } from "../bounds";
 import { isBone, isHelper, isLight, isNode, isReference, type SceneObject, type Vec3 } from "../types";
 import { boneRest, descendantBones } from "../bones";
 import { isSkinned } from "../skinning";
+import { loadVideo, syncVideo, trackVideo, videoTime } from "../referenceVideo";
 import { geometryKey, geometryOf, getGeometry } from "./geometries";
 import { normalMapFor, normalScaleOf, roughnessMapFor, textureById, textureFor } from "../meshes";
 import { cutGeometry, overlappingHoles } from "./csg";
@@ -461,9 +462,41 @@ function SolidMesh({ obj, selected, holes: givenHoles, accent }: { obj: SceneObj
  * Referansebilde: uten lys og tonekurve, så det har samme farger som fila uansett lysoppsett. Skriver ikke til dybden,
  * så modellen synes bak et bilde foran den, og bildet synes rundt modellen foran det.
  */
+/**
+ * Referansevideo: lastes når den trengs og følger tidslinja – tiden i videoen er `videoOffset + videoRate · klippets tid`
+ * (0 uten klipp valgt). Under avspilling spiller den med; ellers står den på riktig bilde.
+ */
+function useReferenceVideo(obj: SceneObject): THREE.Texture | null {
+  const [video, setVideo] = useState<Awaited<ReturnType<typeof loadVideo>> | null>(null);
+  useEffect(() => {
+    if (!obj.video) return setVideo(null);
+    let alive = true;
+    loadVideo(obj.video)
+      .then((v) => alive && setVideo(v))
+      .catch((e) => console.warn("Referansevideo", obj.video, e));
+    return () => {
+      alive = false;
+    };
+  }, [obj.video]);
+  const timing = useRef({ offset: 0, rate: 1 });
+  timing.current = { offset: obj.videoOffset ?? 0, rate: obj.videoRate ?? 1 };
+  const target = () => {
+    const { clipId, time } = usePlayer.getState();
+    return video ? videoTime(video, clipId ? time : 0, timing.current.offset, timing.current.rate) : 0;
+  };
+  useEffect(() => (video ? trackVideo(video, target) : undefined)); // eslint-disable-line react-hooks/exhaustive-deps
+  useFrame(() => {
+    if (!video) return;
+    const { clipId, playing } = usePlayer.getState();
+    syncVideo(video, target(), playing && !!clipId, timing.current.rate);
+  });
+  return video?.texture ?? null;
+}
+
 function ReferenceImage({ obj, selected, accent }: { obj: SceneObject; selected: boolean; accent: string }) {
   const onClick = useSelectHandler(obj.id);
-  const texture = obj.imageId ? textureById(obj.imageId) : null;
+  const videoTexture = useReferenceVideo(obj);
+  const texture = obj.video ? videoTexture : obj.imageId ? textureById(obj.imageId) : null;
   return (
     <mesh
       name={obj.name}
@@ -474,7 +507,17 @@ function ReferenceImage({ obj, selected, accent }: { obj: SceneObject; selected:
       scale={obj.scale}
       onClick={onClick}
     >
-      <meshBasicMaterial map={texture} transparent opacity={obj.opacity} depthWrite={false} side={THREE.DoubleSide} toneMapped={false} />
+      <meshBasicMaterial
+        // Ny nøkkel når videoen blir klar – materialet må kompileres på nytt med tekstur.
+        key={texture ? "map" : "plain"}
+        map={texture}
+        color={texture ? "#ffffff" : "#33384a"}
+        transparent
+        opacity={obj.opacity}
+        depthWrite={false}
+        side={THREE.DoubleSide}
+        toneMapped={false}
+      />
       {selected && <Edges color={accent} />}
     </mesh>
   );

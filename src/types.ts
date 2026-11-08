@@ -150,6 +150,15 @@ export interface SceneObject {
   meshId?: string;
   /** Kun referansebilder: id i teksturregisteret (se meshes.ts). */
   imageId?: string;
+  /**
+   * Kun referansevideo (i stedet for imageId): stien til videofila. Lenkes, ikke lagres i scenen. Følger tidslinja: tiden i
+   * videoen er `videoOffset + videoRate · klippets tid` (se referenceVideo.ts).
+   */
+  video?: string;
+  /** Sekunder inn i videoen når klippet står på 0 (standard 0). */
+  videoOffset?: number;
+  /** Hvor fort videoen går i forhold til klippet (standard 1; 0.5 = halv fart). */
+  videoRate?: number;
   /** Kun bein: forelderbeinet. Mangler det (eller er slettet), er beinet en rot i skjelettet. */
   parentId?: string;
   /** Kun modeller: bundet til et skjelett. Hjørnenes vekter ligger i modellen (`MeshAsset.joints/weights`). */

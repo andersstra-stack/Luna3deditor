@@ -5,6 +5,7 @@ import { registerTexture, textureIdOf } from "./meshes";
 import { REFERENCE_HEIGHT, useEditor } from "./store";
 import type { SceneObject, Vec3 } from "./types";
 import { cameraState, viewTargetOnGround } from "./viewport/three-handle";
+import { VIDEO_EXTENSIONS, loadVideo } from "./referenceVideo";
 
 export const REFERENCE_EXTENSIONS = ["png", "jpg", "jpeg"];
 
@@ -36,6 +37,27 @@ export function addReferenceImage(data: ArrayBuffer, fileName: string): SceneObj
       type: "reference",
       name: fileName.split(/[\\/]/).pop()!.replace(/\.[^.]+$/, ""),
       texture: { id },
+      position: [x, REFERENCE_HEIGHT / 2, z],
+      rotation: facingCamera(),
+      folderId: state.activeFolderId,
+    },
+  ]);
+  state.selectMany([obj.id]);
+  return obj;
+}
+
+/** «Legg til → Video…»: en filmsnutt å animere etter. Lenkes (stien lagres), vender mot kameraet og følger tidslinja. */
+export async function pickReferenceVideo(): Promise<SceneObject | null> {
+  const picked = await open({ filters: [{ name: "Video", extensions: VIDEO_EXTENSIONS }], multiple: false });
+  if (typeof picked !== "string") return null;
+  await loadVideo(picked);
+  const state = useEditor.getState();
+  const [x, z] = viewTargetOnGround();
+  const [obj] = state.addObjects([
+    {
+      type: "reference",
+      name: picked.split(/[\\/]/).pop()!.replace(/\.[^.]+$/, ""),
+      video: picked,
       position: [x, REFERENCE_HEIGHT / 2, z],
       rotation: facingCamera(),
       folderId: state.activeFolderId,

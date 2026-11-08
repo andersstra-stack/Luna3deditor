@@ -79,6 +79,12 @@ const objectProps = {
     .union([z.number().min(0), z.array(z.number().min(0))])
     .optional()
     .describe("Curve only: tube radius in meters – one number, or one per point for a tapering tube (e.g. [0.12, 0.07, 0.02]). Default 0.1."),
+  video: z
+    .string()
+    .optional()
+    .describe("Reference only, instead of texture: absolute path to a video (MP4 H.264 or WebM) to animate from. It is linked (not stored in the scene) and follows the timeline."),
+  videoOffset: z.number().min(0).optional().describe("Reference video only: seconds into the video at clip time 0 (default 0)."),
+  videoRate: z.number().positive().optional().describe("Reference video only: video speed relative to the clip (default 1; 0.5 = the video runs at half speed)."),
   head: vec3.optional().describe("Bone only: WORLD point of the joint (root). Default for a new bone: the parent's tail."),
   tail: vec3.optional().describe("Bone only: WORLD point of the tip. head/tail replace position/rotation/scale."),
   roll: z.number().optional().describe("Bone only: twist around its own axis in degrees (default 0)."),
@@ -103,7 +109,7 @@ const meshProps = {
     .optional()
     .describe("type 'mesh' only: one [u, v] per vertex, needed for texture and normal_map. v = 0 is the TOP of the image (glTF)."),
   texture: z.string().optional().describe("type 'mesh' or 'reference': absolute path to a PNG or JPEG image. On a mesh the object's color tints it (default white)."),
-  height: z.number().positive().optional().describe("type 'reference' only: height of the image in meters (default 2); the width follows from the image."),
+  height: z.number().positive().optional().describe("type 'reference' only: height of the image or video in meters (default 2); the width follows from it."),
   normal_map: z.string().optional().describe("type 'mesh' only: absolute path to a PNG or JPEG normal map (OpenGL style, +Y up): fine detail without more triangles."),
   normal_scale: z.number().min(0).optional().describe("type 'mesh' only: strength of normal_map (default 1)."),
   roughness_map: z
@@ -142,6 +148,10 @@ All shapes are unit-sized and centered on their origin, so 'scale' equals the ob
   It stands upright facing +Z (rotation [0, 90, 0] for a side view), half transparent ('opacity'), and keeps the image's
   own colors under any light. It shows in the viewport and in screenshots, so compare your model with it there, but it is
   saved only in the scene: never in the GLB or in icons, and snapping, holes and raycast ignore it. Put it behind the model.
+  With 'video' (absolute path to MP4/WebM) instead of 'texture' it is a REFERENCE VIDEO that follows the animation
+  timeline: video time = videoOffset + videoRate × clip time (no clip selected: videoOffset). Use it to animate from film:
+  preview_animation at a time + screenshot shows the video frame and the pose at the same moment (screenshots wait for the
+  video to reach the frame) – compare, then set keyframes. Stand it next to or behind the character, facing the camera.
 - curve: a round tube along a smooth curve through 'points' (WORLD coordinates) with 'radius' (one number, or one per
   point to taper it) – branches, roots, cables, handles, tentacles, horns. Give points + radius instead of
   position/scale; get_scene returns its current world 'points' and 'radius'. Sending new points to update_objects
@@ -195,6 +205,7 @@ where one loop replaces hundreds of add_objects entries. The whole run is ONE un
 - luna.mesh(vertices=[...], triangles=[...], position=, rotation=, color=, vertex_colors=, smooth=, uvs=[(u, v), ...],
   texture="C:/path/color.png", normal_map="C:/path/normal.png", normal_scale=1, roughness_map="C:/path/rough.png") – custom shapes;
   luna.reference("C:/path/front.png", height=1.78, position=(0, 0.89, -0.5), rotation=(0, 0, 0), opacity=0.6) – image to model from;
+  luna.reference("C:/film/press.mp4", height=1.8, videoOffset=1.2, videoRate=1) – reference video that follows the timeline;
   luna.orient(forward, up) -> rotation that points the shape's +Z along forward and +Y toward up (like nodes)
 Large runs return only counts (not every id); use luna.objects(...) / get_scene to find objects afterwards.
 - luna.folder(name, parent=None) -> key (use as folder=/parent=)

@@ -94,6 +94,14 @@ MCP-verktøybeskrivelser er på engelsk.
   leses først i `applyScriptOps` (async) og legges i `animationSources.ts`, siden `applyScript` er synkron. En mappe gjøres om
   til filer av huben (`animationFiles` i `index.ts`) eller av Python. `rig_character` (commands.ts) setter alt sammen.
   Eksporten samler bundne modeller med samme rotbein til én SkinnedMesh (felles leddliste, `skinIndex` regnet om).
+- Referansevideo: `type: "reference"` med `video` (sti, lenket – ikke i scenefila), `videoOffset` og `videoRate`;
+  `src/referenceVideo.ts`. Videoen leses via `read_binary_file` (i vanlig nettleser: `fetch`) til en blob-URL og vises med
+  `THREE.VideoTexture` (en vanlig `Texture` lagres med elementets width/height = 0 og blir svart). Visningen
+  (`useReferenceVideo` i `Viewport.tsx`) setter tiden hvert bilde: `videoOffset + videoRate · klippets tid`; under
+  avspilling spiller den med. `settleVideos()` i screenshot-handleren venter på innlasting og «seeked» og sjekker tiden.
+  Bredden følger videoens mål – derfor leses videoen inn før `add_objects`/skript (`loadVideo`). Opptak fra MediaRecorder
+  mangler lengde og nøkkelbilder: lengden finnes ved å spole til slutten, og uten nøkkelbilder spoler Chromium feil (fila,
+  ikke Luna). Dra-og-slipp av video er ikke mulig (WebView gir ikke stien).
 - Referansebilder: `type: "reference"` (`isHelper`) med `imageId` i teksturregisteret i `meshes.ts`. Står i lokal XY og vender mot +Z,
   `meshBasicMaterial` uten tonekurve (`ReferenceImage` i `Viewport.tsx`). `referenceProps` i `store.ts` regner bredden fra bildets hode
   (`imageSizeOf`). Fra appen: `src/referenceImage.ts` (filvalg, dra-og-slipp når ingen modell følger med). Vises på skjermbilder; ikke i eksport eller ikoner.

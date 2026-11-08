@@ -10,6 +10,14 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **Referansevideo å animere etter**: «Legg til → Video…» legger inn en filmsnutt (MP4 eller WebM) som et referansebilde som
+  følger tidslinja. Velg et klipp og dra i tiden, så viser videoen samme øyeblikk; spilles klippet, spiller videoen med.
+  «Start» og «Fart» i egenskapspanelet bestemmer hvor i videoen klippet begynner og hvor fort den går. Videoen lenkes
+  (bare stien lagres i scenen) og kommer ikke med i eksporten. Claude kan legge den inn med `add_objects` (`video`) og
+  `luna.reference("film.mp4")`, og skjermbilder venter til videoen står på riktig bilde – så Claude kan sammenligne
+  figuren med filmen bilde for bilde.
+
 ## [0.21.0] — 2026-11-08
 
 ### Added

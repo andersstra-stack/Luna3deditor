@@ -33,6 +33,7 @@ import { boneFromHeadTail, boneTail, makesCycle } from "./bones";
 import { humanoidSkeleton } from "./humanoid";
 import { retargetAnimation } from "./retarget";
 import { animationSource } from "./animationSources";
+import { videoAspect } from "./referenceVideo";
 
 const HISTORY_LIMIT = 100;
 
@@ -207,17 +208,30 @@ export const REFERENCE_HEIGHT = 2;
  * Kopier og innlimte objekter har `imageId` fra før og trenger ingen `texture`.
  */
 function referenceProps(texture: MeshInput["texture"], height: number | undefined, given: Partial<SceneObject>): Partial<SceneObject> {
-  const imageId = texture ? storeImage("texture", texture) : given.imageId;
-  if (!imageId) throw new Error("Et referansebilde trenger texture (PNG eller JPEG)");
-  const size = imageSizeOf(imageId);
-  if (!size || !size.width || !size.height) throw new Error("Kunne ikke lese målene på bildet (PNG eller JPEG)");
   if (height !== undefined && !(Number.isFinite(height) && height > 0)) throw new Error("height må være over 0");
   const h = height ?? REFERENCE_HEIGHT;
+  if (given.video) {
+    // Referansevideo: bredden fra videoens mål (lest inn på forhånd, se referenceVideo.ts), ellers 16:9.
+    if (texture) throw new Error("Et referanseobjekt har enten texture (bilde) eller video, ikke begge");
+    checkVideoTiming(given);
+    const aspect = videoAspect(given.video) ?? 16 / 9;
+    const scale = given.scale ?? ([round3(h * aspect), h, 1] as Vec3);
+    return { scale, position: given.position ?? [0, scale[1] / 2, 0], opacity: given.opacity ?? 0.6, color: given.color ?? "#ffffff" };
+  }
+  const imageId = texture ? storeImage("texture", texture) : given.imageId;
+  if (!imageId) throw new Error("Et referansebilde trenger texture (PNG eller JPEG) eller video (MP4/WebM)");
+  const size = imageSizeOf(imageId);
+  if (!size || !size.width || !size.height) throw new Error("Kunne ikke lese målene på bildet (PNG eller JPEG)");
   const scale = given.scale ?? ([round3((h * size.width) / size.height), h, 1] as Vec3);
   return { imageId, scale, position: given.position ?? [0, scale[1] / 2, 0], opacity: given.opacity ?? 0.6, color: given.color ?? "#ffffff" };
 }
 
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
+
+function checkVideoTiming(o: Partial<SceneObject>) {
+  if (o.videoOffset !== undefined && !(Number.isFinite(o.videoOffset) && o.videoOffset >= 0)) throw new Error("videoOffset må være 0 eller mer (sekunder)");
+  if (o.videoRate !== undefined && !(Number.isFinite(o.videoRate) && o.videoRate > 0)) throw new Error("videoRate må være over 0");
+}
 
 /** Forelderbeinet må finnes og være et bein. */
 function checkParent(parent: string | null | undefined, objects: SceneObject[]): string | undefined {
@@ -302,6 +316,10 @@ function withUpdate(o: SceneObject, update: Partial<SceneObject> & CurveInput & 
   if (head !== undefined || tail !== undefined || roll !== undefined) {
     Object.assign(props, boneFromHeadTail(head ?? o.position, tail ?? boneTail(o), roll ?? 0, Math.abs((props.scale ?? o.scale)[0])));
   }
+  if ((props.video !== undefined || props.videoOffset !== undefined || props.videoRate !== undefined) && o.type !== "reference") {
+    throw new Error(`video, videoOffset og videoRate gjelder bare referanser – ${o.name} er ${o.type}`);
+  }
+  checkVideoTiming(props);
   const next = { ...o, ...props, id: o.id, type: o.type };
   if ("parentId" in next && !next.parentId) delete next.parentId;
   if (points === undefined && radius === undefined) return next;

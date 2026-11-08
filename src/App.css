@@ -985,6 +985,15 @@ select.text option {
   cursor: default;
 }
 
+.video-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 .simplify-row .text {
   width: 56px;
   flex: none;

@@ -88,6 +88,7 @@ PROPS = {
     "opacity", "visible", "hole", "intensity", "emissive", "material", "props", "folder",
     "taper", "points", "radius", "vertices", "triangles", "vertex_colors", "smooth",
     "uvs", "texture", "normal_map", "normal_scale", "roughness_map", "height", "head", "tail", "roll", "parent",
+    "video", "videoOffset", "videoRate",
 }
 MARKER = "@@LUNA3D_OPS@@"
 MAX_OPS = 20000
@@ -168,6 +169,12 @@ def _clean(props):
         if k in ("position", "rotation", "scale", "head", "tail"):
             v = _vec3(k, v)
         elif k == "roll":
+            v = float(v)
+        elif k == "video":
+            v = os.path.abspath(os.fspath(v))
+            if not os.path.isfile(v):
+                raise ValueError(f"Fant ikke videoen {v}")
+        elif k in ("videoOffset", "videoRate"):
             v = float(v)
         elif k == "parent":
             v = None if v is None else str(v)
@@ -426,8 +433,17 @@ curve = _shape("curve")
 mesh = _shape("mesh")
 
 
+_VIDEO_FILES = (".mp4", ".webm", ".mov", ".m4v")
+
+
 def reference(path, **props):
-    """Referansebilde å modellere etter: vises i scenen, men eksporteres ikke. Vender mot +Z; rotation=(0, 90, 0) gir et bilde fra siden."""
+    """Referansebilde å modellere etter: vises i scenen, men eksporteres ikke. Vender mot +Z; rotation=(0, 90, 0) gir et bilde fra siden.
+
+    En video (MP4/WebM) blir en referansevideo som følger tidslinja: tiden i videoen er videoOffset + videoRate · klippets tid.
+    Videoen lenkes (bare stien lagres i scenen).
+    """
+    if os.fspath(path).lower().endswith(_VIDEO_FILES):
+        return add("reference", video=path, **props)
     return add("reference", texture=path, **props)
 
 

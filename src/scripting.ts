@@ -13,6 +13,7 @@ import { curveWorldPoints } from "./curves";
 import { simplifierReady } from "./meshSimplify";
 import { clearAnimationSources, putAnimationSource } from "./animationSources";
 import { loadAnimationSource } from "./animationImport";
+import { loadVideo } from "./referenceVideo";
 
 export const SCRIPT_MARKER = "@@LUNA3D_OPS@@";
 
@@ -81,6 +82,8 @@ export async function applyScriptOps(ops: ScriptOp[], name = "skript", scriptPat
       const data = await invoke<ArrayBuffer>("read_binary_file", { path });
       putAnimationSource(path, await loadAnimationSource(data, path));
     }
+    // Referansevideoer leses inn først, så bredden kan følge videoens mål.
+    for (const op of ops) if (op.op === "add" && typeof op.props.video === "string") await loadVideo(op.props.video);
     const result = useEditor.getState().applyScript(ops, scriptPath ? scriptKey(scriptPath) : undefined);
     useEditor.getState().setActivity(`${name}: ${describeResult(result)}`);
     return result;

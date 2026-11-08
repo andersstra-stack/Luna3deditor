@@ -24,3 +24,26 @@ Ting jeg la merke til mens figurene ble forenklet, rigget og animert (november 2
     innstillinger). Kan legges i git hvis du vil, så det følger repoet.
 12. **Samme klipp på flere figurer lagres flere ganger** (én gang per scene). Bare et problem hvis mange figurer ligger i samme
     scene.
+
+## Egne animasjoner (fra konsoll-testen, 8. november 2026)
+
+Testen «Konsoll» (piloten trykker, tenker, trykker videre) virket, men var stiv. Rekkefølge jeg ville tatt:
+
+13. **Overgang som glir gjennom nøklene (spline).** I dag er hver overgang lineær eller «myk» (myk start og stopp), så en figur
+    med mange nøkler bremser helt opp ved hver av dem. En kurve gjennom nøklene (Catmull-Rom) gir flytende bevegelse. Liten
+    endring i `channelAt` (`animation.ts`) + eksporten sampler den uansett.
+14. **Lag: Idle under egne bevegelser.** La et klipp ligge oppå et annet (f.eks. «Konsoll» oppå Mixamo-Idle), så pust,
+    vektforskyvning og små bevegelser er med, og bare armene/hodet styres av det egne klippet. Utvidelse av klippsystemet.
+15. **Liv i detaljene i skriptet:** hodet leder (ser før hånden går), albue og håndledd kommer litt etter skulderen,
+    fingeren spretter litt opp etter trykket, vektforskyvning mellom føttene, pust i overkroppen.
+16. **Gizmo-opptak med musa** på bein (velg klipp, drei beinet) er ikke prøvd ennå – bare matten bak er testet.
+17. **IK i editoren.** Editoren kan ikke dra i hånden og la armen følge etter; konsoll-skriptet regner det ut selv
+    (`N:\space ed characters\rigget\konsoll_test.py`). Et IK-håndtak i editoren ville gjort håndarbeid mye enklere.
+
+## Animasjon fra video
+
+18. **Prøv en nettjeneste først** (Rokoko Vision, DeepMotion, Plask): video → FBX som kan legges på pilotene med «Importer
+    animasjon». Heter beina noe annet enn Mixamo-navnene, må navnene inn i `ALIASES` i `src/retarget.ts` (liten jobb).
+19. **Video → animasjon i Luna selv:** en positurmodell (f.eks. MediaPipe) finner leddene i hvert bilde, og bevegelsen overføres
+    til skjelettet med samme matte som `import_animation`. Krever glatting (skjelving, glidende føtter) og gir usikker dybde med
+    ett kamera. Større jobb – vurder etter at punkt 18 er prøvd.

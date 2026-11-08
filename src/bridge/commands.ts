@@ -11,6 +11,7 @@ import { splitLooseParts } from "../meshSplit";
 import { mergeObjects } from "../meshMerge";
 import { simplifierReady } from "../meshSimplify";
 import { importAnimationFile } from "../animationImport";
+import { loadVideo, settleVideos } from "../referenceVideo";
 import { usePlayer } from "../animationPlayer";
 import type { AnimClip } from "../types";
 import {
@@ -150,7 +151,7 @@ export const handlers: Record<BridgeMethod, Handler> = {
     return compactScriptResult(await applyScriptOps(ops, (p.name as string | undefined) ?? "Claude-skript", p.script as string | undefined));
   },
 
-  add_objects: (p) => {
+  add_objects: async (p) => {
     const items = p.objects as (Partial<SceneObject> & { type: ShapeType })[];
     if (!Array.isArray(items) || !items.length) throw new Error("objects må være en ikke-tom liste");
     for (const i of items) {
@@ -161,6 +162,8 @@ export const handlers: Record<BridgeMethod, Handler> = {
         );
       }
     }
+    // Referansevideoer leses inn først, så bredden kan følge videoens mål.
+    for (const i of items) if (i.type === "reference" && typeof i.video === "string") await loadVideo(i.video);
     // Claude må velge mappe eksplisitt – brukerens aktive mappe brukes ikke.
     const created = editor().addObjects(items.map((i) => ({ ...i, folderId: i.folderId ?? null })));
     say(created.length === 1 ? `la til ${created[0].name}` : `la til ${created.length} objekter`);
@@ -479,6 +482,8 @@ export const handlers: Record<BridgeMethod, Handler> = {
       frameScene(checkView(p.view));
     }
     try {
+      // Referansevideoer må stå på riktig bilde før bildet tas.
+      await settleVideos();
       return await captureViewport(typeof p.width === "number" ? p.width : 1024);
     } finally {
       if (custom && p.keep_view !== true) restoreCamera(saved);

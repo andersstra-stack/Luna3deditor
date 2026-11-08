@@ -552,6 +552,40 @@ function SimplifyRow({ meshes }: { meshes: SceneObject[] }) {
   );
 }
 
+/** Referansevideo: hvilken fil, og hvordan den følger tidslinja (start i videoen og fart). */
+function VideoTiming({ obj }: { obj: SceneObject }) {
+  const field = (key: "videoOffset" | "videoRate", title: string, fallback: number, min: number) => (
+    <label className="video-field">
+      {title}
+      <input
+        key={`${obj.id}:${obj[key] ?? fallback}`}
+        className="text"
+        type="number"
+        step={0.05}
+        min={min}
+        defaultValue={obj[key] ?? fallback}
+        onBlur={(e) => {
+          const v = Number(e.target.value.replace(",", "."));
+          if (Number.isFinite(v) && v !== (obj[key] ?? fallback)) run(() => useEditor.getState().updateObject(obj.id, { [key]: v }))();
+        }}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+      />
+    </label>
+  );
+  return (
+    <div className="row">
+      <div className="row-title">
+        Video <span className="value">{obj.video!.split(/[\\/]/).pop()}</span>
+      </div>
+      <p className="hint">Følger tidslinja: tiden i videoen er start + fart × klippets tid. Uten klipp valgt står den på start.</p>
+      <div className="btn-row">
+        {field("videoOffset", "Start (s)", 0, 0)}
+        {field("videoRate", "Fart", 1, 0.05)}
+      </div>
+    </div>
+  );
+}
+
 /** Bein: forelderen, lengden og et nytt bein som fortsetter fra tuppen. */
 function BoneInfo({ obj }: { obj: SceneObject }) {
   const objects = useEditor((s) => s.objects);
@@ -864,7 +898,10 @@ export function Inspector() {
       {!reference && <ColorRow objs={objs} />}
 
       {isBone(obj.type) ? null : reference ? (
-        <Slider title="Synlighet" objs={objs} field="opacity" />
+        <>
+          <Slider title="Synlighet" objs={objs} field="opacity" />
+          {obj.video && <VideoTiming obj={obj} />}
+        </>
       ) : node ? (
         <NodePropsEditor obj={obj} />
       ) : light ? (
