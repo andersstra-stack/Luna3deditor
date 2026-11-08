@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-11-08
+
 ### Added
 - **Menneskeskjelett med ett klikk**: «Lag menneskeskjelett» i egenskapspanelet (MCP `add_humanoid_skeleton`, Python
   `luna.humanoid`) plasserer 22 bein med Mixamo-navn (Hips, Spine … LeftArm, LeftForeArm …) ut fra en figur i T- eller
