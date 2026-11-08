@@ -90,6 +90,10 @@ MCP-verktøybeskrivelser er på engelsk.
   kildebeinets hvileretning (mot barnet, målt som Luna-beinets rot→tupp) over på Luna-beinets – så T-positur passer på
   A-positur. Rotbeinet får forflytningen skalert med høyden. `src/animationImport.ts` leser FBX/GLB og legger klippet inn
   med `store.importClip`. Mixamo-FBX: cm, Y opp, ansiktet mot +Z, alle klipp heter «mixamo.com» (filnavnet brukes).
+  `reduceKeys` fjerner nøkler som ligger på linja (Luna interpolerer lineært). Python: skript-op `import_animation`; filene
+  leses først i `applyScriptOps` (async) og legges i `animationSources.ts`, siden `applyScript` er synkron. En mappe gjøres om
+  til filer av huben (`animationFiles` i `index.ts`) eller av Python. `rig_character` (commands.ts) setter alt sammen.
+  Eksporten samler bundne modeller med samme rotbein til én SkinnedMesh (felles leddliste, `skinIndex` regnet om).
 - Referansebilder: `type: "reference"` (`isHelper`) med `imageId` i teksturregisteret i `meshes.ts`. Står i lokal XY og vender mot +Z,
   `meshBasicMaterial` uten tonekurve (`ReferenceImage` i `Viewport.tsx`). `referenceProps` i `store.ts` regner bredden fra bildets hode
   (`imageSizeOf`). Fra appen: `src/referenceImage.ts` (filvalg, dra-og-slipp når ingen modell følger med). Vises på skjermbilder; ikke i eksport eller ikoner.
@@ -157,10 +161,12 @@ MCP-verktøybeskrivelser er på engelsk.
 
 ## Sjekk
 - `npx tsc --noEmit` (frontend), `cargo build` i `src-tauri`.
-- `node mcp-server/hub-test.mjs` – huben med falske vinduer og flere økter (egne testporter, trenger ikke appen).
-- Ny MCP-kode ende-til-ende uten å røre brukerens hub: start en testhub (`LUNA_BRIDGE_PORT=47417 LUNA_HUB_PORT=47418 node
-  mcp-server/index.ts --hub`), åpne appen med `?bridge=47417` i adressen (nettleserpanelet: `http://localhost:1420/?bridge=47417`)
-  og kall verktøyene med en MCP-klient mot `http://127.0.0.1:47418/mcp`. Stopp testhuben etterpå. `tauri dev` mot testhuben:
+- `node mcp-server/hub-test.mjs` – huben med falske vinduer og flere økter (egne testporter, trenger ikke appen). Lukk
+  nettleserfaner med appen først – en side koblet til testporten blir et ekstra vindu og får testen til å feile.
+- Ny MCP-kode ende-til-ende uten å røre brukerens hub: `npm run testhub` (porter 47417/47418, logg `~/.luna3d/hub-47418.log`),
+  åpne appen med `?bridge=47417` i adressen (nettleserpanelet: `http://localhost:1420/?bridge=47417`) og kall verktøyene med
+  `npm run call -- <verktøy> '<json>'` (`batch`, `@fil` for argumenter, bilder lagres til fil; se `mcp-server/call.mjs`).
+  Stopp testhuben etterpå. `tauri dev` mot testhuben:
   launch-oppsettet `tauri-test` (`VITE_LUNA_BRIDGE_PORT=47417`), så dev-vinduet ikke blandes med brukerens installerte app.
 - `npm run tauri dev`, så `node mcp-server/smoke-test.mjs <prosjekt> <utmappe>` for ende-til-ende via MCP.
 

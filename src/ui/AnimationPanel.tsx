@@ -6,7 +6,7 @@ import { isInside } from "../folders";
 import { PRESETS, PRESET_DEFAULTS, PRESET_LABELS, type Axis, type Preset } from "../animation";
 import { usePlayer } from "../animationPlayer";
 import { isBone, type SceneObject } from "../types";
-import { importAnimationFile } from "../animationImport";
+import { pickAndImportAnimations } from "../animationImport";
 import { reportError } from "./StatusBar";
 import { Icon } from "./icons";
 
@@ -110,9 +110,9 @@ export function AnimationPanel({ objs }: { objs: SceneObject[] }) {
       {hasBones && (
         <button
           className="anim-add"
-          title="Legg en animasjon fra Mixamo (FBX) eller en GLB på skjelettet. Beina må hete som i fila (Mixamo-navn: Hips, LeftArm …)."
+          title="Legg animasjoner fra Mixamo (FBX) eller GLB på skjelettet – velg gjerne flere filer. Beina må hete som i fila (Mixamo-navn: Hips, LeftArm …)."
           onClick={() =>
-            importAnimationFile()
+            pickAndImportAnimations()
               .then((r) => {
                 if (!r) return;
                 usePlayer.getState().select(r.clipId);

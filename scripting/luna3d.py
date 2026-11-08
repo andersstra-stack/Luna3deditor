@@ -75,7 +75,7 @@ __all__ = [
     "scene", "objects", "get", "folders", "folder", "add", "update", "delete",
     "box", "sphere", "cylinder", "cone", "torus", "plane", "capsule", "wedge", "prism",
     "pyramid", "stairs", "hemisphere", "tube", "rounded_box", "curve", "point_light", "spot_light", "node", "mesh",
-    "reference", "orient", "animate", "keyframes", "simplify", "bone", "skin", "humanoid",
+    "reference", "orient", "animate", "keyframes", "simplify", "bone", "skin", "humanoid", "import_animation",
 ]
 
 SHAPES = {
@@ -361,6 +361,42 @@ def humanoid(*meshes, folder=None):
     if not flat:
         raise ValueError("humanoid trenger minst én modell")
     _push({"op": "humanoid", "meshes": flat, "folder": folder})
+
+
+_ANIMATION_FILES = (".fbx", ".glb", ".gltf")
+
+
+def import_animation(*paths, clip=None, in_place=False, loop=None, fps=None, folder=None):
+    """Legger animasjoner fra filer (Mixamo-FBX, GLB) på beina med samme navn – også fra en hel mappe.
+
+        luna.import_animation("L:/Assets/Animasjoner/Mixamo")              # alle .fbx/.glb i mappa
+        luna.import_animation("C:/anim/Walking.fbx", in_place=True)
+
+    Klippet får filnavnet (eller clip= for én fil). folder = bare beina i den mappa (flere figurer i scenen).
+    Beina må hete som i fila – humanoid() lager Mixamo-navn.
+    """
+    files = []
+    for p in paths:
+        p = os.path.abspath(os.fspath(p))
+        if os.path.isdir(p):
+            found = sorted(f for f in os.listdir(p) if f.lower().endswith(_ANIMATION_FILES))
+            if not found:
+                raise ValueError(f"Ingen .fbx/.glb/.gltf i {p}")
+            files += [os.path.join(p, f) for f in found]
+        elif os.path.isfile(p):
+            files.append(p)
+        else:
+            raise ValueError(f"Fant ikke {p}")
+    if not files:
+        raise ValueError("import_animation trenger minst én fil eller mappe")
+    op = {"op": "import_animation", "paths": files, "in_place": bool(in_place), "folder": folder}
+    if clip is not None:
+        op["clip"] = str(clip)
+    if loop is not None:
+        op["loop"] = bool(loop)
+    if fps is not None:
+        op["fps"] = int(fps)
+    _push(op)
 
 
 def _shape(type):

@@ -31,6 +31,8 @@ import { simplifiedObject, type SimplifyResult, type SimplifyTarget } from "./me
 import { skinnedObject } from "./skinning";
 import { boneFromHeadTail, boneTail, makesCycle } from "./bones";
 import { humanoidSkeleton } from "./humanoid";
+import { retargetAnimation } from "./retarget";
+import { animationSource } from "./animationSources";
 
 const HISTORY_LIMIT = 100;
 
@@ -710,6 +712,21 @@ export const useEditor = create<EditorState>((set, get) => {
             objects.push(obj);
             ids.set(b.name, obj.id);
             result.created.push(obj.id);
+          }
+        } else if (op.op === "import_animation") {
+          // Filene er lest inn på forhånd (scripting.ts). Beina: alle i scenen, eller de i mappa som er oppgitt.
+          const folder = op.folder ? resolve(op.folder, "mappe") : null;
+          const bones = objects.filter((o) => isBone(o.type) && (!folder || (o.folderId !== null && isInside(folders, o.folderId, folder))));
+          if (!bones.length) throw new Error("Ingen bein å legge animasjonen på – lag et skjelett først (luna.humanoid)");
+          if (op.clip && op.paths.length > 1) throw new Error("clip (navnet) gjelder bare én fil");
+          for (const path of op.paths) {
+            const name = op.clip ?? path.split(/[\\/]/).pop()!.replace(/\.(fbx|glb|gltf)$/i, "");
+            const r = retargetAnimation(animationSource(path), bones, { name, inPlace: op.in_place, loop: op.loop, fps: op.fps });
+            const old = clips.find((c) => c.name === r.name);
+            const clip: AnimClip = { id: old?.id ?? newId("clip"), name: r.name, duration: r.duration, loop: r.loop, tracks: r.tracks };
+            clips = old ? clips.map((c) => (c === old ? clip : c)) : [...clips, clip];
+            (result.imported ??= []).push({ clip: r.name, duration: r.duration, keys: r.keys });
+            result.animated += r.tracks.length;
           }
         } else if (op.op === "skin") {
           const bones = op.bones?.map((ref) => resolve(ref, "objekt"));

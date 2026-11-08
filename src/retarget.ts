@@ -21,6 +21,35 @@ export interface RetargetOptions {
   loop?: boolean;
 }
 
+/** Nøkler som ligger så nær den rette linja mellom naboene fjernes (Luna interpolerer lineært mellom nøklene). */
+const ROTATION_TOLERANCE = 0.3; // grader
+const POSITION_TOLERANCE = 0.001; // meter
+
+/**
+ * Færre nøkler med samme bevegelse: går fram fra siste beholdte nøkkel og strekker linja så langt alle nøklene imellom
+ * ligger innenfor toleransen. Første og siste nøkkel beholdes alltid.
+ */
+export function reduceKeys(keys: AnimKey[]): AnimKey[] {
+  if (keys.length < 3) return keys;
+  const fits = (a: AnimKey, b: AnimKey, k: AnimKey) => {
+    const f = (k.t - a.t) / (b.t - a.t || 1);
+    const near = (x?: Vec3, y?: Vec3, z?: Vec3, tol = 0) => !x || !y || !z || z.every((v, i) => Math.abs(x[i] + (y[i] - x[i]) * f - v) <= tol);
+    return near(a.rotation, b.rotation, k.rotation, ROTATION_TOLERANCE) && near(a.position, b.position, k.position, POSITION_TOLERANCE);
+  };
+  const out = [keys[0]];
+  let anchor = 0;
+  for (let j = 2; j < keys.length; j++) {
+    let ok = true;
+    for (let k = anchor + 1; k < j && ok; k++) ok = fits(keys[anchor], keys[j], keys[k]);
+    if (!ok) {
+      anchor = j - 1;
+      out.push(keys[anchor]);
+    }
+  }
+  out.push(keys[keys.length - 1]);
+  return out;
+}
+
 export interface RetargetResult {
   name: string;
   duration: number;
@@ -30,6 +59,9 @@ export interface RetargetResult {
   mapped: { bone: string; source: string }[];
   /** Luna-bein uten partner (står stille i forhold til forelderen). */
   unmapped: string[];
+  /** Nøkler før og etter reduksjonen. */
+  sampled: number;
+  keys: number;
 }
 
 /** Navn uten rigg-prefiks («mixamorig:LeftArm», «mixamorig1LeftArm» → «leftarm»). */
@@ -232,11 +264,14 @@ export function retargetAnimation(source: THREE.Object3D, bones: SceneObject[], 
   mixer.stopAllAction();
 
   const mapped = [...pair].map(([id, s]) => ({ bone: byId.get(id)!.name, source: s.name }));
+  const tracks = [...keys].map(([target, ks]) => ({ target, keys: reduceKeys(ks) }));
   return {
     name: options.name ?? clip.name,
     duration: Math.round(clip.duration * 1000) / 1000,
     loop: options.loop ?? true,
-    tracks: [...keys].map(([target, ks]) => ({ target, keys: ks })),
+    tracks,
+    sampled: [...keys.values()].reduce((n, ks) => n + ks.length, 0),
+    keys: tracks.reduce((n, t) => n + t.keys.length, 0),
     mapped,
     unmapped: ordered.filter((b) => !pair.has(b.id)).map((b) => b.name),
   };

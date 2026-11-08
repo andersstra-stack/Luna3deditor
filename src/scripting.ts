@@ -11,6 +11,8 @@ import { boneTail } from "./bones";
 import { nodeAxes } from "./nodes";
 import { curveWorldPoints } from "./curves";
 import { simplifierReady } from "./meshSimplify";
+import { clearAnimationSources, putAnimationSource } from "./animationSources";
+import { loadAnimationSource } from "./animationImport";
 
 export const SCRIPT_MARKER = "@@LUNA3D_OPS@@";
 
@@ -61,18 +63,30 @@ export function describeResult(r: ScriptResult): string {
     r.animated && `${plural(r.animated, "animasjon", "animasjoner")}`,
     r.simplified?.length && `forenklet ${plural(r.simplified.length, "modell", "modeller")}`,
     r.skinned && `bandt ${plural(r.skinned, "modell", "modeller")} til skjelettet`,
+    r.imported?.length && `${plural(r.imported.length, "animasjon", "animasjoner")} fra fil`,
   ].filter(Boolean);
   return parts.length ? parts.join(", ") : "ingen endringer";
 }
 
 /**
  * Bruker skriptets endringer på scenen (ett angre-steg). Med `scriptPath` merkes det nye
- * med skriptet, og resultatet fra forrige kjøring av samme skript erstattes.
+ * med skriptet, og resultatet fra forrige kjøring av samme skript erstattes. Animasjonsfiler (luna.import_animation)
+ * og forenkling trenger forarbeid som må vente, så det gjøres først.
  */
-export function applyScriptOps(ops: ScriptOp[], name = "skript", scriptPath?: string): ScriptResult {
-  const result = useEditor.getState().applyScript(ops, scriptPath ? scriptKey(scriptPath) : undefined);
-  useEditor.getState().setActivity(`${name}: ${describeResult(result)}`);
-  return result;
+export async function applyScriptOps(ops: ScriptOp[], name = "skript", scriptPath?: string): Promise<ScriptResult> {
+  if (ops.some((op) => op.op === "simplify")) await simplifierReady;
+  const files = [...new Set(ops.flatMap((op) => (op.op === "import_animation" ? op.paths : [])))];
+  try {
+    for (const path of files) {
+      const data = await invoke<ArrayBuffer>("read_binary_file", { path });
+      putAnimationSource(path, await loadAnimationSource(data, path));
+    }
+    const result = useEditor.getState().applyScript(ops, scriptPath ? scriptKey(scriptPath) : undefined);
+    useEditor.getState().setActivity(`${name}: ${describeResult(result)}`);
+    return result;
+  } finally {
+    clearAnimationSources();
+  }
 }
 
 interface ScriptOutput {
@@ -91,8 +105,6 @@ export async function runPythonScriptFile(path?: string) {
   if (!target) return null;
   const name = target.split(/[\\/]/).pop()!;
 
-  // Forenkling (luna.simplify) trenger WebAssembly-modulen klar før endringene brukes.
-  await simplifierReady;
   const out = await invoke<ScriptOutput>("run_python_script", { path: target, sceneJson: JSON.stringify(sceneForScripts()) });
   const { ops, printed } = parseScriptOutput(out.stdout);
   if (printed) console.info(`[${name}]`, printed);

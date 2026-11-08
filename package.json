@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "mcp": "node mcp-server/index.ts",
-    "bump": "node scripts/bump-version.mjs"
+    "bump": "node scripts/bump-version.mjs",
+    "testhub": "node scripts/testhub.mjs",
+    "call": "node mcp-server/call.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",

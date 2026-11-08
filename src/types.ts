@@ -348,7 +348,8 @@ export type ScriptOp =
   | { op: "keyframes"; target: string; clip: string; keys: unknown[]; duration?: number; loop?: boolean }
   | { op: "simplify"; ids: string[]; ratio?: number; triangles?: number; max_error?: number }
   | { op: "skin"; meshes: string[]; bones?: string[] }
-  | { op: "humanoid"; meshes: string[]; folder?: string | null };
+  | { op: "humanoid"; meshes: string[]; folder?: string | null }
+  | { op: "import_animation"; paths: string[]; clip?: string; in_place?: boolean; loop?: boolean; fps?: number; folder?: string | null };
 
 export interface ScriptResult {
   /** Objekter fra forrige kjøring av samme skript som ble fjernet. */
@@ -363,6 +364,8 @@ export interface ScriptResult {
   simplified?: { name: string; before: number; after: number }[];
   /** Modeller som ble bundet til skjelettet. */
   skinned?: number;
+  /** Animasjoner lagt på skjelettet fra fil (navn, sekunder, nøkler). */
+  imported?: { clip: string; duration: number; keys: number }[];
   /** Skriptets nøkler (@o1, @f1 …) → id-er i scenen. */
   keys: Record<string, string>;
 }

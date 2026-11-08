@@ -21,6 +21,19 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
   GLB-en. Valg av en bundet modell viser klippene som beveger den. Prøvd på fem Tripo-piloter med Idle, Walking, Running,
   Waving, Talking og Sitting.
 
+- **Rigg en figur i ett steg**: MCP-verktøyet `rig_character` tar en modellfil og en mappe med Mixamo-animasjoner og gjør
+  resten – import i riktig høyde (standard 1,8 m) i en egen mappe, menneskeskjelett, binding og alle animasjonene. En pilot
+  med 17 Mixamo-klipp tok under 6 sekunder. I egenskapspanelet lager «Lag skjelett og bind» skjelettet og binder i samme klikk.
+- `import_model` tar `height` (meter), så en figur som kommer 1 m høy fra Tripo kan importeres i riktig størrelse.
+- `import_animation` tar flere filer eller en hel mappe, og dialogen i animasjonspanelet lar deg velge flere filer.
+  `luna.import_animation(...)` gjør det samme fra Python (også en mappe).
+
+### Changed
+- **Mindre scenefiler med animasjoner**: importerte klipp lagrer bare nøklene som trengs (en nøkkel som ligger på linja mellom
+  naboene innen 0,3° og 1 mm, fjernes). Mixamo-Idle gikk fra 11 000 til 828 nøkler, og en pilot med 17 klipp tar 4,1 MB.
+- **Én skin per figur i GLB-en**: alle delene som er bundet til samme skjelett, eksporteres som én skinnet mesh med ett
+  materiale per utseende – én SkinnedMeshRenderer i Unity i stedet for én per del. Fiskeren gikk fra 12 skins til 1.
+
 ### Fixed
 - Lagring av scenen lager mappa hvis den mangler (som GLB-eksporten allerede gjorde).
 

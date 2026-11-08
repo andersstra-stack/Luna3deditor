@@ -11,7 +11,7 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withImages } from "./images.ts";
@@ -201,7 +201,8 @@ Large runs return only counts (not every id); use luna.objects(...) / get_scene 
 - luna.update(id_or_key, **props), luna.delete(*ids), luna.simplify(id_or_key, ratio=0.1 or triangles=5000) – fewer triangles
 - luna.bone(name=, head=(x,y,z), tail=(x,y,z), parent=key, roll=, folder=) -> key; luna.skin(mesh_keys..., bones=[...]) binds
   meshes to the bones (default all) with automatic weights; luna.humanoid(mesh_keys..., folder=) builds a Mixamo-named
-  skeleton for a T/A-pose character
+  skeleton for a T/A-pose character; luna.import_animation("C:/anim/Mixamo", in_place=False) puts every animation file
+  (or the given files) on the bones
 - luna.scene / luna.objects(name=, type=, folder=) / luna.folders(name=) / luna.get(id): the scene at start,
   objects include "bounds" {min, max}
 print() output is returned to you; exceptions return the traceback and change nothing. Save reusable scripts with
@@ -233,9 +234,9 @@ the hierarchy and _L/_R names swap. Bones show through the mesh in the viewport.
 skin_mesh them (automatic weights; limit 'bones' for parts that must follow one bone rigidly, e.g. eyes/beard → head).
 A bone's local +Y points to its tail, so keyframe rotations are around the joint in the bone's own axes (rotation x bends
 most limbs forward/back); child bones follow their parents. Pose by setting keyframes on bones in a clip ("Idle", "Gå") and
-check with preview_animation + screenshot. For a character in T-pose or A-pose, add_humanoid_skeleton builds the whole
-skeleton with Mixamo names in one go, and import_animation puts Mixamo FBX animations (Idle, Walking, Waving …) on it –
-the fastest way to a moving character. Moving bones WITHOUT a clip edits the rest pose (meshes don't follow – re-run
+check with preview_animation + screenshot. For a character in T-pose or A-pose, rig_character does it all in one call
+(import at a height, Mixamo-named skeleton, skin, animations from a folder of Mixamo FBX files) – the fastest way to a
+moving character; add_humanoid_skeleton and import_animation are the single steps. Moving bones WITHOUT a clip edits the rest pose (meshes don't follow – re-run
 skin_mesh). export_glb writes the bones as a glTF skeleton (skin with joints and inverse bind matrices) and the clips as
 bone animations; skinned meshes are separate skinned meshes, not baked into model folders.
 
@@ -665,9 +666,14 @@ server.registerTool(
         .describe(
           "true = keep the file's own origin (it goes to the scene origin, or to 'position') instead of centering the model. Omit to use the user's setting.",
         ),
+      height: z
+        .number()
+        .positive()
+        .optional()
+        .describe("Scale the whole model uniformly to this height in meters (e.g. 1.8 for a character that comes 1 m tall from Tripo)."),
     },
   },
-  ({ path, folderId, position, keep_origin }) => run("import_model", { path, folderId, position, keep_origin }, SLOW_MS),
+  ({ path, folderId, position, keep_origin, height }) => run("import_model", { path, folderId, position, keep_origin, height }, SLOW_MS),
 );
 
 server.registerTool(
@@ -816,21 +822,56 @@ server.registerTool(
 );
 
 server.registerTool(
+  "rig_character",
+  {
+    title: "Rig character",
+    description:
+      "Everything from a model file to a moving character in one call: import the model (scaled to 'height', default 1.8 m, in its own folder), build a Mixamo-named humanoid skeleton, skin it with automatic weights and put animations on it (Mixamo FBX/GLB files or a folder of them). The character must stand in T-pose or A-pose facing +Z (Tripo, Meshy, Mixamo characters do). Or give 'ids' of meshes already in the scene instead of 'path'. Returns the folder, bone count and clips – check with preview_animation + screenshot, then export_glb.",
+    inputSchema: {
+      path: z.string().optional().describe("Absolute path to the character model (GLB/FBX/OBJ …)."),
+      ids: z.array(z.string()).optional().describe("Mesh objects already in the scene (instead of path)."),
+      height: z.number().positive().optional().describe("Height in meters when importing (default 1.8)."),
+      position: vec3.optional().describe("Where to stand it when importing (default [0, 0, 0])."),
+      animations: z
+        .union([z.string(), z.array(z.string())])
+        .optional()
+        .describe("Animation files to put on it: one path, a list, or a folder (every .fbx/.glb in it)."),
+      in_place: z.boolean().optional().describe("Remove forward/sideways travel from the animations."),
+    },
+  },
+  ({ path, ids, height, position, animations, in_place }) => {
+    try {
+      const files = animations === undefined ? [] : Array.isArray(animations) ? animations : animationFiles(animations);
+      return run("rig_character", { path, ids, height, position, animations: files, in_place }, SLOW_MS);
+    } catch (e) {
+      return { content: [{ type: "text" as const, text: (e as Error).message }], isError: true };
+    }
+  },
+);
+
+server.registerTool(
   "import_animation",
   {
     title: "Import animation",
     description:
       "Put an animation from a file (Mixamo FBX – 'Without Skin' or with – or a GLB/glTF with an animated skeleton) on the bones in the scene, matched by name (Mixamo names like Hips/LeftArm, with or without 'mixamorig:'). Each bone follows its source bone's rotation from the rest pose; a T-pose source fits an A-pose character, and the hip motion is scaled to the character's size. Becomes a normal clip (replaces one with the same name) that previews in the editor and exports in the GLB. Returns which bones matched.",
     inputSchema: {
-      path: z.string().describe("Absolute path to the .fbx/.glb/.gltf file"),
-      clip: z.string().optional().describe("Clip name (default: the file name, e.g. 'Walking')."),
+      path: z.string().optional().describe("Absolute path to an .fbx/.glb/.gltf file – or a FOLDER: every animation file in it is imported."),
+      paths: z.array(z.string()).optional().describe("Several files at once (instead of path)."),
+      clip: z.string().optional().describe("Clip name for a single file (default: the file name, e.g. 'Walking')."),
       in_place: z.boolean().optional().describe("Remove forward/sideways travel (walk on the spot); height is kept."),
       loop: z.boolean().optional().describe("Loop in the editor preview (default true)."),
       fps: z.number().int().min(5).max(60).optional().describe("Keyframes per second (default 30)."),
       folderId: z.string().optional().describe("Only the bones in this folder (several characters with their own skeletons)."),
     },
   },
-  ({ path, clip, in_place, loop, fps, folderId }) => run("import_animation", { path, clip, in_place, loop, fps, folderId }, SLOW_MS),
+  ({ path, paths, clip, in_place, loop, fps, folderId }) => {
+    try {
+      return run("import_animation", { paths: animationFiles(path, paths), clip, in_place, loop, fps, folderId }, SLOW_MS);
+    } catch (e) {
+      return { content: [{ type: "text" as const, text: (e as Error).message }], isError: true };
+    }
+  },
 );
 
 server.registerTool(
@@ -852,6 +893,21 @@ server.registerTool(
   },
   ({ ids, ratio, triangles, max_error }) => run("simplify_mesh", { ids, ratio, triangles, max_error }, SLOW_MS),
 );
+
+const ANIMATION_EXTENSIONS = /\.(fbx|glb|gltf)$/i;
+
+/** Filene som skal importeres: `paths`, eller `path` – en fil, eller alle animasjonsfilene i en mappe (sortert). */
+function animationFiles(path?: string, paths?: string[]): string[] {
+  if (paths?.length) return paths;
+  if (!path) throw new Error("Give 'path' (a file or a folder) or 'paths'.");
+  if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) return [path];
+  const files = readdirSync(path)
+    .filter((f) => ANIMATION_EXTENSIONS.test(f))
+    .sort((a, b) => a.localeCompare(b))
+    .map((f) => `${path.replace(/[\\/]+$/, "")}/${f}`);
+  if (!files.length) throw new Error(`No .fbx/.glb/.gltf files in ${path}`);
+  return files;
+}
 
 const axisEnum = z.enum(["x", "y", "z"]);
 const keyframe = z.object({

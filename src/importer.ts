@@ -53,6 +53,8 @@ export interface ImportOptions {
   position?: Vec3;
   /** Behold filas origo (standard: innstillingen i appen). Deler med samme origo passer da sammen. */
   keepOrigin?: boolean;
+  /** Skaler hele modellen likt så den blir så høy (meter) – f.eks. 1.8 for en figur som kommer 1 m høy fra Tripo. */
+  height?: number;
 }
 
 export interface ImportResult {
@@ -534,6 +536,18 @@ export async function importModelData(
     total.min.multiplyScalar(unitScale);
     total.max.multiplyScalar(unitScale);
   }
+  // Ønsket høyde: hele modellen skaleres likt (rundt filas origo, så keepOrigin fortsatt stemmer).
+  let heightScale = 1;
+  if (opts.height !== undefined) {
+    if (!(Number.isFinite(opts.height) && opts.height > 0)) throw new Error("height må være over 0 (meter)");
+    const current = total.max.y - total.min.y;
+    if (current < 1e-6) throw new Error("Modellen er flat – kan ikke skaleres til en høyde");
+    heightScale = opts.height / current;
+    for (const p of parts) p.geometry.scale(heightScale, heightScale, heightScale);
+    for (const n of nodes) n.position.multiplyScalar(heightScale);
+    total.min.multiplyScalar(heightScale);
+    total.max.multiplyScalar(heightScale);
+  }
 
   // Plassering: filas origo i scenens origo (eller på oppgitt posisjon) – eller, uten det valget,
   // bunnen på bakken og midten der kameraet ser.
@@ -615,6 +629,7 @@ export async function importModelData(
     nodes.length ? `${nodes.length} noder` : "",
     keepOrigin ? "filas origo beholdt" : "",
     unitScale === 1 ? "" : `skalert ×${unitScale} til meter`,
+    heightScale === 1 ? "" : `${round(opts.height!, 0.01)} m høy`,
     textures.length ? `farger fra ${textures.join(", ")}` : "",
   ];
   const note = notes.filter(Boolean).join(", ");

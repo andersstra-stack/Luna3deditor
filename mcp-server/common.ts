@@ -7,9 +7,11 @@ import { HUB_PORT } from "../src/bridge/protocol.ts";
 
 export const VERSION: string = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 export const REPO_ROOT = fileURLToPath(new URL("../", import.meta.url));
-export const HUB_URL = `http://127.0.0.1:${Number(process.env.LUNA_HUB_PORT ?? HUB_PORT)}`;
+const port = Number(process.env.LUNA_HUB_PORT ?? HUB_PORT);
+export const HUB_URL = `http://127.0.0.1:${port}`;
 export const LOG_DIR = join(homedir(), ".luna3d");
-export const LOG_FILE = join(LOG_DIR, "hub.log");
+/** En testhub på en annen port logger til sin egen fil (hub-47418.log), så den ikke blandes med den vanlige. */
+export const LOG_FILE = join(LOG_DIR, port === HUB_PORT ? "hub.log" : `hub-${port}.log`);
 
 export const log = (...args: unknown[]) => console.error("[luna3d-mcp]", ...args);
 

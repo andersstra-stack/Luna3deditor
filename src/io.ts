@@ -489,25 +489,8 @@ export async function buildGlb(base: string) {
   let skinned = 0;
   for (const obj of solids) {
     count++;
-    if (skinnedSet.has(obj.id)) {
-      // Bakt i verdensrommet med identitet som bindematrise: de inverse bindematrisene er bare beinas hvile, og
-      // meshens egen node har ingen betydning (som glTF sier om skinnede mesher).
-      const indexed = paletteGeometry(obj);
-      const geo = indexed.index ? indexed.toNonIndexed() : indexed;
-      const m = objectMatrix(obj);
-      geo.applyMatrix4(m);
-      if (m.determinant() < 0) flipTriangles(geo);
-      const mesh = new THREE.SkinnedMesh(geo, materialFor(obj));
-      mesh.name = obj.name;
-      const bones = obj.skin!.bones.map((id) => boneNodes.get(id)!);
-      const inverses = obj.skin!.bones.map((id) => boneRest(objectById.get(id)!).invert());
-      attach(mesh, new THREE.Matrix4(), obj.folderId, obj.id);
-      // Noden selv animeres ikke (beina gjør jobben).
-      worldFns.delete(mesh);
-      mesh.bind(new THREE.Skeleton(bones, inverses), new THREE.Matrix4());
-      skinned++;
-      continue;
-    }
+    // Bundne modeller samles per skjelett nedenfor.
+    if (skinnedSet.has(obj.id)) continue;
     // Deler i en modell slås inn i den (nodeFor bygger modellen første gang).
     if (modelOf(obj.folderId)) {
       nodeFor(obj.folderId);
@@ -516,6 +499,69 @@ export async function buildGlb(base: string) {
     const c = new THREE.Mesh(paletteGeometry(obj), materialFor(obj));
     c.name = obj.name;
     attach(c, objectMatrix(obj), obj.folderId, obj.id);
+  }
+
+  // ---------- Skinnede figurer ----------
+  // Alle bundne modeller på samme skjelett (samme rotbein) blir ÉN SkinnedMesh med ett skin og én gruppe per materiale –
+  // som en figur fra Blender: én SkinnedMeshRenderer i Unity. Bakt i verdensrommet med identitet som bindematrise:
+  // de inverse bindematrisene er bare beinas hvile, og meshens egen node har ingen betydning (som glTF sier).
+  const rootBone = (id: string) => {
+    let b = objectById.get(id)!;
+    for (let p = parentBone(b, objectById), n = 0; p && n < objects.length; p = parentBone(p, objectById), n++) b = p;
+    return b.id;
+  };
+  const figures = new Map<string, SceneObject[]>();
+  for (const obj of solids) {
+    if (!skinnedSet.has(obj.id)) continue;
+    const root = rootBone(obj.skin!.bones[0]);
+    figures.set(root, [...(figures.get(root) ?? []), obj]);
+  }
+  for (const parts of figures.values()) {
+    const boneIds = bonesInOrder([...new Set(parts.flatMap((o) => o.skin!.bones))].map((id) => objectById.get(id)!)).map((b) => b.id);
+    const jointOf = new Map(boneIds.map((id, i) => [id, i]));
+    const byMaterial = new Map<string, { material: THREE.Material; geos: THREE.BufferGeometry[] }>();
+    for (const o of parts) {
+      const indexed = paletteGeometry(o);
+      const geo = indexed.index ? indexed.toNonIndexed() : indexed;
+      const m = objectMatrix(o);
+      geo.applyMatrix4(m);
+      if (m.determinant() < 0) flipTriangles(geo);
+      // Leddnumrene peker på delens egen beinliste – gjør dem om til figurens felles liste.
+      const joints = geo.getAttribute("skinIndex") as THREE.BufferAttribute;
+      const remapped = new Uint16Array(joints.count * 4);
+      for (let i = 0; i < remapped.length; i++) remapped[i] = jointOf.get(o.skin!.bones[joints.array[i]])!;
+      geo.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(remapped, 4));
+      const key = materialKey(o);
+      const material = materialFor(o);
+      let group = byMaterial.get(key);
+      if (!group) byMaterial.set(key, (group = { material, geos: [] }));
+      group.geos.push(geo);
+    }
+    const groups = [...byMaterial.values()];
+    // Alle delene må ha samme attributter for å slås sammen: har én hjørnefarger, får de andre hvite (samme bilde).
+    if (groups.some((g) => g.geos.some((geo) => geo.getAttribute("color")))) {
+      for (const g of groups) {
+        for (const geo of g.geos) {
+          if (!geo.getAttribute("color")) geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(geo.getAttribute("position").count * 3).fill(1), 3));
+        }
+      }
+    }
+    const merged = mergeGeometries(
+      groups.map((g) => mergeGeometries(g.geos)!),
+      true,
+    );
+    if (!merged) throw new Error(`Kunne ikke slå sammen delene til «${parts[0].name}»`);
+    const mesh = new THREE.SkinnedMesh(merged, groups.length === 1 ? groups[0].material : groups.map((g) => g.material));
+    // Navnet: mappa delene ligger i (figuren), ellers den første delen.
+    const folder = parts.every((o) => o.folderId === parts[0].folderId) && parts[0].folderId ? folderById.get(parts[0].folderId) : undefined;
+    mesh.name = parts.length === 1 ? parts[0].name : (folder?.name ?? parts[0].name);
+    attach(mesh, new THREE.Matrix4(), parts[0].folderId, parts[0].id);
+    // Noden selv animeres ikke (beina gjør jobben).
+    worldFns.delete(mesh);
+    const bones = boneIds.map((id) => boneNodes.get(id)!);
+    const inverses = boneIds.map((id) => boneRest(objectById.get(id)!).invert());
+    mesh.bind(new THREE.Skeleton(bones, inverses), new THREE.Matrix4());
+    skinned += parts.length;
   }
   if (!count) throw new Error("Scenen er tom – ingenting å eksportere");
 

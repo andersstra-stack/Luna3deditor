@@ -147,8 +147,7 @@ export const handlers: Record<BridgeMethod, Handler> = {
   apply_script: async (p) => {
     const ops = p.ops as ScriptOp[];
     if (!Array.isArray(ops)) throw new Error("ops må være en liste");
-    if (ops.some((op) => op.op === "simplify")) await simplifierReady;
-    return compactScriptResult(applyScriptOps(ops, (p.name as string | undefined) ?? "Claude-skript", p.script as string | undefined));
+    return compactScriptResult(await applyScriptOps(ops, (p.name as string | undefined) ?? "Claude-skript", p.script as string | undefined));
   },
 
   add_objects: (p) => {
@@ -292,25 +291,78 @@ export const handlers: Record<BridgeMethod, Handler> = {
     };
   },
 
-  import_animation: async (p) => {
-    const result = await importAnimationFile(requireString(p, "path"), {
-      name: p.clip as string | undefined,
-      inPlace: p.in_place === true,
-      loop: p.loop as boolean | undefined,
-      fps: p.fps as number | undefined,
-      folderId: p.folderId as string | undefined,
-    });
-    if (!result) throw new Error("Ingen fil");
-    say(`la animasjonen «${result.name}» på skjelettet`);
+  rig_character: async (p) => {
+    // Hele veien fra fil til figur som kan spilles av: import (med høyde) → menneskeskjelett → binding → animasjoner.
+    let ids = p.ids as string[] | undefined;
+    let folderId: string | null = null;
+    if (typeof p.path === "string") {
+      const name = p.path.split(/[\\/]/).pop()!.replace(/\.[^.]+$/, "");
+      folderId = editor().addFolders([{ name }])[0].id;
+      const imported = await importModelFile(p.path, {
+        folderId,
+        position: (p.position as Vec3 | undefined) ?? [0, 0, 0],
+        keepOrigin: false,
+        height: (p.height as number | undefined) ?? 1.8,
+      });
+      if (!imported) throw new Error(`Kunne ikke importere ${p.path}`);
+      ids = imported.objectIds;
+      // Én mesh får filnavnet (Tripo o.l. kaller den «tripo_node_…»).
+      if (ids.length === 1) editor().updateObjects([{ id: ids[0], name }]);
+      // En modell i flere deler får sin egen mappe; den legges i figurens mappe.
+      if (imported.folderId && imported.folderId !== folderId) editor().updateFolders([{ id: imported.folderId, parentId: folderId }]);
+    }
+    if (!ids?.length) throw new Error("Oppgi path (modellfil) eller ids (modellene i scenen)");
+    const meshes = editor().objects.filter((o) => ids!.includes(o.id) && o.type === "mesh");
+    if (!meshes.length) throw new Error("Fant ingen modeller (type mesh) å rigge");
+    const skeleton = editor().applyScript([{ op: "humanoid", meshes: meshes.map((o) => o.id), folder: null }]);
+    const bones = skeleton.created;
+    const skin = editor().skinObjects(
+      meshes.map((o) => o.id),
+      bones,
+    );
+    const skeletonFolder = skeleton.folders[0] ?? null;
+    const clips = [];
+    for (const path of (p.animations as string[] | undefined) ?? []) {
+      const r = await importAnimationFile(path, { folderId: skeletonFolder, inPlace: p.in_place === true });
+      if (r) clips.push({ clip: r.name, duration: r.duration, keys: r.keys });
+    }
+    say(`rigget ${meshes.length === 1 ? meshes[0].name : `${meshes.length} modeller`} (${bones.length} bein, ${clips.length} animasjoner)`);
     return {
-      clip: result.name,
-      duration: result.duration,
-      loop: result.loop,
-      bones: result.mapped.length,
-      keys: result.tracks.reduce((n, t) => n + t.keys.length, 0),
-      mapped: result.mapped,
-      unmapped: result.unmapped,
+      folderId: folderId ?? meshes[0].folderId,
+      meshes: meshes.map((o) => ({ id: o.id, name: o.name })),
+      skeletonFolderId: skeletonFolder,
+      bones: bones.length,
+      skinned: skin.skinned.length,
+      clips,
+      note: "Check with screenshot (+ preview_animation). Adjust a bone with update_objects head/tail and re-run skin_mesh if needed.",
     };
+  },
+
+  import_animation: async (p) => {
+    // Huben gjør en mappe om til en liste med filer (appen kan ikke lese mapper).
+    const paths = Array.isArray(p.paths) ? (p.paths as string[]) : [requireString(p, "path")];
+    if (!paths.length) throw new Error("Ingen animasjonsfiler");
+    if (p.clip && paths.length > 1) throw new Error("clip (navnet) gjelder bare én fil – klippene får ellers filnavnet");
+    const clips = [];
+    for (const path of paths) {
+      const result = await importAnimationFile(path, {
+        name: p.clip as string | undefined,
+        inPlace: p.in_place === true,
+        loop: p.loop as boolean | undefined,
+        fps: p.fps as number | undefined,
+        folderId: p.folderId as string | undefined,
+      });
+      if (!result) throw new Error(`Kunne ikke lese ${path}`);
+      clips.push({
+        clip: result.name,
+        duration: result.duration,
+        bones: result.mapped.length,
+        keys: result.keys,
+        ...(result.unmapped.length ? { unmapped: result.unmapped } : {}),
+      });
+    }
+    say(clips.length === 1 ? `la animasjonen «${clips[0].clip}» på skjelettet` : `la ${clips.length} animasjoner på skjelettet`);
+    return { clips };
   },
 
   animate: (p) => {
@@ -492,6 +544,7 @@ export const handlers: Record<BridgeMethod, Handler> = {
       position: p.position as Vec3 | undefined,
       // Uten parameter gjelder brukerens innstilling.
       keepOrigin: p.keep_origin as boolean | undefined,
+      height: p.height as number | undefined,
     });
     say(`importerte ${p.path}`);
     return result;

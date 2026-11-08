@@ -610,14 +610,17 @@ function SkinRow({ meshes, bones }: { meshes: SceneObject[]; bones: SceneObject[
         <div className="btn-row">
           <button
             className="small-btn"
-            title="Lager et skjelett med Mixamo-navn ut fra modellene (figuren må stå i T- eller A-positur, ansiktet mot +Z). Bind etterpå."
+            title="Lager et skjelett med Mixamo-navn ut fra modellene og binder dem til det (figuren må stå i T- eller A-positur, ansiktet mot +Z). Legg deretter på animasjoner i animasjonspanelet."
             onClick={run(() => {
               const state = useEditor.getState();
-              const r = state.applyScript([{ op: "humanoid", meshes: meshes.map((o) => o.id), folder: null }]);
-              state.setActivity(`Lagde et menneskeskjelett med ${r.created.length} bein – sjekk plasseringen og bind modellene`);
+              const ids = meshes.map((o) => o.id);
+              const r = state.applyScript([{ op: "humanoid", meshes: ids, folder: null }]);
+              state.skinObjects(ids, r.created);
+              state.selectMany(ids);
+              state.setActivity(`Lagde et menneskeskjelett med ${r.created.length} bein og bandt modellene – legg på animasjoner under Animasjon`);
             })}
           >
-            <Icon name="shapes" size={14} /> Lag menneskeskjelett
+            <Icon name="shapes" size={14} /> Lag skjelett og bind
           </button>
         </div>
       </div>

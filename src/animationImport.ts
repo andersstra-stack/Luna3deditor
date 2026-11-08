@@ -16,6 +16,16 @@ export interface AnimationImportOptions extends RetargetOptions {
   folderId?: string | null;
 }
 
+/** Fildialog (flere filer kan velges) og import av hver; gir det siste klippet, så det kan vises med en gang. */
+export async function pickAndImportAnimations(options: AnimationImportOptions = {}): Promise<(RetargetResult & { clipId: string }) | null> {
+  const picked = await open({ filters: [{ name: "Animasjon (Mixamo FBX, GLB)", extensions: ["fbx", "glb", "gltf"] }], multiple: true });
+  const files = Array.isArray(picked) ? picked : typeof picked === "string" ? [picked] : [];
+  let last: (RetargetResult & { clipId: string }) | null = null;
+  for (const file of files) last = await importAnimationFile(file, options);
+  if (files.length > 1) useEditor.getState().setActivity(`La ${files.length} animasjoner på skjelettet`);
+  return last;
+}
+
 /** Leser en animasjonsfil til et three-objekt med `animations`. */
 export async function loadAnimationSource(data: ArrayBuffer, path: string): Promise<THREE.Object3D> {
   const ext = path.toLowerCase().split(".").pop();
@@ -29,13 +39,8 @@ export async function loadAnimationSource(data: ArrayBuffer, path: string): Prom
 }
 
 /** Overfører animasjonen i fila til beina i scenen og legger den inn som klipp (et klipp med samme navn byttes ut). */
-export async function importAnimationFile(path?: string, options: AnimationImportOptions = {}): Promise<(RetargetResult & { clipId: string }) | null> {
-  let target = path ?? null;
-  if (!target) {
-    const picked = await open({ filters: [{ name: "Animasjon (Mixamo FBX, GLB)", extensions: ["fbx", "glb", "gltf"] }], multiple: false });
-    target = typeof picked === "string" ? picked : null;
-  }
-  if (!target) return null;
+export async function importAnimationFile(path: string, options: AnimationImportOptions = {}): Promise<(RetargetResult & { clipId: string }) | null> {
+  const target = path;
   const data = await invoke<ArrayBuffer>("read_binary_file", { path: target });
   const source = await loadAnimationSource(data, target);
   const state = useEditor.getState();
@@ -47,6 +52,6 @@ export async function importAnimationFile(path?: string, options: AnimationImpor
   // Mixamo kaller alle klipp «mixamo.com»: filnavnet er et bedre navn.
   const result = retargetAnimation(source, bones, { ...options, name: options.name ?? fileName });
   const clip = state.importClip({ name: result.name, duration: result.duration, loop: result.loop, tracks: result.tracks });
-  state.setActivity(`La animasjonen «${result.name}» på ${result.mapped.length} bein (${result.duration} s)`);
+  state.setActivity(`La animasjonen «${result.name}» på ${result.mapped.length} bein (${result.duration} s, ${result.keys} nøkler)`);
   return { ...result, clipId: clip.id };
 }
