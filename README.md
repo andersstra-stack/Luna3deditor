@@ -66,7 +66,7 @@ Verktøy Claude får: `get_scene`, `add_objects`, `update_objects`, `delete_obje
 `create_folders`, `update_folders`, `delete_folders`, `select_objects`, `duplicate_objects`,
 `drop_to_ground`, `align_objects`, `mirror_objects`, `run_python`, `import_model`,
 `get_notes`, `add_note`, `reply_to_note`, `delete_notes`,
-`clear_scene`, `undo`, `redo`, `set_view`, `screenshot`, `save_scene`, `load_scene`, `export_glb`.
+`clear_scene`, `undo`, `redo`, `set_view`, `screenshot`, `save_scene`, `load_scene`, `export_glb`, `export_stl`.
 
 Alt Claude gjør kan angres med Ctrl+Z, og vises i statuslinja nederst.
 

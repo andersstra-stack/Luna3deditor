@@ -1013,6 +1013,20 @@ server.registerTool(
   ({ path }) => run("export_glb", { path }, SLOW_MS),
 );
 
+server.registerTool(
+  "export_stl",
+  {
+    title: "Export STL (3D print)",
+    description:
+      "Export visible shapes and models (or only 'ids') as a binary STL for a 3D printer / slicer: millimeters, Z up, centered on the bed with the bottom at z = 0, holes cut out, rest pose. Lights, nodes, bones, reference images and planes are left out. Parts are not fused; overlapping parts are fine for slicers. Returns size in mm, triangle count, open edges left after T-junction repair (small numbers are auto-fixed by slicers) and whether low-poly detail is on (round shapes come out faceted – ask the user to turn it off first).",
+    inputSchema: {
+      path: z.string().describe("Absolute file path ending in .stl"),
+      ids: z.array(z.string()).optional().describe("Only these objects (default: everything visible)."),
+    },
+  },
+  (p) => run("export_stl", p, SLOW_MS),
+);
+
 // ---------- Prosjekter (kjøres i huben, ikke i appen) ----------
 
 async function local(fn: (call: ReturnType<typeof currentCall>) => unknown) {

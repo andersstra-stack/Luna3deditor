@@ -1,5 +1,5 @@
 import { useEditor, type FolderUpdate, type NewObject } from "../store";
-import { exportGlb, openScene, saveScene, writeBinaryFile } from "../io";
+import { exportGlb, exportStl, openScene, saveScene, writeBinaryFile } from "../io";
 import { importModelFile } from "../importer";
 import { ADDABLE_SHAPES, type SceneObject, type ScriptOp, type ScriptResult, type ShapeType, type Vec3 } from "../types";
 import * as THREE from "three";
@@ -557,6 +557,13 @@ export const handlers: Record<BridgeMethod, Handler> = {
 
   export_glb: async (p) => {
     const result = await exportGlb(requireString(p, "path"));
+    say(`eksporterte ${result?.path}`);
+    return result;
+  },
+
+  export_stl: async (p) => {
+    const ids = Array.isArray(p.ids) && p.ids.length ? (p.ids as string[]) : undefined;
+    const result = await exportStl(requireString(p, "path"), ids);
     say(`eksporterte ${result?.path}`);
     return result;
   },

@@ -12,7 +12,7 @@ import {
   type ShapeType,
   type Vec3,
 } from "../types";
-import { exportGlb, newScene, openScene, saveScene, saveSceneAs, type GlbExport } from "../io";
+import { exportGlb, exportStl, newScene, openScene, saveScene, saveSceneAs, type GlbExport, type StlExport } from "../io";
 import { importModelFile } from "../importer";
 import { pickReferenceImage, pickReferenceVideo } from "../referenceImage";
 import { openWindow } from "../windows";
@@ -54,6 +54,18 @@ function reportExport(r: GlbExport | null) {
         (r.bones ? `, skjelett med ${r.bones} bein (${r.skinned} bundne modeller)` : "") +
         (r.animations.length ? `, ${r.animations.length} animasjon${r.animations.length === 1 ? "" : "er"}` : "") +
         (r.warnings.length ? ` – ${r.warnings[0]}` : ""),
+    );
+}
+
+function reportStl(r: StlExport | null) {
+  if (!r) return;
+  const mm = r.size.map((v) => Math.round(v)).join(" × ");
+  useEditor
+    .getState()
+    .setActivity(
+      `Eksporterte ${r.path.split(/[\\/]/).pop()}: ${r.parts} del${r.parts === 1 ? "" : "er"}, ${mm} mm` +
+        (r.openEdges ? `, ${r.openEdges} åpne kanter (sliceren reparerer dem)` : "") +
+        (r.lowpoly ? " – Lavpoly er på, så runde former blir kantete" : ""),
     );
 }
 
@@ -147,6 +159,16 @@ export function Toolbar() {
         </button>
         <button className="icon-btn" title="Eksporter GLB (til Blender, Roblox, Unity…)" onClick={() => exportGlb().then(reportExport).catch(reportError)}>
           <Icon name="export" />
+        </button>
+        <button
+          className="icon-btn"
+          title="Eksporter STL til 3D-printer – synlige former (eller de valgte) i millimeter, Z opp, hull skåret ut"
+          onClick={() => {
+            const selected = useEditor.getState().selectedIds;
+            exportStl(undefined, selected.length ? selected : undefined).then(reportStl).catch(reportError);
+          }}
+        >
+          <Icon name="print" />
         </button>
       </div>
 

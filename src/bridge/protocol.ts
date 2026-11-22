@@ -37,6 +37,7 @@ export const BRIDGE_METHODS = [
   "save_scene",
   "load_scene",
   "export_glb",
+  "export_stl",
   "import_model",
   "apply_script",
   "get_notes",

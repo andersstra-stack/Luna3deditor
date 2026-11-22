@@ -10,6 +10,12 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+### Added
+- **STL til 3D-printer**: ny knapp i verktøylinja (MCP `export_stl`) skriver de synlige formene – eller bare de valgte –
+  som en STL-fil sliceren kan åpne direkte: millimeter, Z opp, midt på platen med bunnen på platen, og hullene skåret ut.
+  Sømmene som hullkuttene lager (T-skjøter) repareres, så fila er lukket. Lys, noder, bein, referansebilder og plan blir
+  ikke med. Står Lavpoly på, sier Luna ifra, siden runde former da blir kantete i fila.
+
 ## [0.22.0] — 2026-11-22
 
 ### Added

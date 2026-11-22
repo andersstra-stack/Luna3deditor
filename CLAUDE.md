@@ -135,6 +135,9 @@ MCP-verktøybeskrivelser er på engelsk.
   D' = F⁻¹·P⁻¹·Δ·P·F·D (`keyFromDelta` + `upsertKey`, live via `setClipsLive` med `pushHistory()` ved start).
   `keyFromDelta` velger den av de to XYZ-Euler-løsningene (og ±360) som ligger nærmest dagens verdi. Eksporten sampler 30 bilder/s til glTF-spor på nodenes `uuid` (alt samles
   under én `THREE.Scene`, ellers finner eksportøren bare nodene under første rot).
+- STL (3D-print): `buildStl`/`exportStl` i `io.ts` tar de viste meshene (hull skåret ut) i hvile, gjør om til mm med Z opp
+  og sentrerer på platen. `src/stl.ts` (uten three, kan kjøres i Node) sveiser hjørnene og deler trekanter ved T-skjøter fra
+  CSG, og skriver binær STL. Delene smeltes ikke sammen – overlapp er greit for slicere. Lavpoly gir kantete runde former.
 - `src-tauri/src/lib.rs` – filkommandoer (`write_text_file`, `read_text_file`, `write_binary_file`) + dialog-plugin.
   `write_binary_file` tar rå body (`tauri::ipc::Request`) med stien URI-kodet i headeren `path`; bruk `writeBinaryFile` i
   `io.ts`, aldri `Array.from(bytes)` (60 MB som JSON-tall ble aldri ferdig og blokkerte IPC-en). `exportGlb` gir `ms`

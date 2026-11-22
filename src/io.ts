@@ -27,6 +27,8 @@ import {
 } from "./meshes";
 import { isPivotNode, makeAnimator } from "./animation";
 import { lightingFromFile } from "./lighting";
+import { encodeStl, repairMesh } from "./stl";
+import { geometryDetail } from "./viewport/geometries";
 
 type Animator = ReturnType<typeof makeAnimator>;
 /** Bilder per sekund når animasjonene samples til glTF-spor. */
@@ -200,6 +202,94 @@ export async function exportGlb(path?: string): Promise<GlbExport | null> {
     materials: built.materials,
     ms: { build: Math.round(t1 - t0), write: Math.round(performance.now() - t1) },
     bytes: built.glb.length,
+  };
+}
+
+export interface StlExport {
+  path: string;
+  /** Delene som ble med (synlige former og modeller, hull skåret ut). */
+  parts: number;
+  triangles: number;
+  /** Mål i millimeter [x, y, z], Z opp som på printeren. */
+  size: [number, number, number];
+  /** Kanter som ikke henger sammen etter reparasjonen (0 = lukket). Slicere reparerer små rester selv. */
+  openEdges: number;
+  /** Lavpoly-visningen er på: runde former blir kantete i fila. */
+  lowpoly: boolean;
+  bytes: number;
+}
+
+/**
+ * Bygger en binær STL i minnet til 3D-print: synlige former (eller bare `ids`) som de vises – hull skåret ut – i hvile
+ * (ingen animasjonspositur), i millimeter med Z opp, midt på platen med bunnen på z = 0. Delene smeltes ikke sammen;
+ * overlappende deler er vanlig i STL og slicerne slår dem sammen lag for lag.
+ */
+export function buildStl(ids?: string[]) {
+  const { objects, folders } = useEditor.getState();
+  const hidden = hiddenFolderIds(folders);
+  const meshById = new Map(sceneMeshes().map((m) => [m.userData.lunaId as string, m]));
+  const wanted = ids ? new Set(ids) : null;
+  const parts = objects.filter(
+    (o) =>
+      !isHelper(o.type) &&
+      !o.hole &&
+      o.type !== "plane" &&
+      meshById.has(o.id) &&
+      (wanted ? wanted.has(o.id) : o.visible && !(o.folderId && hidden.has(o.folderId))),
+  );
+  if (!parts.length) throw new Error(wanted ? "Ingen av de valgte objektene kan skrives til STL" : "Ingen synlige former å eksportere");
+  // Luna (meter, Y opp) → printer (millimeter, Z opp): (x, y, z) → (x, -z, y).
+  const toPrinter = new THREE.Matrix4().makeRotationX(Math.PI / 2).premultiply(new THREE.Matrix4().makeScale(1000, 1000, 1000));
+  const chunks: Float32Array[] = [];
+  for (const o of parts) {
+    const src = meshById.get(o.id)!.geometry;
+    const geo = new THREE.BufferGeometry().setAttribute("position", src.getAttribute("position").clone());
+    if (src.index) geo.setIndex(src.index.clone());
+    const flat = geo.index ? geo.toNonIndexed() : geo;
+    const m = toPrinter.clone().multiply(objectMatrix(o));
+    flat.applyMatrix4(m);
+    if (m.determinant() < 0) flipTriangles(flat);
+    chunks.push(flat.getAttribute("position").array as Float32Array);
+  }
+  const soup = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
+  let offset = 0;
+  for (const c of chunks) {
+    soup.set(c, offset);
+    offset += c.length;
+  }
+  const box = new THREE.Box3().setFromArray(soup);
+  const center = box.getCenter(new THREE.Vector3());
+  for (let i = 0; i < soup.length; i += 3) {
+    soup[i] -= center.x;
+    soup[i + 1] -= center.y;
+    soup[i + 2] -= box.min.z;
+  }
+  const mesh = repairMesh(soup);
+  const size = box.getSize(new THREE.Vector3());
+  return {
+    stl: encodeStl(mesh.positions, "Luna 3D STL, mm, Z up"),
+    parts: parts.length,
+    triangles: mesh.triangles,
+    size: [size.x, size.y, size.z].map((v) => Math.round(v * 100) / 100) as [number, number, number],
+    openEdges: mesh.openEdges,
+  };
+}
+
+/** Eksporterer synlige former (eller `ids`) som STL til 3D-print. Uten sti spørres brukeren. */
+export async function exportStl(path?: string, ids?: string[]): Promise<StlExport | null> {
+  let target = path ?? null;
+  if (!target) target = await save({ filters: [{ name: "STL (3D-print)", extensions: ["stl"] }], defaultPath: "modell.stl" });
+  if (!target) return null;
+  const built = buildStl(ids);
+  await writeBinaryFile(target, built.stl);
+  return {
+    path: target,
+    parts: built.parts,
+    triangles: built.triangles,
+    size: built.size,
+    openEdges: built.openEdges,
+    lowpoly: geometryDetail() === "lowpoly",
+    bytes: built.stl.length,
   };
 }
 
