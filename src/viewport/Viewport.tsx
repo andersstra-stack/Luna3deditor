@@ -380,7 +380,8 @@ function SolidMesh({ obj, selected, holes: givenHoles, accent }: { obj: SceneObj
   // Negativ y: UV-ene har v = 0 øverst og geometrien har ingen tangenter (samme grep som GLTFLoader).
   const strength = normalScaleOf(obj);
   const normalScale: [number, number] = [strength, -strength];
-  const look = `${colored ? "vertex-colors" : "color"}${texture ? "+map" : ""}${normalMap ? "+normal" : ""}${roughnessMap ? "+rough" : ""}`;
+  // `transparent` er med: three bytter ikke shader (OPAQUE-define) når den endres på et eksisterende materiale.
+  const look = `${colored ? "vertex-colors" : "color"}${texture ? "+map" : ""}${normalMap ? "+normal" : ""}${roughnessMap ? "+rough" : ""}${transparent ? "+alpha" : ""}`;
 
   const common = {
     name: obj.name,

@@ -103,7 +103,10 @@ async function parseModel(name: string, data: ArrayBuffer, manager: THREE.Loadin
         materials.preload();
         loader.setMaterials(materials);
       }
-      return loader.parse(text);
+      const group = loader.parse(text);
+      // Tinkercad eksporterer alltid i millimeter (står i toppen av fila).
+      if (/^#.*Tinkercad/im.test(text.slice(0, 500))) group.userData.millimeters = true;
+      return group;
     }
     case "stl":
       // STL (3D-utskrift) har Z opp – snu til Luna sin Y opp.
@@ -491,11 +494,13 @@ function mergeByAppearance(parts: Part[]): Part[] {
 /**
  * Enheten, siden Luna bruker meter: glTF er alltid i meter, og FBX sier selv hvor mange cm én
  * enhet er (`UnitScaleFactor`; Blender skriver 100 for meter). Ellers gjettes det: STL er nesten
- * alltid i millimeter, OBJ ofte i centimeter, og veldig store modeller skaleres ned.
+ * alltid i millimeter, OBJ ofte i centimeter (men Tinkercad-OBJ i millimeter), og veldig store
+ * modeller skaleres ned.
  */
 function unitScaleFor(ext: string, size: THREE.Vector3, root: THREE.Object3D): number {
   const largest = Math.max(size.x, size.y, size.z);
   if (ext === "glb" || ext === "gltf") return 1;
+  if (root.userData.millimeters) return 0.001;
   const fbxUnit = Number(root.userData.unitScaleFactor);
   if (ext === "fbx" && fbxUnit > 0) return fbxUnit / 100;
   if (ext === "stl") return largest > 10 ? 0.001 : 1;

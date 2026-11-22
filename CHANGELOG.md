@@ -18,6 +18,12 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
   `luna.reference("film.mp4")`, og skjermbilder venter til videoen står på riktig bilde – så Claude kan sammenligne
   figuren med filmen bilde for bilde.
 
+### Fixed
+- **Gjennomsiktighet slo ikke inn**: å senke «Gjennomsiktighet» på et objekt som var helt tett (f.eks. importert glass)
+  ga ingen synlig endring før vinduet ble lastet på nytt. Materialet lages nå på nytt når objektet blir gjennomsiktig.
+- **Tinkercad-modeller ble ti ganger for store**: OBJ-filer fra Tinkercad er i millimeter, men ble gjettet som centimeter
+  (et 20 cm håndtak ble 2 m). Importen kjenner nå igjen Tinkercad i toppen av fila og regner om fra millimeter.
+
 ## [0.21.0] — 2026-11-08
 
 ### Added
