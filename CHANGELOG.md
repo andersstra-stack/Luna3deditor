@@ -10,6 +10,8 @@ Endringer skrives under [Unreleased] ved hver meningsfull commit. Ny versjon: `n
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-11-22
+
 ### Added
 - **Referansevideo å animere etter**: «Legg til → Video…» legger inn en filmsnutt (MP4 eller WebM) som et referansebilde som
   følger tidslinja. Velg et klipp og dra i tiden, så viser videoen samme øyeblikk; spilles klippet, spiller videoen med.
